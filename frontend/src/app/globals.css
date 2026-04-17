@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ekm-primary: #2563eb;
+  --ekm-sidebar-bg: #0f172a;
+  --ekm-sidebar-width: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #f0f2f5;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
+    'Segoe UI', Helvetica, Arial, sans-serif;
+  margin: 0;
+}
