@@ -17,6 +17,7 @@ import {
   MenuUnfoldOutlined,
   GlobalOutlined,
   TagsOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { Tooltip, Avatar } from 'antd'
 import { useAuth } from '@/hooks/useAuth'
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { key: '/dashboard',        icon: <HomeOutlined />,       label: '首页' },
   { key: '/portal',           icon: <GlobalOutlined />,     label: '知识门户' },
   { key: '/search',           icon: <SearchOutlined />,     label: '搜索' },
+  { key: '/assistant',        icon: <RobotOutlined />,      label: 'AI 助手' },
   { key: '/knowledge',        icon: <BookOutlined />,       label: '知识库' },
   { key: '/community',        icon: <TeamOutlined />,       label: '社区' },
   { key: '/knowledge-graph',  icon: <BranchesOutlined />,   label: '知识图谱' },

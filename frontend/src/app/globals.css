@@ -32,3 +32,23 @@ body {
   border-radius: 2px;
   font-weight: 500;
 }
+
+/* AI assistant typing indicator — three bouncing dots while the SSE
+   stream is still delivering tokens. */
+.ekm-typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 2px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.5;
+  animation: ekm-typing-bounce 1.2s infinite ease-in-out;
+}
+.ekm-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.ekm-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes ekm-typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
+  40%           { transform: translateY(-3px); opacity: 1; }
+}
