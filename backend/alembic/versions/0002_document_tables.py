@@ -57,15 +57,9 @@ def upgrade() -> None:
     )
 
     # ── document_parse_records ───────────────────────────────────────────────
-    # create_type=False: we manage the type lifecycle explicitly below to avoid
-    # SQLAlchemy's DDL emitter trying to CREATE TYPE a second time inside
-    # create_table when the type was already created (or already exists).
-    parse_status_col = sa.Enum(
-        "pending", "parsing", "parsed", "failed", name="parsestatus", create_type=False,
-    )
-    sa.Enum("pending", "parsing", "parsed", "failed", name="parsestatus").create(
-        op.get_bind(), checkfirst=True
-    )
+    # Let op.create_table manage the enum type lifecycle via its before_create
+    # DDL event — do NOT create the type separately, as that causes a duplicate
+    # CREATE TYPE error when op.create_table fires the same event.
     op.create_table(
         "document_parse_records",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -78,7 +72,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            parse_status_col,
+            sa.Enum("pending", "parsing", "parsed", "failed", name="parsestatus"),
             nullable=False,
             server_default="pending",
         ),
