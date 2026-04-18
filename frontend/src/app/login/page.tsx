@@ -7,6 +7,7 @@ import {
   ReadOutlined, TeamOutlined, BranchesOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
+import type { User } from '@/types/auth'
 import api from '@/lib/api'
 
 const FEATURES = [
@@ -42,7 +43,17 @@ export default function LoginPage() {
       const meRes = await api.get('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${access_token}` },
       })
-      setAuth(meRes.data, access_token, refresh_token)
+      const raw = meRes.data
+      const user: User = {
+        id: String(raw.id),
+        username: raw.username,
+        email: raw.email,
+        displayName: raw.display_name,
+        avatar: raw.avatar_url ?? undefined,
+        department: raw.department ?? undefined,
+        roles: [raw.role],
+      }
+      setAuth(user, access_token, refresh_token)
       message.success('登录成功')
       router.replace('/dashboard')
     } catch (err: unknown) {
