@@ -1,16 +1,15 @@
 """sharing_records — soft delete with 30-day recovery window.
 
-Revision ID: 0006_sharing_soft_delete
-Revises: 0005
+Revision ID: 0007_sharing_soft_delete
+Revises: 0006
 Create Date: 2026-04-18
 
 Adds `deleted_at` to `sharing_records` so revoke becomes reversible for 30
 days. The Celery beat task `ekm.sharing.purge_expired` hard-deletes rows
 whose `deleted_at` is older than that window.
 
-Note: picked a literal revision ID rather than `0006` so the migration
-graph stays deterministic if another parallel PR also numbers at 0006 —
-whoever merges second just updates `down_revision` during rebase.
+Renumbered from 0006 → 0007 on rebase: #85 (notifications) shipped first
+at 0006. Keeping the migration graph linear.
 """
 from typing import Sequence, Union
 
@@ -18,8 +17,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "0006_sharing_soft_delete"
-down_revision: Union[str, None] = "0005"
+revision: str = "0007_sharing_soft_delete"
+down_revision: Union[str, None] = "0006"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
