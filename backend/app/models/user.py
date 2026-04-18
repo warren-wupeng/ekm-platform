@@ -36,7 +36,7 @@ class User(Base):
 
     # Relationships
     knowledge_items: Mapped[list["KnowledgeItem"]] = relationship("KnowledgeItem", back_populates="uploader")  # noqa: F821
-    sharing_records: Mapped[list["SharingRecord"]] = relationship("SharingRecord", back_populates="shared_by")  # noqa: F821
+    sharing_records: Mapped[list["SharingRecord"]] = relationship("SharingRecord", foreign_keys="[SharingRecord.shared_by_id]", back_populates="shared_by")  # noqa: F821
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="actor")  # noqa: F821
 
     def __repr__(self) -> str:
