@@ -4,6 +4,7 @@ from app.models.sharing import AuditAction, AuditLog, SharePermission, SharingRe
 from app.models.kg import KGEdge, KGNode
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.version import KnowledgeVersion
+from app.models.community import Post, Reply, ReplyLike
 
 __all__ = [
     "User", "UserRole",
@@ -12,4 +13,5 @@ __all__ = [
     "KGEdge", "KGNode",
     "DocumentChunk", "DocumentParseRecord", "ParseStatus",
     "KnowledgeVersion",
+    "Post", "Reply", "ReplyLike",
 ]
