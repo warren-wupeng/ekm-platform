@@ -16,6 +16,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   GlobalOutlined,
+  TagsOutlined,
 } from '@ant-design/icons'
 import { Tooltip, Avatar } from 'antd'
 import { useAuth } from '@/hooks/useAuth'
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { key: '/ontology',         icon: <NodeIndexOutlined />,  label: 'Ontology' },
   { key: '/editor',           icon: <EditOutlined />,       label: 'AI 写作' },
   { key: '/developer',        icon: <CodeOutlined />,       label: 'Developer' },
+  { key: '/tags',             icon: <TagsOutlined />,       label: '标签管理' },
 ]
 
 const COLLAPSED_W = 64
