@@ -22,5 +22,11 @@ export function useKnowledgeList() {
     mutate((prev) => prev?.filter((i) => i.id !== id), { revalidate: false })
   }
 
-  return { items: data ?? [], isLoading, removeItem }
+  /** Called after a new upload + parse finishes so the freshly indexed
+   * file appears in the list without requiring a manual refresh. */
+  function refresh() {
+    void mutate()
+  }
+
+  return { items: data ?? [], isLoading, removeItem, refresh }
 }

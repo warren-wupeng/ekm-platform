@@ -54,14 +54,21 @@ const TYPE_COLOR: Record<FileType, string> = {
 
 export default function KnowledgePage() {
   const router = useRouter()
-  const { items, isLoading, removeItem } = useKnowledgeList()
+  const { items, isLoading, removeItem, refresh } = useKnowledgeList()
   const [search, setSearch]     = useState('')
   const [activeTab, setActiveTab] = useState('list')
   const [showUpload, setShowUpload] = useState(false)
 
   function handleUploaded() {
-    // In real app: mutate() to revalidate SWR cache
-    setShowUpload(false)
+    // Keep the upload panel open until parse settles — closing it here
+    // would hide the in-progress parse rows. Parent triggers refresh via
+    // onParseSettled instead.
+  }
+
+  function handleParseSettled() {
+    // Reload the list so the newly indexed file appears; still keep the
+    // panel open so the user can see the completed parse state.
+    refresh()
   }
 
   function handleDelete(id: string) {
@@ -230,7 +237,7 @@ export default function KnowledgePage() {
                 收起
               </Button>
             </div>
-            <UploadZone onUploaded={handleUploaded} />
+            <UploadZone onUploaded={handleUploaded} onParseSettled={handleParseSettled} />
           </div>
         )}
 

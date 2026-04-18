@@ -10,10 +10,17 @@ import {
 import clsx from 'clsx'
 import { nanoid } from 'nanoid'
 import type { UploadFile, FileType } from '@/types/upload'
-import { getFileType, formatFileSize, mockUploadFile } from '@/lib/mockUpload'
+import { getFileType, formatFileSize } from '@/lib/mockUpload'
+import { uploadFile } from '@/lib/uploadApi'
+import { triggerParse } from '@/lib/documentsApi'
+import { useParseProgress } from '@/hooks/useParseProgress'
 
 interface Props {
   onUploaded?: (files: UploadFile[]) => void
+  /** Fires after a file has been uploaded AND its parse task has reached a
+   * terminal state (parsed / parse_failed). Parent can use this to mutate
+   * the SWR cache on the knowledge list so the new row shows up. */
+  onParseSettled?: (file: UploadFile) => void
 }
 
 const TYPE_ICON: Record<FileType, React.ReactNode> = {
@@ -34,15 +41,61 @@ const TYPE_COLOR: Record<FileType, string> = {
   other:    'default',
 }
 
-export default function UploadZone({ onUploaded }: Props) {
+export default function UploadZone({ onUploaded, onParseSettled }: Props) {
   const [files, setFiles]   = useState<UploadFile[]>([])
   const [dragOver, setDrag] = useState(false)
   const inputRef            = useRef<HTMLInputElement>(null)
   const abortsRef           = useRef<Map<string, AbortController>>(new Map())
+  // task_id → uid mapping so task-poll updates find the right row.
+  const taskToUidRef        = useRef<Map<string, string>>(new Map())
+  // Snapshot of the last known file state keyed by uid — lets the parse
+  // onDone callback resolve the UploadFile without racing setState.
+  const filesByUidRef       = useRef<Map<string, UploadFile>>(new Map())
 
   function updateFile(uid: string, patch: Partial<UploadFile>) {
-    setFiles((prev) => prev.map((f) => f.uid === uid ? { ...f, ...patch } : f))
+    setFiles((prev) => {
+      const next = prev.map((f) => f.uid === uid ? { ...f, ...patch } : f)
+      const updated = next.find((f) => f.uid === uid)
+      if (updated) filesByUidRef.current.set(uid, updated)
+      return next
+    })
   }
+
+  const parseProgress = useParseProgress({
+    onUpdate: (taskId, parseState) => {
+      const uid = taskToUidRef.current.get(taskId)
+      if (!uid) return
+      updateFile(uid, { parseState })
+    },
+    onDone: (taskId, parseState, detail) => {
+      const uid = taskToUidRef.current.get(taskId)
+      if (!uid) return
+      taskToUidRef.current.delete(taskId)
+      const patch: Partial<UploadFile> = { parseState }
+      if (parseState === 'parse_failed') {
+        patch.parseError = detail.error ?? '解析失败'
+      }
+      updateFile(uid, patch)
+      const final = { ...filesByUidRef.current.get(uid)!, ...patch }
+      onParseSettled?.(final)
+    },
+  })
+
+  const beginParse = useCallback(
+    async (uid: string, documentId: number) => {
+      updateFile(uid, { parseState: 'pending' })
+      try {
+        const { task_id } = await triggerParse(documentId)
+        taskToUidRef.current.set(task_id, uid)
+        updateFile(uid, { parseTaskId: task_id, parseState: 'pending' })
+        parseProgress.start(task_id)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '触发解析失败'
+        updateFile(uid, { parseState: 'parse_failed', parseError: msg })
+      }
+    },
+    [parseProgress],
+  )
 
   const startUpload = useCallback(async (file: File) => {
     const uid: string = nanoid()
@@ -50,27 +103,40 @@ export default function UploadZone({ onUploaded }: Props) {
     const entry: UploadFile = {
       uid, name: file.name, size: file.size, type: file.type,
       fileType, status: 'uploading', progress: 0,
+      parseState: 'idle',
     }
     setFiles((prev) => [...prev, entry])
+    filesByUidRef.current.set(uid, entry)
 
     const ctrl = new AbortController()
     abortsRef.current.set(uid, ctrl)
 
     try {
-      const url = await mockUploadFile(
+      const uploaded = await uploadFile(
         file,
         (pct) => updateFile(uid, { progress: pct }),
-        ctrl.signal
+        ctrl.signal,
       )
-      updateFile(uid, { status: 'success', progress: 100, url })
-      onUploaded?.([{ ...entry, status: 'success', progress: 100, url }])
+      updateFile(uid, {
+        status: 'success',
+        progress: 100,
+        url: uploaded.url,
+        documentId: uploaded.id,
+      })
+      onUploaded?.([{
+        ...entry, status: 'success', progress: 100,
+        url: uploaded.url, documentId: uploaded.id,
+      }])
+      // Auto-fire the parse pipeline. Fire-and-forget — progress is
+      // tracked via useParseProgress.
+      void beginParse(uid, uploaded.id)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '上传失败'
       updateFile(uid, { status: 'error', error: msg })
     } finally {
       abortsRef.current.delete(uid)
     }
-  }, [onUploaded])
+  }, [onUploaded, beginParse])
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return
@@ -86,16 +152,12 @@ export default function UploadZone({ onUploaded }: Props) {
   function retryFile(uid: string) {
     const f = files.find((x) => x.uid === uid)
     if (!f) return
-    // Create a mock File to retry (in real app would keep original)
-    const blob = new Blob([''], { type: f.type })
-    const file = new File([blob], f.name, { type: f.type })
-    updateFile(uid, { status: 'uploading', progress: 0, error: undefined })
-    const ctrl = new AbortController()
-    abortsRef.current.set(uid, ctrl)
-    mockUploadFile(file, (pct) => updateFile(uid, { progress: pct }), ctrl.signal)
-      .then((url) => updateFile(uid, { status: 'success', progress: 100, url }))
-      .catch((err) => updateFile(uid, { status: 'error', error: err.message }))
-      .finally(() => abortsRef.current.delete(uid))
+    // If upload itself failed we can't retry — the original File reference
+    // is gone. User must re-drag the file. When parse failed, however, we
+    // have documentId in hand and can just re-kick the pipeline.
+    if (f.parseState === 'parse_failed' && f.documentId !== undefined) {
+      void beginParse(uid, f.documentId)
+    }
   }
 
   function clearAll() {
@@ -104,9 +166,16 @@ export default function UploadZone({ onUploaded }: Props) {
     setFiles([])
   }
 
-  const doneCount = files.filter((f) => f.status === 'success').length
-  const errorCount = files.filter((f) => f.status === 'error').length
-  const uploadingCount = files.filter((f) => f.status === 'uploading').length
+  const doneCount = files.filter((f) => f.parseState === 'parsed').length
+  const errorCount = files.filter(
+    (f) => f.status === 'error' || f.parseState === 'parse_failed',
+  ).length
+  const uploadingCount = files.filter(
+    (f) =>
+      f.status === 'uploading' ||
+      f.parseState === 'pending' ||
+      f.parseState === 'parsing',
+  ).length
 
   return (
     <div className="space-y-3">
@@ -206,16 +275,62 @@ export default function UploadZone({ onUploaded }: Props) {
                     {f.status === 'error' && (
                       <span className="text-xs text-red-500">{f.error}</span>
                     )}
+                    {/* Parse stage — only render when upload succeeded so
+                       we don't confuse upload vs parse states visually. */}
+                    {f.status === 'success' && f.parseState === 'pending' && (
+                      <span className="text-xs text-slate-400">已上传 · 等待解析…</span>
+                    )}
+                    {f.status === 'success' && f.parseState === 'parsing' && (
+                      <Progress
+                        percent={100}
+                        size="small"
+                        showInfo={false}
+                        status="active"
+                        strokeColor="var(--ekm-primary)"
+                        className="flex-1 !mb-0"
+                        style={{ lineHeight: 1 }}
+                      />
+                    )}
+                    {f.status === 'success' && f.parseState === 'parsed' && (
+                      <span className="text-xs text-green-600">已解析 · 已索引</span>
+                    )}
+                    {f.status === 'success' && f.parseState === 'parse_failed' && (
+                      <span className="text-xs text-red-500">
+                        解析失败：{f.parseError ?? '未知错误'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Status icon + actions */}
+                {/* Status icon + actions. Upload-stage states take priority;
+                    once upload is done we reflect parse-stage state. */}
                 <div className="flex items-center gap-1 shrink-0">
                   {f.status === 'uploading' && (
                     <LoadingOutlined className="text-primary text-base" />
                   )}
-                  {f.status === 'success' && (
+                  {f.status === 'success' &&
+                    (f.parseState === 'pending' || f.parseState === 'parsing') && (
+                      <LoadingOutlined className="text-primary text-base" />
+                    )}
+                  {f.status === 'success' && f.parseState === 'parsed' && (
                     <CheckCircleFilled className="text-green-500 text-base" />
+                  )}
+                  {f.status === 'success' && f.parseState === 'idle' && (
+                    // Uploaded but parse not yet triggered — usually a brief flash
+                    <CheckCircleFilled className="text-green-500 text-base" />
+                  )}
+                  {f.status === 'success' && f.parseState === 'parse_failed' && (
+                    <>
+                      <ExclamationCircleFilled className="text-red-400 text-base" />
+                      <Tooltip title="重新解析">
+                        <button
+                          onClick={() => retryFile(f.uid)}
+                          className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-primary"
+                        >
+                          <ReloadOutlined className="text-xs" />
+                        </button>
+                      </Tooltip>
+                    </>
                   )}
                   {f.status === 'error' && (
                     <>
