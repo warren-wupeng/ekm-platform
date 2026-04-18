@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin } from 'antd'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
@@ -54,10 +54,24 @@ const TYPE_COLOR: Record<FileType, string> = {
 
 export default function KnowledgePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // ?doc=<id> — AI assistant links use this to deep-link to a specific
+  // document. We filter the table to just that row so the user lands on
+  // the referenced doc without manual searching. Clicking "清除" drops
+  // the query param and restores the full list.
+  const docFilter = searchParams?.get('doc') ?? null
   const { items, isLoading, removeItem, refresh } = useKnowledgeList()
   const [search, setSearch]     = useState('')
   const [activeTab, setActiveTab] = useState('list')
   const [showUpload, setShowUpload] = useState(false)
+
+  function clearDocFilter() {
+    // Preserve any other query params (e.g. future `?category=`).
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    params.delete('doc')
+    const q = params.toString()
+    router.replace(q ? `/knowledge?${q}` : '/knowledge')
+  }
 
   function handleUploaded() {
     // Keep the upload panel open until parse settles — closing it here
@@ -75,10 +89,16 @@ export default function KnowledgePage() {
     removeItem(id)
   }
 
-  const filtered = items.filter((i) =>
-    !search || i.name.toLowerCase().includes(search.toLowerCase()) ||
-    i.tags.some((t) => t.includes(search))
-  )
+  const filtered = items.filter((i) => {
+    if (docFilter && String(i.id) !== docFilter) return false
+    if (!search) return true
+    return i.name.toLowerCase().includes(search.toLowerCase()) ||
+      i.tags.some((t) => t.includes(search))
+  })
+
+  // If ?doc=<id> resolved to nothing (stale link, deleted item), tell the
+  // user explicitly rather than silently showing an empty table.
+  const docNotFound = docFilter && !isLoading && filtered.length === 0
 
   const columns: ColumnsType<KnowledgeItem> = [
     {
@@ -224,6 +244,25 @@ export default function KnowledgePage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-5 space-y-4">
+        {/* AI-assistant deep-link banner */}
+        {docFilter && (
+          <Alert
+            type={docNotFound ? 'warning' : 'info'}
+            showIcon
+            message={
+              docNotFound
+                ? `未找到 ID 为 ${docFilter} 的文件（可能已被删除或无权访问）`
+                : `已按 AI 助手引用筛选至文件 #${docFilter}`
+            }
+            action={
+              <Button size="small" type="link" onClick={clearDocFilter}>
+                清除筛选
+              </Button>
+            }
+            className="rounded-xl"
+          />
+        )}
+
         {/* Upload panel (collapsible) */}
         {showUpload && (
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
