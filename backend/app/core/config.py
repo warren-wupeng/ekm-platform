@@ -16,6 +16,27 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Celery
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    # Search / Vector / Graph
+    ELASTICSEARCH_URL: str = "http://localhost:9200"
+    QDRANT_URL: str = "http://localhost:6333"
+    NEO4J_URL: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "ekm_neo4j_pw"
+
+    # Document parsing
+    TIKA_URL: str = "http://localhost:9998"
+
+    # LLM (LiteLLM)
+    LLM_MODEL: str = "claude-sonnet-4-6"
+    LLM_API_BASE: str = "https://ai-gateway.happycapy.ai/api/v1"
+    LLM_API_KEY: str = ""
+    LLM_MAX_TOKENS: int = 2048
+    LLM_TEMPERATURE: float = 0.3
+
     # JWT
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"

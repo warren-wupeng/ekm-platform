@@ -20,6 +20,17 @@ python-multipart==0.0.20
 redis==5.2.1
 celery==5.4.0
 
+# LLM
+litellm==1.52.16
+
+# Search / Vector / Graph
+elasticsearch==8.15.1
+qdrant-client==1.12.1
+neo4j==5.25.0
+
+# Document parsing
+tika==2.6.0
+
 # Utils
 httpx==0.28.1
 python-dotenv==1.0.1

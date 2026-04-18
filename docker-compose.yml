@@ -1,0 +1,149 @@
+# EKM Platform — unified development environment.
+#
+# Usage:
+#   cp backend/.env.example backend/.env
+#   docker compose up -d
+#   curl localhost:8000/health
+#
+# All services bind to 127.0.0.1 by default — safe on shared machines.
+
+name: ekm
+
+services:
+  # ── Database ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ekm
+      POSTGRES_PASSWORD: ekm
+      POSTGRES_DB: ekm
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekm -d ekm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Cache / Queue broker ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Full-text search ──────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # ── Vector DB (RAG) ───────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333 && echo -e \"GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n\" >&3 && head -n1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Knowledge graph ───────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/ekm_neo4j_pw
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # ── Document parser (Tika REST server) ────────────────────────────────
+  tika:
+    image: apache/tika:2.9.2.1
+    ports:
+      - "127.0.0.1:9998:9998"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9998/tika || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Backend API ───────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app            # live reload during dev
+      - upload_data:/data/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:      { condition: service_healthy }
+      redis:         { condition: service_healthy }
+      elasticsearch: { condition: service_healthy }
+      qdrant:        { condition: service_healthy }
+      neo4j:         { condition: service_healthy }
+      tika:          { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Celery worker (enabled in #9) ─────────────────────────────────────
+  # Stays in compose for orchestration; the worker entrypoint will be
+  # wired up when Celery tasks land in #9/#15/#16/#22.
+  worker:
+    build: ./backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - upload_data:/data/uploads
+    depends_on:
+      redis:         { condition: service_healthy }
+      postgres:      { condition: service_healthy }
+    restart: unless-stopped
+    profiles: ["worker"]   # opt-in: `docker compose --profile worker up`
+
+volumes:
+  pg_data:
+  es_data:
+  qdrant_data:
+  neo4j_data:
+  upload_data:
