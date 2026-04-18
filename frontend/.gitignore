@@ -17,3 +17,6 @@ npm-debug.log*
 # Misc
 .DS_Store
 *.pem
+
+# TS incremental build cache
+tsconfig.tsbuildinfo

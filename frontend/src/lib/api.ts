@@ -1,17 +1,21 @@
 import axios from 'axios'
+import { useAuthStore } from '@/store/auth'
+
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach token from localStorage
+// Attach token from Zustand persisted store. Reading getState() is safe
+// both during and after hydration — pre-hydration the token is null and
+// the interceptor just omits the header (unauthenticated endpoints still work).
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('ekm_token')
-    if (token) config.headers.Authorization = `Bearer ${token}`
-  }
+  const token = useAuthStore.getState().token
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
@@ -20,8 +24,7 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('ekm_token')
-      localStorage.removeItem('ekm_refresh_token')
+      useAuthStore.getState().clearAuth()
       window.location.href = '/login'
     }
     return Promise.reject(err)

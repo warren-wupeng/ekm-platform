@@ -21,3 +21,14 @@ body {
     'Segoe UI', Helvetica, Arial, sans-serif;
   margin: 0;
 }
+
+/* Elasticsearch returns <em> tags for highlighted hits — style them to
+   match the brand color without overriding semantic italics elsewhere. */
+.ekm-search-hit em {
+  font-style: normal;
+  color: var(--ekm-primary);
+  background: var(--ekm-primary-light);
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}

@@ -2,14 +2,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Input, Select, Space, Segmented, Empty, Spin, Tag, Tooltip,
-  AutoComplete,
+  AutoComplete, Skeleton, message,
 } from 'antd'
 import {
   SearchOutlined, FilterOutlined, SortAscendingOutlined,
   FileTextOutlined, MessageOutlined, PaperClipOutlined,
   BookOutlined, CloseOutlined, FireOutlined,
 } from '@ant-design/icons'
-import { mockSearch, mockSuggest } from '@/lib/mockSearch'
+import { searchItems, suggestQuery } from '@/lib/searchApi'
 import ResultCard from '@/components/search/ResultCard'
 import type { SearchFilters, SortBy, SearchResult } from '@/types/search'
 
@@ -51,9 +51,17 @@ export default function SearchPage() {
     setLoading(true)
     setHasSearched(true)
     try {
-      const res = await mockSearch(q, f, s)
+      const res = await searchItems({ q, filters: f, sort: s })
       setResults(res.results)
       setTotal(res.total)
+    } catch (e) {
+      // Degrade gracefully: show empty results + toast the cause.
+      setResults([])
+      setTotal(0)
+      const detail =
+        (e as { response?: { data?: { detail?: string } }; message?: string })
+          ?.response?.data?.detail ?? (e as Error)?.message ?? '搜索失败'
+      message.error(`搜索失败：${detail}`)
     } finally {
       setLoading(false)
     }
@@ -77,7 +85,7 @@ export default function SearchPage() {
     setInputVal(val)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
-      const s = await mockSuggest(val)
+      const s = await suggestQuery(val)
       setSuggestions(s.map((v) => ({ value: v })))
     }, 200)
   }
@@ -222,9 +230,20 @@ export default function SearchPage() {
         )}
 
         {loading && (
-          <div className="flex items-center justify-center py-16">
-            <Spin size="large" tip="搜索中…" />
-          </div>
+          <Space direction="vertical" className="w-full" size={10}>
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="bg-white rounded-xl border border-slate-200 px-5 py-4"
+              >
+                <Skeleton
+                  active
+                  title={{ width: '40%' }}
+                  paragraph={{ rows: 2, width: ['100%', '80%'] }}
+                />
+              </div>
+            ))}
+          </Space>
         )}
 
         {!loading && hasSearched && (

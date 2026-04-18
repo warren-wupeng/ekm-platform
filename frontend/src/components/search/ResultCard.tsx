@@ -54,9 +54,10 @@ export default function ResultCard({ result }: Props) {
             {result.title}
           </h3>
 
-          {/* Snippet with keyword highlight */}
+          {/* Snippet with keyword highlight. ES returns <em>…</em> around hits;
+             we restyle to match our primary color accent. */}
           <p
-            className="text-slate-500 text-xs leading-relaxed line-clamp-2 mb-2"
+            className="text-slate-500 text-xs leading-relaxed line-clamp-2 mb-2 ekm-search-hit"
             dangerouslySetInnerHTML={{ __html: result.highlightedSnippet ?? result.snippet }}
           />
 
