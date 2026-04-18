@@ -11,6 +11,12 @@ from app.models.user import User
 from app.schemas.sharing import CreateShareRequest, ShareTarget
 
 
+# How long a soft-deleted share stays recoverable before the purge task
+# hard-deletes it. Single source of truth — the Celery task and the router
+# both import this.
+RETENTION_DAYS = 30
+
+
 class SharingError(Exception):
     def __init__(self, message: str, code: str = "SHARING_ERROR"):
         self.message = message
@@ -58,12 +64,46 @@ async def create_share(
 
 
 async def resolve_public_token(db: AsyncSession, token: str) -> SharingRecord:
-    result = await db.execute(select(SharingRecord).where(SharingRecord.token == token))
+    result = await db.execute(
+        select(SharingRecord).where(
+            SharingRecord.token == token,
+            SharingRecord.deleted_at.is_(None),  # revoked links 404
+        )
+    )
     record: SharingRecord | None = result.scalar_one_or_none()
     if not record:
         raise SharingError("分享链接无效", "INVALID_TOKEN")
     if record.expires_at and record.expires_at < datetime.now(timezone.utc):
         raise SharingError("分享链接已过期", "TOKEN_EXPIRED")
+    return record
+
+
+async def soft_delete_share(db: AsyncSession, record: SharingRecord) -> SharingRecord:
+    """Mark a share as deleted without removing the row.
+
+    Idempotent — re-revoking a soft-deleted record does not reset the
+    clock, which would extend the user's recovery window unfairly.
+    """
+    if record.deleted_at is None:
+        record.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+    return record
+
+
+async def restore_share(db: AsyncSession, record: SharingRecord) -> SharingRecord:
+    """Clear the soft-delete marker if still within the retention window.
+
+    Raises SharingError(\"RESTORE_WINDOW_EXPIRED\") if the window has elapsed
+    — at that point the row is only waiting for the purge task to sweep it,
+    and the user would get inconsistent behaviour otherwise.
+    """
+    if record.deleted_at is None:
+        return record  # already active, no-op
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    if record.deleted_at < cutoff:
+        raise SharingError("恢复窗口已过期", "RESTORE_WINDOW_EXPIRED")
+    record.deleted_at = None
+    await db.flush()
     return record
 
 
@@ -79,6 +119,7 @@ async def check_user_access(
     result = await db.execute(
         select(SharingRecord).where(
             SharingRecord.knowledge_item_id == knowledge_item_id,
+            SharingRecord.deleted_at.is_(None),   # revoked shares never grant access
             (
                 (SharingRecord.shared_to_user_id == user.id)
                 | (SharingRecord.shared_to_department == user.department)

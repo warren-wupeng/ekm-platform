@@ -46,6 +46,13 @@ class ShareResponse(BaseModel):
     public_url: str | None   # constructed by router
     expires_at: datetime | None
     created_at: datetime
+    # Soft-delete metadata — `is_deleted` is redundant with `deleted_at`
+    # but cheap, and saves the client a null-check when it only wants to
+    # render status pills.
+    deleted_at: datetime | None = None
+    is_deleted: bool = False
+    # Present only on trash listings; days remaining before auto-purge.
+    restore_days_left: int | None = None
 
     model_config = {"from_attributes": True}
 

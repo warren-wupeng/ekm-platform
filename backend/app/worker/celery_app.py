@@ -13,6 +13,7 @@ Or via compose:
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -44,4 +45,14 @@ celery_app.conf.update(
     # Prefetch 1 so a slow parse doesn't starve other workers.
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+
+    # Periodic jobs — requires running `celery beat` alongside the worker:
+    #     celery -A app.worker.celery_app beat --loglevel=info
+    # See docker-compose.yml `beat` service (profile: worker).
+    beat_schedule={
+        "sharing-purge-expired-daily": {
+            "task": "ekm.sharing.purge_expired",
+            "schedule": crontab(hour=3, minute=17),  # 03:17 UTC — off-peak
+        },
+    },
 )

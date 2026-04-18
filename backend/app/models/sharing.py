@@ -37,6 +37,10 @@ class SharingRecord(Base):
     token: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)  # public link token
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Soft-delete: NULL means active. Set to revoke-time; the owner can restore
+    # within 30 days. A Celery beat task purges rows whose deleted_at is older
+    # than the retention window.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     knowledge_item: Mapped["KnowledgeItem"] = relationship("KnowledgeItem", back_populates="sharing_records")  # noqa: F821
     shared_by: Mapped["User"] = relationship("User", foreign_keys=[shared_by_id], back_populates="sharing_records")  # noqa: F821
