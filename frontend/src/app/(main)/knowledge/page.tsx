@@ -5,21 +5,39 @@ import type { ColumnsType } from 'antd/es/table'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
   DeleteOutlined, EyeOutlined, TagOutlined,
-  FileTextOutlined, FileImageOutlined, FileZipOutlined,
-  SoundOutlined, VideoCameraOutlined, FileOutlined,
+  FilePdfOutlined, FileWordOutlined, FileExcelOutlined, FilePptOutlined,
+  FileZipOutlined, FileImageOutlined, FileTextOutlined, FileOutlined,
+  SoundOutlined, VideoCameraOutlined,
 } from '@ant-design/icons'
 import UploadZone from '@/components/upload/UploadZone'
 import { formatFileSize, MOCK_KNOWLEDGE_LIST } from '@/lib/mockUpload'
 import type { KnowledgeItem } from '@/types/upload'
 import type { FileType } from '@/types/upload'
 
-const TYPE_ICON: Record<FileType, React.ReactNode> = {
-  document: <FileTextOutlined className="text-primary" />,
-  image:    <FileImageOutlined className="text-cyan-500" />,
-  archive:  <FileZipOutlined className="text-orange-400" />,
-  audio:    <SoundOutlined className="text-purple-500" />,
-  video:    <VideoCameraOutlined className="text-pink-500" />,
-  other:    <FileOutlined className="text-slate-400" />,
+function getFileIcon(name: string): React.ReactNode {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  switch (ext) {
+    case 'pdf':
+      return <FilePdfOutlined style={{ color: '#dc2626' }} />
+    case 'doc': case 'docx':
+      return <FileWordOutlined style={{ color: '#2563eb' }} />
+    case 'xls': case 'xlsx':
+      return <FileExcelOutlined style={{ color: '#16a34a' }} />
+    case 'ppt': case 'pptx':
+      return <FilePptOutlined style={{ color: '#ea580c' }} />
+    case 'zip': case 'rar': case 'tar': case 'gz': case '7z':
+      return <FileZipOutlined style={{ color: '#ca8a04' }} />
+    case 'png': case 'jpg': case 'jpeg': case 'gif': case 'webp': case 'svg':
+      return <FileImageOutlined style={{ color: '#7c3aed' }} />
+    case 'mp3': case 'wav': case 'aac': case 'flac':
+      return <SoundOutlined className="text-purple-500" />
+    case 'mp4': case 'mov': case 'avi': case 'mkv':
+      return <VideoCameraOutlined className="text-pink-500" />
+    case 'txt': case 'md':
+      return <FileTextOutlined className="text-slate-500" />
+    default:
+      return <FileOutlined className="text-slate-400" />
+  }
 }
 
 const TYPE_LABEL: Record<FileType, string> = {
@@ -57,9 +75,9 @@ export default function KnowledgePage() {
       title: '文件名',
       dataIndex: 'name',
       key: 'name',
-      render: (name, record) => (
+      render: (name: string) => (
         <div className="flex items-center gap-2">
-          <span className="text-base">{TYPE_ICON[record.fileType]}</span>
+          <span className="text-base">{getFileIcon(name)}</span>
           <span className="text-slate-700 text-sm font-medium truncate max-w-[260px]">{name}</span>
         </div>
       ),
