@@ -7,7 +7,7 @@ import {
   ReadOutlined, TeamOutlined, BranchesOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
-import { mockLogin } from '@/lib/mock'
+import api from '@/lib/api'
 
 const FEATURES = [
   {
@@ -37,12 +37,17 @@ export default function LoginPage() {
   async function handleLogin(values: { username: string; password: string }) {
     setLoading(true)
     try {
-      const res = await mockLogin(values.username, values.password)
-      setAuth(res.user, res.access_token, res.refresh_token)
+      const loginRes = await api.post('/api/v1/auth/login', values)
+      const { access_token, refresh_token } = loginRes.data
+      const meRes = await api.get('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      })
+      setAuth(meRes.data, access_token, refresh_token)
       message.success('登录成功')
       router.replace('/dashboard')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '登录失败，请重试'
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
+      const msg = axiosErr?.response?.data?.detail ?? '登录失败，请检查用户名或密码'
       message.error(msg)
     } finally {
       setLoading(false)
