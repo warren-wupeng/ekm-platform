@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://ekm:ekm@localhost:5432/ekm"
+    DATABASE_SSL: bool = False  # Set True when using external Postgres with SSL
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
