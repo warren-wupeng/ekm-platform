@@ -26,11 +26,19 @@ def ping(self) -> dict[str, Any]:
 
 
 @celery_app.task(name="ekm.docs.parse", bind=True, max_retries=3, default_retry_delay=30)
-def parse_document(self, document_id: str) -> dict[str, Any]:
-    """Stub — filled in by #15. Extracts text + metadata via Tika,
-    persists chunks, then chains index_to_es + vectorize_chunks."""
-    log.info("parse_document stub invoked for %s", document_id)
-    return {"document_id": document_id, "status": "pending_impl"}
+def parse_document(self, document_id: int) -> dict[str, Any]:
+    """Extract text + metadata via Tika, persist chunks, then chain
+    index_to_es + vectorize_chunks so the downstream stores stay in sync.
+    """
+    from app.services.document_parse import parse_and_persist
+
+    result = parse_and_persist(int(document_id))
+
+    # Fan out: ES indexing + Qdrant embedding run independently.
+    index_to_es.delay(int(document_id))
+    vectorize_chunks.delay(int(document_id))
+
+    return {"document_id": document_id, "status": "parsed", **result}
 
 
 @celery_app.task(name="ekm.docs.index", bind=True, max_retries=3, default_retry_delay=30)

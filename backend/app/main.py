@@ -10,6 +10,7 @@ from app.routers import auth
 from app.routers import files
 from app.routers import sharing
 from app.routers import tasks
+from app.routers import documents
 
 
 @asynccontextmanager
@@ -45,6 +46,7 @@ app.include_router(auth.router)
 app.include_router(files.router)
 app.include_router(sharing.router)
 app.include_router(tasks.router)
+app.include_router(documents.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
