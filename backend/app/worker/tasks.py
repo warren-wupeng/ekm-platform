@@ -122,6 +122,138 @@ def purge_expired_shares(self) -> dict[str, Any]:
     return {"cutoff": cutoff.isoformat(), "purged": purged, "status": "ok"}
 
 
+@celery_app.task(name="ekm.archive.tick", bind=True)
+def archive_tick(self) -> dict[str, Any]:
+    """Daily sweep: send pre-archive reminders + auto-archive stale items.
+
+    One pass, two phases:
+      1. For each non-archived item matched by some enabled rule, compute
+         its effective (tightest) threshold. If it's inside the reminder
+         window (threshold - ARCHIVE_REMINDER_DAYS_BEFORE <= updated_at
+         < threshold) and we haven't already sent a reminder for this
+         window, fire ARCHIVE_REMINDER (in-app + email).
+      2. If the item is past the threshold, flip is_archived=True,
+         archived_at=now, and fire AUTO_ARCHIVED.
+
+    All notification pushes go DB-only — this runs in the Celery worker
+    process, which has no access to the FastAPI WS ConnectionManager.
+    Users will receive the backlog on next WS connect.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.config import settings
+    from app.models.knowledge import KnowledgeItem
+    from app.models.notification import Notification, NotificationType
+    from app.models.user import User
+    from app.services.archive import (
+        fetch_candidates, load_active_rules, resolve_effective_rule,
+    )
+    from app.services.document_parse import SyncSession
+    from app.services.mailer import send_sync as mail_send
+
+    now = datetime.now(timezone.utc)
+    reminder_window = timedelta(days=settings.ARCHIVE_REMINDER_DAYS_BEFORE)
+
+    reminders = 0
+    archived = 0
+
+    with SyncSession() as db:
+        rules = load_active_rules(db)
+        if not rules:
+            return {"status": "no_rules", "reminders": 0, "archived": 0}
+
+        items = fetch_candidates(db)
+        for item in items:
+            eff = resolve_effective_rule(db, item, rules)
+            if eff is None:
+                continue
+
+            threshold_at = item.updated_at + timedelta(days=eff.inactive_days)
+
+            if now >= threshold_at:
+                # Phase 2: past threshold — auto-archive.
+                item.is_archived = True
+                item.archived_at = now
+                db.add(Notification(
+                    user_id=item.uploader_id,
+                    type=NotificationType.AUTO_ARCHIVED,
+                    title=f"已自动归档: {item.name}",
+                    payload={
+                        "knowledge_id": item.id,
+                        "name": item.name,
+                        "rule_id": eff.rule_id,
+                        "rule_name": eff.rule_name,
+                        "inactive_days": eff.inactive_days,
+                    },
+                ))
+                archived += 1
+                # Email the uploader (best-effort).
+                uploader = db.get(User, item.uploader_id)
+                if uploader and uploader.email:
+                    mail_send(
+                        to=uploader.email,
+                        subject=f"[EKM] 文档已自动归档: {item.name}",
+                        body=(
+                            f"您的文档「{item.name}」已根据规则「{eff.rule_name}」"
+                            f"自动归档（超过 {eff.inactive_days} 天未更新）。\n"
+                            f"如需恢复，请访问: {settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
+                        ),
+                    )
+                continue
+
+            # Phase 1: inside reminder window?
+            window_start = threshold_at - reminder_window
+            if now < window_start:
+                continue  # too early — no action
+
+            # Only send one reminder per window. If we've already sent
+            # one that's newer than window_start, skip.
+            if (
+                item.archive_reminder_sent_at is not None
+                and item.archive_reminder_sent_at >= window_start
+            ):
+                continue
+
+            days_left = max(0, (threshold_at - now).days)
+            db.add(Notification(
+                user_id=item.uploader_id,
+                type=NotificationType.ARCHIVE_REMINDER,
+                title=f"即将归档: {item.name}（{days_left} 天后）",
+                payload={
+                    "knowledge_id": item.id,
+                    "name": item.name,
+                    "days_left": days_left,
+                    "threshold_at": threshold_at.isoformat(),
+                    "rule_id": eff.rule_id,
+                    "rule_name": eff.rule_name,
+                },
+            ))
+            item.archive_reminder_sent_at = now
+            reminders += 1
+
+            uploader = db.get(User, item.uploader_id)
+            if uploader and uploader.email:
+                mail_send(
+                    to=uploader.email,
+                    subject=f"[EKM] 文档 {days_left} 天后将自动归档: {item.name}",
+                    body=(
+                        f"您的文档「{item.name}」将在 {days_left} 天后根据规则"
+                        f"「{eff.rule_name}」自动归档。\n"
+                        f"要保留该文档，请在此日期前更新或查看:\n"
+                        f"{settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
+                    ),
+                )
+
+        db.commit()
+
+    log.info("archive tick: reminders=%d archived=%d", reminders, archived)
+    return {
+        "status": "ok",
+        "reminders": reminders,
+        "archived": archived,
+    }
+
+
 @celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=60)
 def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
     """Embed each DocumentChunk + upsert to Qdrant. Idempotent on re-run."""

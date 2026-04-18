@@ -21,6 +21,7 @@ from app.routers import ai
 from app.routers import feedback
 from app.routers import graph as graph_router
 from app.routers import notifications
+from app.routers import archive as archive_router
 
 
 @asynccontextmanager
@@ -94,6 +95,7 @@ for _r in feedback.routers:
     app.include_router(_r)
 app.include_router(graph_router.router)
 app.include_router(notifications.router)
+app.include_router(archive_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])

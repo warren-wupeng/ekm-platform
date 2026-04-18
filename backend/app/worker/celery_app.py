@@ -54,5 +54,11 @@ celery_app.conf.update(
             "task": "ekm.sharing.purge_expired",
             "schedule": crontab(hour=3, minute=17),  # 03:17 UTC — off-peak
         },
+        # Auto-archive sweep (US-058/059). 03:42 UTC — staggered from
+        # sharing-purge so two long-running jobs don't contend for the DB.
+        "archive-tick-daily": {
+            "task": "ekm.archive.tick",
+            "schedule": crontab(hour=3, minute=42),
+        },
     },
 )

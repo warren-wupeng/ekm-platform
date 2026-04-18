@@ -7,6 +7,7 @@ from app.models.version import KnowledgeVersion
 from app.models.community import Post, Reply, ReplyLike
 from app.models.feedback import ChatFeedback, FeedbackRating
 from app.models.notification import Notification, NotificationType
+from app.models.archive import ArchiveRule
 
 __all__ = [
     "User", "UserRole",
@@ -18,4 +19,5 @@ __all__ = [
     "Post", "Reply", "ReplyLike",
     "ChatFeedback", "FeedbackRating",
     "Notification", "NotificationType",
+    "ArchiveRule",
 ]
