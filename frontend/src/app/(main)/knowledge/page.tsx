@@ -4,7 +4,7 @@ import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm } fr
 import type { ColumnsType } from 'antd/es/table'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
-  DeleteOutlined, EyeOutlined, TagOutlined,
+  DeleteOutlined, EyeOutlined, TagOutlined, FireOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, FilePptOutlined,
   FileZipOutlined, FileImageOutlined, FileTextOutlined, FileOutlined,
   SoundOutlined, VideoCameraOutlined,
@@ -134,9 +134,14 @@ export default function KnowledgePage() {
       title: '下载',
       dataIndex: 'downloads',
       key: 'downloads',
-      width: 60,
+      width: 72,
       align: 'center',
-      render: (v: number) => <span className="text-slate-400 text-xs">{v}</span>,
+      render: (v: number) => (
+        <span className="inline-flex items-center gap-1">
+          {v >= 20 && <FireOutlined className="text-orange-500 text-xs" />}
+          <span className="text-slate-400 text-xs">{v}</span>
+        </span>
+      ),
       sorter: (a, b) => a.downloads - b.downloads,
     },
     {
