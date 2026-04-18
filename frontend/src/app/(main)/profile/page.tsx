@@ -1,9 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { Avatar, Tag, Button, Tabs, Statistic, Form, Input, Select, message } from 'antd'
+import { Avatar, Tag, Button, Tabs, Form, Input, Select, message, Badge, Drawer } from 'antd'
 import {
   EditOutlined, FileTextOutlined, TeamOutlined,
-  CheckOutlined, LikeOutlined,
+  CheckOutlined, LikeOutlined, StarOutlined,
+  BellOutlined, ClockCircleOutlined, InfoCircleOutlined,
+  CheckCircleOutlined, WarningOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -18,17 +20,56 @@ const MOCK_POSTS = [
   { id: 'p2', title: 'EKM 知识图谱功能上线！', date: '2026-04-17', likes: 24 },
 ]
 
+const MOCK_FAVORITES = [
+  { id: 'f1', name: '新员工入职手册 2026', type: 'document', date: '2026-04-16' },
+  { id: 'f2', name: 'EKM 使用指南', type: 'document', date: '2026-04-14' },
+  { id: 'f3', title: '关于知识库分类体系的讨论', type: 'post', date: '2026-04-13' },
+  { id: 'f4', name: 'Q2 产品路线图.pptx', type: 'document', date: '2026-04-11' },
+]
+
+interface Notification {
+  id: string
+  type: 'like' | 'share' | 'system' | 'mention'
+  text: string
+  detail: string
+  time: string
+  read: boolean
+}
+
+const MOCK_NOTIFICATIONS: Notification[] = [
+  { id: 'n1', type: 'like',    text: 'Warren Wu 点赞了你的帖子',              detail: 'RAG 召回率优化实践：从 67% 到 91%', time: '10 分钟前', read: false },
+  { id: 'n2', type: 'share',   text: 'Luca Rossi 分享了一份文档给你',         detail: '市场推广策略 2026 H1',             time: '1 小时前',  read: false },
+  { id: 'n3', type: 'mention', text: 'Mira Tang 在帖子中提到了你',            detail: '产品周报 #12 中 @Kira',           time: '昨天',      read: false },
+  { id: 'n4', type: 'system',  text: '知识库月度报告已生成',                  detail: '2026 年 3 月知识库统计报告可下载', time: '2 天前',    read: true },
+  { id: 'n5', type: 'like',    text: 'Luca Rossi 点赞了你的帖子',             detail: 'EKM 知识图谱功能上线！',          time: '3 天前',    read: true },
+  { id: 'n6', type: 'system',  text: '你上传的「技术架构设计.docx」被下载 10 次', detail: '本月下载量突破 10 次里程碑',  time: '4 天前',    read: true },
+]
+
+const NOTIF_ICON: Record<string, React.ReactNode> = {
+  like:    <LikeOutlined className="text-blue-500" />,
+  share:   <StarOutlined className="text-yellow-500" />,
+  system:  <InfoCircleOutlined className="text-slate-400" />,
+  mention: <TeamOutlined className="text-purple-500" />,
+}
+
 export default function ProfilePage() {
   const { user } = useAuth()
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing]               = useState(false)
+  const [msgOpen, setMsgOpen]               = useState(false)
+  const [notifications, setNotifications]   = useState<Notification[]>(MOCK_NOTIFICATIONS)
   const [form] = Form.useForm()
 
   const displayName = user?.displayName ?? 'Kira Chen'
   const email       = user?.email ?? 'kira@ekm.ai'
+  const unread      = notifications.filter((n) => !n.read).length
 
   function handleSave(values: { displayName: string; department: string; bio: string }) {
     message.success('个人信息已保存')
     setEditing(false)
+  }
+
+  function markAllRead() {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }
 
   return (
@@ -52,16 +93,26 @@ export default function ProfilePage() {
                 <span className="text-xs text-slate-400">加入于 2026-01-10</span>
               </div>
             </div>
-            <Button
-              size="small" icon={<EditOutlined />}
-              onClick={() => {
-                form.setFieldsValue({ displayName, department: '技术', bio: '分布式系统 & AI infra 工程师，前 Databricks。' })
-                setEditing(true)
-              }}
-              className="flex-shrink-0"
-            >
-              编辑资料
-            </Button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Message center bell */}
+              <Badge count={unread} size="small">
+                <Button
+                  size="small" icon={<BellOutlined />}
+                  onClick={() => setMsgOpen(true)}
+                >
+                  消息
+                </Button>
+              </Badge>
+              <Button
+                size="small" icon={<EditOutlined />}
+                onClick={() => {
+                  form.setFieldsValue({ displayName, department: '技术', bio: '分布式系统 & AI infra 工程师，前 Databricks。' })
+                  setEditing(true)
+                }}
+              >
+                编辑资料
+              </Button>
+            </div>
           </div>
 
           {/* Stats */}
@@ -125,9 +176,77 @@ export default function ProfilePage() {
                 </div>
               ),
             },
+            {
+              key: 'favorites',
+              label: <span><StarOutlined className="mr-1" />我的收藏</span>,
+              children: (
+                <div className="space-y-2">
+                  {MOCK_FAVORITES.map((f) => (
+                    <div key={f.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3">
+                      {f.type === 'document'
+                        ? <FileTextOutlined className="text-primary text-base flex-shrink-0" />
+                        : <TeamOutlined className="text-purple-500 text-base flex-shrink-0" />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{(f as any).name ?? (f as any).title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {f.type === 'document' ? '文档' : '帖子'} · 收藏于 {f.date}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ),
+            },
           ]}
         />
       </div>
+
+      {/* Message center drawer */}
+      <Drawer
+        title={
+          <div className="flex items-center justify-between pr-4">
+            <span>消息中心</span>
+            {unread > 0 && (
+              <button className="text-xs text-primary font-normal" onClick={markAllRead}>
+                全部已读
+              </button>
+            )}
+          </div>
+        }
+        open={msgOpen}
+        onClose={() => setMsgOpen(false)}
+        width={360}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div>
+          {notifications.map((n) => (
+            <div
+              key={n.id}
+              className={`px-4 py-3 border-b border-slate-50 flex items-start gap-3 cursor-pointer hover:bg-slate-50/60 transition-colors ${!n.read ? 'bg-blue-50/30' : ''}`}
+              onClick={() => setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x))}
+            >
+              <div className="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                {NOTIF_ICON[n.type]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-slate-700 font-medium leading-snug">{n.text}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{n.detail}</p>
+                <p className="text-[10px] text-slate-300 mt-0.5 flex items-center gap-1">
+                  <ClockCircleOutlined />{n.time}
+                </p>
+              </div>
+              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
+            </div>
+          ))}
+          {notifications.every((n) => n.read) && (
+            <div className="text-center py-12 text-slate-400 flex flex-col items-center gap-2">
+              <CheckCircleOutlined className="text-2xl text-green-400" />
+              <p className="text-sm">没有新消息</p>
+            </div>
+          )}
+        </div>
+      </Drawer>
 
       {/* Edit profile modal */}
       {editing && (

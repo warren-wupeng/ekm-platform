@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.routers import health
+from app.routers import auth
 
 
 @asynccontextmanager
@@ -37,9 +38,10 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router)
+app.include_router(auth.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
-# app.include_router(auth.router,       prefix="/api/v1/auth",      tags=["auth"])
+# app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
 # app.include_router(knowledge.router,  prefix="/api/v1/knowledge", tags=["knowledge"])
 # app.include_router(sharing.router,    prefix="/api/v1/sharing",   tags=["sharing"])
