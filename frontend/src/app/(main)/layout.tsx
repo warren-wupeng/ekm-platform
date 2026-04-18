@@ -8,16 +8,21 @@ import { useUIStore } from '@/store/ui'
 import Sidebar, { COLLAPSED_W, EXPANDED_W } from '@/components/layout/Sidebar'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
   const { sidebarExpanded, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Only act after persist middleware has finished rehydrating from localStorage.
+    // Otherwise a hard refresh kicks the user to /login before state is restored.
+    if (_hasHydrated && !isAuthenticated) {
       router.replace('/login')
     }
-  }, [isAuthenticated, router])
+  }, [_hasHydrated, isAuthenticated, router])
 
+  // Block render until hydration completes — show a blank page briefly instead of
+  // flashing the login page on a valid session refresh.
+  if (!_hasHydrated) return null
   if (!isAuthenticated) return null
 
   const ml = sidebarExpanded ? EXPANDED_W : COLLAPSED_W

@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -7,7 +8,7 @@ import {
   DeleteOutlined, EyeOutlined, TagOutlined, FireOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, FilePptOutlined,
   FileZipOutlined, FileImageOutlined, FileTextOutlined, FileOutlined,
-  SoundOutlined, VideoCameraOutlined,
+  SoundOutlined, VideoCameraOutlined, HistoryOutlined,
 } from '@ant-design/icons'
 import UploadZone from '@/components/upload/UploadZone'
 import { formatFileSize } from '@/lib/mockUpload'
@@ -52,6 +53,7 @@ const TYPE_COLOR: Record<FileType, string> = {
 }
 
 export default function KnowledgePage() {
+  const router = useRouter()
   const { items, isLoading, removeItem } = useKnowledgeList()
   const [search, setSearch]     = useState('')
   const [activeTab, setActiveTab] = useState('list')
@@ -148,7 +150,7 @@ export default function KnowledgePage() {
     {
       title: '操作',
       key: 'actions',
-      width: 100,
+      width: 140,
       align: 'center',
       render: (_, record) => (
         <Space size={4}>
@@ -164,6 +166,14 @@ export default function KnowledgePage() {
               type="text" size="small"
               icon={<DownloadOutlined />}
               className="text-slate-400 hover:text-primary"
+            />
+          </Tooltip>
+          <Tooltip title="版本历史">
+            <Button
+              type="text" size="small"
+              icon={<HistoryOutlined />}
+              className="text-slate-400 hover:text-primary"
+              onClick={() => router.push(`/knowledge/history?id=${record.id}`)}
             />
           </Tooltip>
           <Popconfirm
