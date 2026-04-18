@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm } from 'antd'
+import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
@@ -10,7 +10,8 @@ import {
   SoundOutlined, VideoCameraOutlined,
 } from '@ant-design/icons'
 import UploadZone from '@/components/upload/UploadZone'
-import { formatFileSize, MOCK_KNOWLEDGE_LIST } from '@/lib/mockUpload'
+import { formatFileSize } from '@/lib/mockUpload'
+import { useKnowledgeList } from '@/lib/useKnowledgeList'
 import type { KnowledgeItem } from '@/types/upload'
 import type { FileType } from '@/types/upload'
 
@@ -51,18 +52,18 @@ const TYPE_COLOR: Record<FileType, string> = {
 }
 
 export default function KnowledgePage() {
-  const [items, setItems]       = useState<KnowledgeItem[]>(MOCK_KNOWLEDGE_LIST)
+  const { items, isLoading, removeItem } = useKnowledgeList()
   const [search, setSearch]     = useState('')
   const [activeTab, setActiveTab] = useState('list')
   const [showUpload, setShowUpload] = useState(false)
 
   function handleUploaded() {
-    // In real app, refresh list from API
-    // Here we just close the upload panel
+    // In real app: mutate() to revalidate SWR cache
+    setShowUpload(false)
   }
 
   function handleDelete(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id))
+    removeItem(id)
   }
 
   const filtered = items.filter((i) =>
@@ -253,7 +254,9 @@ export default function KnowledgePage() {
             </div>
 
             {/* Table */}
-            {filtered.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center py-16"><Spin /></div>
+            ) : filtered.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="暂无文件，点击右上角「上传文件」开始"
@@ -271,7 +274,10 @@ export default function KnowledgePage() {
                 columns={columns}
                 rowKey="id"
                 size="small"
-                pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
+                // virtual scroll kicks in for lists > 100 rows; pagination handles smaller sets
+                virtual
+                scroll={{ y: 600 }}
+                pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
                 className="ekm-knowledge-table"
               />
             )}
