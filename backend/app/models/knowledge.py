@@ -67,6 +67,19 @@ class KnowledgeItem(Base):
     download_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Timestamp of the auto-archive event (NULL if never archived or manually
+    # archived via legacy path). Lets the UI explain *why* an item is archived
+    # and gives admins a cutoff for "restore the last 30 days of archives".
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True,
+    )
+    # Last time a reminder was sent for this item's upcoming auto-archive.
+    # Reset to NULL when the item is touched (service layer clears this on
+    # update). See services/archive.py for the "once per pre-archive window"
+    # guard.
+    archive_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
 
     uploader_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET DEFAULT"), nullable=False)
     category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)

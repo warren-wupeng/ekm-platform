@@ -28,10 +28,12 @@ from app.core.database import Base
 
 
 class NotificationType(str, enum.Enum):
-    COMMENT          = "comment"           # new reply on your post
-    LIKE             = "like"              # someone liked your reply
-    MENTION          = "mention"           # @user in a reply
-    KNOWLEDGE_UPDATE = "knowledge_update"  # doc you care about changed
+    COMMENT           = "comment"            # new reply on your post
+    LIKE              = "like"               # someone liked your reply
+    MENTION           = "mention"            # @user in a reply
+    KNOWLEDGE_UPDATE  = "knowledge_update"   # doc you care about changed
+    ARCHIVE_REMINDER  = "archive_reminder"   # your doc will auto-archive soon
+    AUTO_ARCHIVED     = "auto_archived"      # your doc was just auto-archived
 
 
 class Notification(Base):

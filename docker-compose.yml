@@ -165,6 +165,22 @@ services:
     restart: unless-stopped
     profiles: ["worker"]   # opt-in: `docker compose --profile worker up`
 
+  # ── Celery beat (periodic task dispatcher) ────────────────────────────
+  # Exactly ONE beat process per deployment — duplicate beats mean
+  # duplicate tasks. Opt-in behind the same worker profile.
+  beat:
+    build: ./backend
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info"]
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:         { condition: service_healthy }
+      postgres:      { condition: service_healthy }
+    restart: unless-stopped
+    profiles: ["worker"]
+
 volumes:
   pg_data:
   es_data:
