@@ -171,7 +171,7 @@ export default function SearchPage() {
               <Select
                 value={sortBy}
                 onChange={(val) => setSortBy(val as SortBy)}
-                style={{ width: 90 }}
+                style={{ width: 110 }}
                 size="small"
                 options={SORT_OPTIONS}
                 prefix={<SortAscendingOutlined />}
