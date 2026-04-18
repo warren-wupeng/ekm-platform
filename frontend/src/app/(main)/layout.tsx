@@ -1,13 +1,15 @@
 'use client'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from 'antd'
+import { MenuOutlined } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
 import { useUIStore } from '@/store/ui'
 import Sidebar, { COLLAPSED_W, EXPANDED_W } from '@/components/layout/Sidebar'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
-  const { sidebarExpanded } = useUIStore()
+  const { sidebarExpanded, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
   const router = useRouter()
 
   useEffect(() => {
@@ -22,13 +24,40 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen">
+      {/* Mobile backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
       <Sidebar />
-      <main
-        className="flex-1 min-h-screen transition-[margin-left] duration-200"
-        style={{ marginLeft: ml }}
+
+      <div className="flex-1 min-h-screen flex flex-col md:transition-[margin-left] md:duration-200"
+        style={{ marginLeft: 0 }}
       >
-        {children}
-      </main>
+        {/* Mobile top bar */}
+        <div className="md:hidden sticky top-0 z-30 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
+          <Button
+            type="text" size="small"
+            icon={<MenuOutlined className="text-slate-500" />}
+            onClick={() => setMobileSidebarOpen(true)}
+          />
+          <span className="text-sm font-semibold text-slate-800">EKM</span>
+        </div>
+
+        {/* Content — on desktop shift right, on mobile full-width */}
+        <main
+          className="flex-1 hidden md:block transition-[margin-left] duration-200"
+          style={{ marginLeft: ml }}
+        >
+          {children}
+        </main>
+        <main className="flex-1 md:hidden">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

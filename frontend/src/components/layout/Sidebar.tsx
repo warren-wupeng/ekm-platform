@@ -12,6 +12,7 @@ import {
   InboxOutlined,
   EditOutlined,
   NodeIndexOutlined,
+  CodeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons'
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { key: '/archive',          icon: <InboxOutlined />,      label: '归档管理' },
   { key: '/ontology',         icon: <NodeIndexOutlined />,  label: 'Ontology' },
   { key: '/editor',           icon: <EditOutlined />,       label: 'AI 写作' },
+  { key: '/developer',        icon: <CodeOutlined />,       label: 'Developer' },
 ]
 
 const COLLAPSED_W = 64
@@ -39,19 +41,29 @@ export { COLLAPSED_W, EXPANDED_W }
 export default function Sidebar() {
   const pathname  = usePathname()
   const router    = useRouter()
-  const { user, logout }            = useAuth()
-  const { sidebarExpanded, toggleSidebar } = useUIStore()
+  const { user, logout }                                 = useAuth()
+  const { sidebarExpanded, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
   const expanded = sidebarExpanded
 
   function isActive(key: string) {
     return pathname === key || pathname.startsWith(key + '/')
   }
 
+  function navigate(key: string) {
+    router.push(key)
+    setMobileSidebarOpen(false)
+  }
+
   const w = expanded ? EXPANDED_W : COLLAPSED_W
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen flex flex-col py-4 z-50 transition-[width] duration-200"
+      className={[
+        'fixed left-0 top-0 h-screen flex flex-col py-4 z-50 transition-[width,transform] duration-200',
+        // Mobile: hidden by default, slide in when open; Desktop: always visible
+        'md:translate-x-0',
+        mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+      ].join(' ')}
       style={{
         width: w,
         background: 'var(--ekm-sidebar-bg)',
@@ -65,7 +77,7 @@ export default function Sidebar() {
           <div
             className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
             style={{ background: 'var(--ekm-primary)' }}
-            onClick={() => router.push('/dashboard')}
+            onClick={() => navigate('/dashboard')}
           >
             <ApartmentOutlined className="text-white text-base" />
           </div>
@@ -84,7 +96,7 @@ export default function Sidebar() {
           const btn = (
             <button
               key={item.key}
-              onClick={() => router.push(item.key)}
+              onClick={() => navigate(item.key)}
               className={clsx(
                 'flex items-center gap-3 w-full rounded-xl text-base transition-all',
                 expanded ? 'px-3 py-2' : 'justify-center w-10 h-10 mx-auto',
