@@ -25,10 +25,9 @@ On connect:
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
-from typing import Any
 
 from fastapi import (
     APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status,
@@ -38,24 +37,12 @@ from sqlalchemy import func, select, update
 from app.core.database import AsyncSessionLocal
 from app.core.deps import CurrentUser, DB
 from app.core.ws import manager
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification
 from app.services.auth import AuthError, get_current_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["notifications"])
-
-
-# ─── Helpers ────────────────────────────────────────────────────────────────
-def _serialize(n: Notification) -> dict[str, Any]:
-    return {
-        "id": n.id,
-        "type": n.type.value,
-        "title": n.title,
-        "payload": n.payload,
-        "read": n.read_at is not None,
-        "created_at": n.created_at.isoformat() if n.created_at else None,
-    }
 
 
 # ─── REST endpoints ────────────────────────────────────────────────────────
@@ -83,7 +70,7 @@ async def list_notifications(
 
     return {
         "page": page, "page_size": page_size, "total": total,
-        "notifications": [_serialize(n) for n in rows],
+        "notifications": [n.to_dict() for n in rows],
     }
 
 
@@ -107,9 +94,9 @@ async def mark_read(notification_id: int, db: DB, user: CurrentUser):
     if n is None:
         raise HTTPException(status_code=404, detail="notification not found")
     if n.read_at is None:
-        n.read_at = datetime.utcnow()
+        n.read_at = datetime.now(timezone.utc)
         await db.flush()
-    return _serialize(n)
+    return n.to_dict()
 
 
 @router.patch("/notifications/read-all")
@@ -118,7 +105,7 @@ async def mark_all_read(db: DB, user: CurrentUser):
     result = await db.execute(
         update(Notification)
         .where(Notification.user_id == user.id, Notification.read_at.is_(None))
-        .values(read_at=datetime.utcnow())
+        .values(read_at=datetime.now(timezone.utc))
     )
     return {"updated": result.rowcount or 0}
 
@@ -152,7 +139,7 @@ async def ws_notifications(websocket: WebSocket, token: str = Query(...)):
         if rows:
             backlog = {
                 "kind": "backlog",
-                "notifications": [_serialize(n) for n in rows],
+                "notifications": [n.to_dict() for n in rows],
             }
             await websocket.send_text(
                 json.dumps(backlog, ensure_ascii=False, default=str)
@@ -205,7 +192,7 @@ async def _mark_read_background(user_id: int, notification_id: int) -> None:
                     Notification.user_id == user_id,
                     Notification.read_at.is_(None),
                 )
-                .values(read_at=datetime.utcnow())
+                .values(read_at=datetime.now(timezone.utc))
             )
             await session.commit()
     except Exception as exc:  # noqa: BLE001

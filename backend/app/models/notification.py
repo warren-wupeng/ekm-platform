@@ -43,7 +43,15 @@ class Notification(Base):
         nullable=False, index=True,
     )
     type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, name="notification_type"),
+        # `values_callable` makes SQLAlchemy persist the enum *value*
+        # ("comment") instead of its name ("COMMENT"), matching the
+        # lowercase labels in the Postgres enum. Same fix we applied to
+        # UserRole last cycle — see that commit for the long story.
+        Enum(
+            NotificationType,
+            values_callable=lambda obj: [e.value for e in obj],
+            name="notification_type",
+        ),
         nullable=False, index=True,
     )
     # Free-form per-type payload; see module docstring for the shape.
@@ -64,3 +72,19 @@ class Notification(Base):
 
     def __repr__(self) -> str:
         return f"<Notification id={self.id} type={self.type.value} user={self.user_id}>"
+
+    def to_dict(self) -> dict:
+        """Canonical wire-format for a Notification.
+
+        Used by both the REST serializer and the WS push payload so they
+        never drift. Keep this file authoritative — if you need a new
+        field on the client, add it here.
+        """
+        return {
+            "id": self.id,
+            "type": self.type.value,
+            "title": self.title,
+            "payload": self.payload,
+            "read": self.read_at is not None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

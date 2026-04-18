@@ -53,20 +53,9 @@ async def dispatch(
     try:
         await manager.send_to_user(user_id, {
             "kind": "notification",
-            "data": _serialize(n),
+            "data": n.to_dict(),
         })
     except Exception as exc:  # noqa: BLE001
         log.warning("live push failed for user=%s: %s", user_id, exc)
 
     return n
-
-
-def _serialize(n: Notification) -> dict[str, Any]:
-    return {
-        "id": n.id,
-        "type": n.type.value,
-        "title": n.title,
-        "payload": n.payload,
-        "read": n.read_at is not None,
-        "created_at": n.created_at.isoformat() if n.created_at else None,
-    }
