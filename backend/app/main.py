@@ -12,6 +12,7 @@ from app.routers import sharing
 from app.routers import tasks
 from app.routers import documents
 from app.routers import search
+from app.routers import chat
 
 
 @asynccontextmanager
@@ -63,6 +64,7 @@ app.include_router(sharing.router)
 app.include_router(tasks.router)
 app.include_router(documents.router)
 app.include_router(search.router)
+app.include_router(chat.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
