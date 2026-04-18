@@ -7,7 +7,7 @@ import {
 import {
   SearchOutlined, FilterOutlined, SortAscendingOutlined,
   FileTextOutlined, MessageOutlined, PaperClipOutlined,
-  BookOutlined, CloseOutlined,
+  BookOutlined, CloseOutlined, FireOutlined,
 } from '@ant-design/icons'
 import { mockSearch, mockSuggest } from '@/lib/mockSearch'
 import ResultCard from '@/components/search/ResultCard'
@@ -153,7 +153,7 @@ export default function SearchPage() {
               <Select
                 value={filters.dateRange}
                 onChange={(val) => setFilter('dateRange', val)}
-                style={{ width: 100 }}
+                style={{ width: 130 }}
                 size="small"
                 options={[
                   { label: '不限时间', value: 'all' },
@@ -206,7 +206,9 @@ export default function SearchPage() {
               {['知识管理', '产品规划', '数据治理', '开发规范'].map((kw) => (
                 <Tag
                   key={kw}
-                  className="cursor-pointer hover:bg-primary/10 transition-colors text-xs py-1 px-2"
+                  icon={<FireOutlined />}
+                  color="default"
+                  className="cursor-pointer border border-slate-200 hover:border-primary hover:text-primary transition-all text-xs py-1 px-3 rounded-full select-none"
                   onClick={() => {
                     setInputVal(kw)
                     handleSearch(kw)

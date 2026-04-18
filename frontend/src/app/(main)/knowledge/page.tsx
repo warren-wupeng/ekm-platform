@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space } from 'antd'
+import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
@@ -142,14 +142,22 @@ export default function KnowledgePage() {
               className="text-slate-400 hover:text-primary"
             />
           </Tooltip>
-          <Tooltip title="删除">
-            <Button
-              type="text" size="small"
-              icon={<DeleteOutlined />}
-              className="text-slate-400 hover:text-red-500"
-              onClick={() => handleDelete(record.id)}
-            />
-          </Tooltip>
+          <Popconfirm
+            title="确认删除"
+            description="此操作不可恢复，确认删除该文件？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="删除">
+              <Button
+                type="text" size="small"
+                icon={<DeleteOutlined />}
+                className="text-slate-400 hover:text-red-500"
+              />
+            </Tooltip>
+          </Popconfirm>
         </Space>
       ),
     },

@@ -36,13 +36,15 @@ export default function Sidebar() {
       style={{ width: 64, background: 'var(--ekm-sidebar-bg)', borderRight: '1px solid #1e293b' }}
     >
       {/* Logo */}
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center mb-6 cursor-pointer"
-        style={{ background: 'var(--ekm-primary)' }}
-        onClick={() => router.push('/dashboard')}
-      >
-        <ThunderboltOutlined className="text-white text-base" />
-      </div>
+      <Tooltip title="返回首页" placement="right">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center mb-6 cursor-pointer"
+          style={{ background: 'var(--ekm-primary)' }}
+          onClick={() => router.push('/dashboard')}
+        >
+          <ThunderboltOutlined className="text-white text-base" />
+        </div>
+      </Tooltip>
 
       {/* Nav */}
       <nav className="flex flex-col items-center gap-1 flex-1">
