@@ -13,6 +13,7 @@ Or via compose:
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -25,6 +26,18 @@ celery_app = Celery(
         "app.worker.tasks",
     ],
 )
+
+# Beat schedule — runs in the dedicated `beat` process (see docker-compose).
+# Do NOT spin up a beat process inside a worker — multiple beats will
+# dispatch duplicates. Exactly one beat per deployment.
+celery_app.conf.beat_schedule = {
+    # Daily at 03:42 UTC — middle of the night everywhere relevant, off
+    # the top of the hour so we don't collide with other infra cron jobs.
+    "archive-tick-daily": {
+        "task": "ekm.archive.tick",
+        "schedule": crontab(hour=3, minute=42),
+    },
+}
 
 celery_app.conf.update(
     # Sensible defaults for a document-processing workload:

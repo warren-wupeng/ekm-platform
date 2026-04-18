@@ -59,6 +59,21 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
 
+    # SMTP (optional — leave SMTP_HOST empty to disable email side of alerts).
+    # Mailer degrades gracefully: if unset, in-app notifications still fire,
+    # only email is skipped (logged at INFO). Same pattern as ES/Neo4j.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM: str = "ekm@localhost"
+    # Public base URL used to build links inside archive-reminder emails.
+    PUBLIC_BASE_URL: str = "http://localhost:3000"
+
+    # Archive / retention — daily sweep defaults.
+    ARCHIVE_REMINDER_DAYS_BEFORE: int = 7  # send reminder when threshold - N days
+
 
 @lru_cache
 def get_settings() -> Settings:
