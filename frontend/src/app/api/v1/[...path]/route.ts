@@ -11,6 +11,8 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
   const headers = new Headers(req.headers)
   // Remove host header so backend doesn't get confused
   headers.delete('host')
+  // Request uncompressed response so we can stream the body as-is
+  headers.set('accept-encoding', 'identity')
 
   try {
     const res = await fetch(backendUrl, {
