@@ -6,6 +6,7 @@ from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.version import KnowledgeVersion
 from app.models.community import Post, Reply, ReplyLike
 from app.models.feedback import ChatFeedback, FeedbackRating
+from app.models.notification import Notification, NotificationType
 
 __all__ = [
     "User", "UserRole",
@@ -16,4 +17,5 @@ __all__ = [
     "KnowledgeVersion",
     "Post", "Reply", "ReplyLike",
     "ChatFeedback", "FeedbackRating",
+    "Notification", "NotificationType",
 ]

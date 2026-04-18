@@ -16,6 +16,7 @@ Endpoints:
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -25,7 +26,30 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import CurrentUser, DB
 from app.models.community import Post, Reply, ReplyLike
-from app.models.user import UserRole
+from app.models.notification import NotificationType
+from app.models.user import User, UserRole
+from app.services.notify import dispatch as notify_dispatch
+
+
+# @username mentions — allow word chars including CJK. Stop at whitespace
+# or common punctuation. Deliberately permissive; the DB lookup is the
+# real filter.
+_MENTION_RE = re.compile(r"@([\w\u4e00-\u9fff]+)")
+
+
+async def _resolve_mentions(db, content: str, exclude_user_id: int) -> list[User]:
+    names = set(_MENTION_RE.findall(content or ""))
+    if not names:
+        return []
+    rows = (await db.execute(
+        select(User).where(User.username.in_(names), User.id != exclude_user_id)
+    )).scalars().all()
+    return list(rows)
+
+
+def _content_snippet(s: str, n: int = 120) -> str:
+    s = (s or "").strip().replace("\n", " ")
+    return s if len(s) <= n else s[: n - 1] + "…"
 
 
 # Separate routers so we can mount /posts and /replies with cleanly
@@ -178,10 +202,76 @@ async def create_reply(
         content=payload.content,
     )
     db.add(r)
+    await db.flush()  # need r.id for the notification payload
 
     # Bump post.reply_count so the feed view doesn't need a JOIN+COUNT.
     post = await _load_post(db, post_id)
     post.reply_count = (post.reply_count or 0) + 1
+
+    # ─── Notifications ──────────────────────────────────────────────────
+    # Dispatch three fan-out cases. All go through notify.dispatch which
+    # inserts a Notification row (commits with this transaction) and best-
+    # effort pushes over WS. We dedupe recipients so the same user never
+    # gets two notifications from one reply.
+    snippet = _content_snippet(payload.content)
+    notified: set[int] = {user.id}  # never notify yourself
+
+    # 1. Post author — "new comment on your post" (only for top-level replies
+    #    to keep signal-to-noise reasonable; nested comments notify the
+    #    parent-reply author instead, below).
+    if parent is None and post.author_id not in notified:
+        await notify_dispatch(
+            db,
+            user_id=post.author_id,
+            type=NotificationType.COMMENT,
+            title=f"{user.username} 评论了你的帖子",
+            payload={
+                "post_id": post_id,
+                "reply_id": r.id,
+                "actor_id": user.id,
+                "actor_name": user.username,
+                "snippet": snippet,
+            },
+        )
+        notified.add(post.author_id)
+
+    # 2. Parent-reply author — "someone replied to your comment".
+    if parent is not None and parent.author_id not in notified:
+        await notify_dispatch(
+            db,
+            user_id=parent.author_id,
+            type=NotificationType.COMMENT,
+            title=f"{user.username} 回复了你的评论",
+            payload={
+                "post_id": post_id,
+                "reply_id": r.id,
+                "parent_reply_id": parent.id,
+                "actor_id": user.id,
+                "actor_name": user.username,
+                "snippet": snippet,
+            },
+        )
+        notified.add(parent.author_id)
+
+    # 3. @mentions — parse out @usernames and ping each distinct user.
+    for mentioned in await _resolve_mentions(db, payload.content, user.id):
+        if mentioned.id in notified:
+            continue
+        await notify_dispatch(
+            db,
+            user_id=mentioned.id,
+            type=NotificationType.MENTION,
+            title=f"{user.username} 在评论中提到了你",
+            payload={
+                "post_id": post_id,
+                "reply_id": r.id,
+                "actor_id": user.id,
+                "actor_name": user.username,
+                "snippet": snippet,
+            },
+        )
+        notified.add(mentioned.id)
+
     await db.commit()
     await db.refresh(r)
     return _reply_dict(r)
@@ -223,6 +313,22 @@ async def like_reply(reply_id: int, db: DB, user: CurrentUser):
 
     db.add(ReplyLike(reply_id=reply_id, user_id=user.id))
     r.like_count = (r.like_count or 0) + 1
+
+    # Notify the reply author — skip if they liked their own comment.
+    if r.author_id != user.id:
+        await notify_dispatch(
+            db,
+            user_id=r.author_id,
+            type=NotificationType.LIKE,
+            title=f"{user.username} 赞了你的评论",
+            payload={
+                "reply_id": reply_id,
+                "post_id": r.post_id,
+                "actor_id": user.id,
+                "actor_name": user.username,
+            },
+        )
+
     try:
         await db.commit()
     except IntegrityError:
