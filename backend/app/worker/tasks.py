@@ -92,8 +92,40 @@ def index_to_es(self, document_id: int) -> dict[str, Any]:
     return {"document_id": document_id, "indexed_chunks": indexed, "status": "indexed"}
 
 
-@celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=30)
-def vectorize_chunks(self, document_id: str) -> dict[str, Any]:
-    """Stub — filled in by #22. Embeds chunks and pushes to Qdrant."""
-    log.info("vectorize_chunks stub invoked for %s", document_id)
-    return {"document_id": document_id, "status": "pending_impl"}
+@celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=60)
+def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
+    """Embed each DocumentChunk + upsert to Qdrant. Idempotent on re-run."""
+    from sqlalchemy import select, update
+    from app.services.document_parse import SyncSession
+    from app.services.embeddings import embedder
+    from app.services.qdrant_client import ensure_collection, upsert_chunks
+    from app.models.document import DocumentChunk
+
+    document_id = int(document_id)
+    ensure_collection()
+
+    with SyncSession() as db:
+        rows = db.execute(
+            select(DocumentChunk.id, DocumentChunk.chunk_index, DocumentChunk.content)
+            .where(DocumentChunk.knowledge_item_id == document_id)
+            .order_by(DocumentChunk.chunk_index)
+        ).all()
+
+        if not rows:
+            return {"document_id": document_id, "status": "no_chunks"}
+
+        vectors = embedder.embed([r.content for r in rows])
+        triples = [(r.chunk_index, r.content, vec) for r, vec in zip(rows, vectors)]
+        count = upsert_chunks(document_id, triples)
+
+        # Back-link the Qdrant point id onto each chunk for debuggability.
+        for r in rows:
+            db.execute(
+                update(DocumentChunk)
+                .where(DocumentChunk.id == r.id)
+                .values(vector_id=str(document_id * 1_000_000 + r.chunk_index))
+            )
+        db.commit()
+
+    log.info("vectorized doc=%s count=%d", document_id, count)
+    return {"document_id": document_id, "vectorized": count, "status": "vectorized"}

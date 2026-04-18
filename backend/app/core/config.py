@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.3
 
+    # Embeddings (LiteLLM)
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIM: int = 1536
+
+    # Qdrant
+    QDRANT_COLLECTION: str = "ekm_chunks"
+    RAG_TOP_K: int = 5
+
     # JWT
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
