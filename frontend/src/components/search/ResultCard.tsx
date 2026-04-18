@@ -5,12 +5,13 @@ import {
   EyeOutlined, ClockCircleOutlined, UserOutlined,
 } from '@ant-design/icons'
 import type { SearchResult, ResultType } from '@/types/search'
+import { TYPE_COLORS } from '@/lib/theme'
 
-const TYPE_CONFIG: Record<ResultType, { icon: React.ReactNode; label: string; color: string }> = {
-  document: { icon: <FileTextOutlined />, label: '文档', color: '#2563eb' },
-  post:     { icon: <MessageOutlined />,  label: '帖子', color: '#059669' },
-  file:     { icon: <PaperClipOutlined />, label: '文件', color: '#d97706' },
-  wiki:     { icon: <BookOutlined />,     label: 'Wiki', color: '#7c3aed' },
+const TYPE_META: Record<ResultType, { icon: React.ReactNode; label: string }> = {
+  document: { icon: <FileTextOutlined />, label: '文档' },
+  post:     { icon: <MessageOutlined />,  label: '帖子' },
+  file:     { icon: <PaperClipOutlined />, label: '文件' },
+  wiki:     { icon: <BookOutlined />,     label: 'Wiki' },
 }
 
 interface Props {
@@ -19,20 +20,21 @@ interface Props {
 }
 
 export default function ResultCard({ result }: Props) {
-  const cfg = TYPE_CONFIG[result.type]
+  const meta  = TYPE_META[result.type]
+  const color = TYPE_COLORS[result.type]
 
   return (
     <div
-      className="bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group"
+      className="bg-white rounded-xl border border-slate-100 p-4 hover:shadow-md hover:border-primary/30 transition-all cursor-pointer group"
       onClick={() => window.open(result.url, '_blank')}
     >
       <div className="flex items-start gap-3">
         {/* Type icon */}
         <span
           className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm mt-0.5"
-          style={{ background: cfg.color + '15', color: cfg.color }}
+          style={{ background: color + '18', color }}
         >
-          {cfg.icon}
+          {meta.icon}
         </span>
 
         <div className="flex-1 min-w-0">
@@ -40,15 +42,15 @@ export default function ResultCard({ result }: Props) {
           <div className="flex items-center gap-2 mb-1">
             <span
               className="text-xs px-1.5 py-0.5 rounded font-medium"
-              style={{ background: cfg.color + '15', color: cfg.color }}
+              style={{ background: color + '18', color }}
             >
-              {cfg.label}
+              {meta.label}
             </span>
             <span className="text-slate-400 text-xs">{result.department}</span>
           </div>
 
           {/* Title */}
-          <h3 className="text-slate-800 font-medium text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-1 mb-1.5">
+          <h3 className="text-slate-800 font-medium text-sm leading-snug group-hover:text-primary transition-colors line-clamp-1 mb-1.5">
             {result.title}
           </h3>
 

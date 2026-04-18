@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --ekm-primary: #2563eb;
-  --ekm-sidebar-bg: #0f172a;
+  /* ↓ Keep in sync with PRIMARY in src/lib/theme.ts */
+  --ekm-primary:       #2563eb;
+  --ekm-primary-light: color-mix(in srgb, var(--ekm-primary) 10%, white);
+  --ekm-sidebar-bg:    #0f172a;
   --ekm-sidebar-width: 64px;
 }
 

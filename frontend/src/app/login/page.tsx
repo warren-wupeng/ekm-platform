@@ -50,7 +50,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md px-4">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4">
             <ThunderboltOutlined className="text-white text-2xl" />
           </div>
           <h1 className="text-white text-2xl font-semibold tracking-tight">EKM</h1>
@@ -90,7 +90,7 @@ export default function LoginPage() {
                 htmlType="submit"
                 loading={loading}
                 className="w-full h-11 text-base font-medium"
-                style={{ background: '#2563eb' }}
+                
               >
                 登录
               </Button>

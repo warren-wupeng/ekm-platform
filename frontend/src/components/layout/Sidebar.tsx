@@ -33,12 +33,12 @@ export default function Sidebar() {
   return (
     <aside
       className="fixed left-0 top-0 h-screen flex flex-col items-center py-4 z-50"
-      style={{ width: 64, background: '#0f172a', borderRight: '1px solid #1e293b' }}
+      style={{ width: 64, background: 'var(--ekm-sidebar-bg)', borderRight: '1px solid #1e293b' }}
     >
       {/* Logo */}
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center mb-6 cursor-pointer"
-        style={{ background: '#2563eb' }}
+        style={{ background: 'var(--ekm-primary)' }}
         onClick={() => router.push('/dashboard')}
       >
         <ThunderboltOutlined className="text-white text-base" />
@@ -53,7 +53,7 @@ export default function Sidebar() {
               className={clsx(
                 'w-10 h-10 rounded-xl flex items-center justify-center text-base transition-all',
                 isActive(item.key)
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               )}
             >

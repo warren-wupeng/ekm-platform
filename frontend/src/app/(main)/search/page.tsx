@@ -181,7 +181,7 @@ export default function SearchPage() {
             {/* Active filter badges */}
             {activeFilterCount > 0 && (
               <Tag
-                color="blue"
+                color="geekblue"
                 closable
                 onClose={() => setFilters(DEFAULT_FILTERS)}
                 className="text-xs"
@@ -197,16 +197,16 @@ export default function SearchPage() {
           <div className="text-center py-20">
             <div
               className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
-              style={{ background: '#eff6ff' }}
+              style={{ background: 'var(--ekm-primary-light)' }}
             >
-              <SearchOutlined className="text-blue-500 text-2xl" />
+              <SearchOutlined className="text-primary text-2xl" />
             </div>
             <p className="text-slate-400 text-sm">输入关键词搜索知识库、文档、社区帖子</p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">
               {['知识管理', '产品规划', '数据治理', '开发规范'].map((kw) => (
                 <Tag
                   key={kw}
-                  className="cursor-pointer hover:bg-blue-50 transition-colors text-xs py-1 px-2"
+                  className="cursor-pointer hover:bg-primary/10 transition-colors text-xs py-1 px-2"
                   onClick={() => {
                     setInputVal(kw)
                     handleSearch(kw)
@@ -232,7 +232,7 @@ export default function SearchPage() {
               <p className="text-slate-400 text-xs mb-3">
                 找到 <span className="text-slate-700 font-medium">{total}</span> 条结果
                 {query && (
-                  <span>，关键词：<span className="text-blue-600 font-medium">"{query}"</span></span>
+                  <span>，关键词：<span className="text-primary font-medium">"{query}"</span></span>
                 )}
               </p>
             )}
@@ -253,7 +253,7 @@ export default function SearchPage() {
                     <p className="text-slate-400 text-xs mt-1">
                       试试换个关键词，或者
                       <span
-                        className="text-blue-500 cursor-pointer ml-1"
+                        className="text-primary cursor-pointer ml-1"
                         onClick={() => setFilters(DEFAULT_FILTERS)}
                       >
                         清除筛选条件
