@@ -17,9 +17,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    feedback_rating = sa.Enum("up", "down", name="feedback_rating")
-    feedback_rating.create(op.get_bind(), checkfirst=True)
-
     op.create_table(
         "chat_feedback",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -32,7 +29,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "rating",
-            sa.Enum("up", "down", name="feedback_rating", create_type=False),
+            sa.Enum("up", "down", name="feedback_rating"),
             nullable=False,
         ),
         sa.Column("comment", sa.Text(), nullable=True),
