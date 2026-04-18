@@ -15,6 +15,7 @@ import {
   CodeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons'
 import { Tooltip, Avatar } from 'antd'
 import { useAuth } from '@/hooks/useAuth'
@@ -23,6 +24,7 @@ import clsx from 'clsx'
 
 const NAV_ITEMS = [
   { key: '/dashboard',        icon: <HomeOutlined />,       label: '首页' },
+  { key: '/portal',           icon: <GlobalOutlined />,     label: '知识门户' },
   { key: '/search',           icon: <SearchOutlined />,     label: '搜索' },
   { key: '/knowledge',        icon: <BookOutlined />,       label: '知识库' },
   { key: '/community',        icon: <TeamOutlined />,       label: '社区' },
