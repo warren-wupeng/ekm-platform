@@ -4,13 +4,11 @@ primary_region = "sin"
 [build]
   dockerfile = "Dockerfile"
 
-  [build.args]
-    NEXT_PUBLIC_API_URL = "https://ekm-backend.fly.dev"
-
 [env]
   PORT = "3000"
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"
+  BACKEND_URL = "https://ekm-backend.fly.dev"
 
 [[services]]
   internal_port = 3000

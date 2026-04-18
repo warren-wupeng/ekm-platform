@@ -1,11 +1,22 @@
 import type { NextConfig } from 'next'
 
+// BACKEND_URL is a server-side runtime env — not exposed to the browser.
+// Set it in fly.toml or docker-compose as BACKEND_URL=https://ekm-backend.fly.dev
+const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8000'
+
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Allow backend API URL to be injected at runtime
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
+  // Proxy /api/v1/* to the backend at runtime (server-side rewrite).
+  // This avoids baking the backend URL into the client bundle and works
+  // correctly even when BACKEND_URL changes between environments.
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${BACKEND_URL}/api/v1/:path*`,
+      },
+    ]
   },
 
   experimental: {

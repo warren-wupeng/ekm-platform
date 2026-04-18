@@ -1,8 +1,9 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/auth'
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+// Use relative base URL so /api/v1/* requests go through Next.js rewrites,
+// which proxy to the backend via BACKEND_URL env var (server-side, not baked in bundle).
+export const API_BASE_URL = ''
 
 const api = axios.create({
   baseURL: API_BASE_URL,
