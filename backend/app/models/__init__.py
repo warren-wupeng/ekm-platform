@@ -5,6 +5,7 @@ from app.models.kg import KGEdge, KGNode
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.version import KnowledgeVersion
 from app.models.community import Post, Reply, ReplyLike
+from app.models.feedback import ChatFeedback, FeedbackRating
 
 __all__ = [
     "User", "UserRole",
@@ -14,4 +15,5 @@ __all__ = [
     "DocumentChunk", "DocumentParseRecord", "ParseStatus",
     "KnowledgeVersion",
     "Post", "Reply", "ReplyLike",
+    "ChatFeedback", "FeedbackRating",
 ]
