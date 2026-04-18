@@ -19,6 +19,7 @@ from app.routers import versions
 from app.routers import community
 from app.routers import ai
 from app.routers import feedback
+from app.routers import graph as graph_router
 
 
 @asynccontextmanager
@@ -33,6 +34,12 @@ async def lifespan(app: FastAPI):
         # Don't block startup if ES is temporarily down — search degrades
         # gracefully, and the next restart will retry index creation.
         log.warning("ES index bootstrap skipped: %s", e)
+    try:
+        from app.core.graph import graph
+        await graph.ensure_constraints()
+    except Exception as e:
+        # Same principle as ES: graph is a degradable feature.
+        log.warning("Neo4j constraint bootstrap skipped: %s", e)
     yield
     # Shutdown: clean up connections
     from app.core.database import engine
@@ -40,6 +47,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.es_client import es
         await es.close()
+    except Exception:
+        pass
+    try:
+        from app.core.graph import graph
+        await graph.close()
     except Exception:
         pass
 
@@ -79,6 +91,7 @@ for _r in community.routers:
 app.include_router(ai.router)
 for _r in feedback.routers:
     app.include_router(_r)
+app.include_router(graph_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])

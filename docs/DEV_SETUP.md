@@ -50,6 +50,29 @@ docker compose exec backend bash      # shell into backend container
 docker compose exec postgres psql -U ekm ekm
 ```
 
+## Neo4j (knowledge graph)
+
+Postgres (`kg_nodes` / `kg_edges`) is the canonical store. Neo4j mirrors
+it for traversal-heavy queries (k-hop, pattern match, shortest path).
+
+```bash
+# Browser UI — run ad-hoc Cypher
+open http://localhost:7474      # login: neo4j / ekm_neo4j_pw
+
+# Verify the backend connected and applied constraints
+curl -s localhost:8000/api/v1/graph/health
+# → {"ok": true}
+
+# Inspect constraints
+docker compose exec neo4j cypher-shell -u neo4j -p ekm_neo4j_pw \
+  "SHOW CONSTRAINTS"
+```
+
+Entity / relation vocabulary lives in `backend/app/models/graph_vocab.py`.
+Anything outside the enum list is still writable but surfaces as "Other"
+on the frontend. The sync layer (`services/graph_sync.py`) swallows Neo4j
+errors — a dead graph never fails a knowledge-item write.
+
 ## Celery worker (opt-in)
 
 The worker is disabled by default (enabled in #9). To bring it up:
