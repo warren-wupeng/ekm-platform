@@ -109,6 +109,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── Schema migrations (one-shot) ──────────────────────────────────────
+  # Runs `alembic upgrade head` against Postgres before the API starts.
+  # Kept as its own service (instead of baked into the backend entrypoint)
+  # so we can retry migrations independently and tail logs cleanly.
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
   # ── Backend API ───────────────────────────────────────────────────────
   backend:
     build: ./backend
@@ -126,6 +141,7 @@ services:
       qdrant:        { condition: service_healthy }
       neo4j:         { condition: service_healthy }
       tika:          { condition: service_healthy }
+      migrate:       { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 10s
