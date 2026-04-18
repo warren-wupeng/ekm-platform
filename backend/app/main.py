@@ -11,15 +11,30 @@ from app.routers import files
 from app.routers import sharing
 from app.routers import tasks
 from app.routers import documents
+from app.routers import search
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: could run DB migrations, warm caches, etc.
+    # Startup: ensure ES indexes exist (idempotent).
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        from app.services.es_client import es
+        await es.ensure_indexes()
+    except Exception as e:
+        # Don't block startup if ES is temporarily down — search degrades
+        # gracefully, and the next restart will retry index creation.
+        log.warning("ES index bootstrap skipped: %s", e)
     yield
     # Shutdown: clean up connections
     from app.core.database import engine
     await engine.dispose()
+    try:
+        from app.services.es_client import es
+        await es.close()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -47,6 +62,7 @@ app.include_router(files.router)
 app.include_router(sharing.router)
 app.include_router(tasks.router)
 app.include_router(documents.router)
+app.include_router(search.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])

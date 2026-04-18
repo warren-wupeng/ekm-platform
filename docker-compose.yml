@@ -40,8 +40,16 @@ services:
       retries: 10
 
   # ── Full-text search ──────────────────────────────────────────────────
+  # Built from ./docker/elasticsearch.Dockerfile so the IK analyzer is
+  # baked in (required for Chinese tokenization in #21). If the IK plugin
+  # URL is unreachable at build time, the app still works against the base
+  # image — es_client.py detects the missing analyzer and falls back to
+  # `standard` with a startup warning.
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    build:
+      context: .
+      dockerfile: docker/elasticsearch.Dockerfile
+    image: ekm/elasticsearch:8.13.4-ik
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
