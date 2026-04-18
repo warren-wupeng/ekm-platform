@@ -9,6 +9,9 @@ import {
   HomeOutlined,
   LogoutOutlined,
   BranchesOutlined,
+  InboxOutlined,
+  EditOutlined,
+  NodeIndexOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons'
@@ -23,6 +26,9 @@ const NAV_ITEMS = [
   { key: '/knowledge',        icon: <BookOutlined />,       label: '知识库' },
   { key: '/community',        icon: <TeamOutlined />,       label: '社区' },
   { key: '/knowledge-graph',  icon: <BranchesOutlined />,   label: '知识图谱' },
+  { key: '/archive',          icon: <InboxOutlined />,      label: '归档管理' },
+  { key: '/ontology',         icon: <NodeIndexOutlined />,  label: 'Ontology' },
+  { key: '/editor',           icon: <EditOutlined />,       label: 'AI 写作' },
 ]
 
 const COLLAPSED_W = 64
