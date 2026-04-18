@@ -17,6 +17,7 @@ from app.routers import categories
 from app.routers import tags
 from app.routers import versions
 from app.routers import community
+from app.routers import ai
 
 
 @asynccontextmanager
@@ -74,6 +75,7 @@ app.include_router(tags.router)
 app.include_router(versions.router)
 for _r in community.routers:
     app.include_router(_r)
+app.include_router(ai.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
