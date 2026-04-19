@@ -126,23 +126,22 @@ def purge_expired_shares(self) -> dict[str, Any]:
 def archive_tick(self) -> dict[str, Any]:
     """Daily sweep: send pre-archive reminders + auto-archive stale items.
 
-    One pass, two phases:
-      1. For each non-archived item matched by some enabled rule, compute
-         its effective (tightest) threshold. If it's inside the reminder
-         window (threshold - ARCHIVE_REMINDER_DAYS_BEFORE <= updated_at
-         < threshold) and we haven't already sent a reminder for this
-         window, fire ARCHIVE_REMINDER (in-app + email).
-      2. If the item is past the threshold, flip is_archived=True,
-         archived_at=now, and fire AUTO_ARCHIVED.
+    Two-phase flow:
+      1. DB phase — flip is_archived / stamp archive_reminder_sent_at,
+         insert Notification rows, collect a pending-email list. Commit.
+      2. Mail phase — AFTER commit succeeds, drain the pending-email
+         list. If commit rolls back, no emails fire → no false "your
+         doc was archived" nudges for a DB state that doesn't exist.
+         Mailer is already best-effort (swallows failures), so a mid-
+         drain crash just drops the tail, never corrupts DB state.
 
-    All notification pushes go DB-only — this runs in the Celery worker
-    process, which has no access to the FastAPI WS ConnectionManager.
-    Users will receive the backlog on next WS connect.
+    All in-app notifications are DB-only: this runs in the Celery worker
+    process, which has no WS ConnectionManager. Users receive the
+    backlog via #27's WS-connect flush.
     """
     from datetime import datetime, timedelta, timezone
 
     from app.core.config import settings
-    from app.models.knowledge import KnowledgeItem
     from app.models.notification import Notification, NotificationType
     from app.models.user import User
     from app.services.archive import (
@@ -156,6 +155,7 @@ def archive_tick(self) -> dict[str, Any]:
 
     reminders = 0
     archived = 0
+    pending_mails: list[dict[str, str]] = []  # drained AFTER commit
 
     with SyncSession() as db:
         rules = load_active_rules(db)
@@ -171,7 +171,7 @@ def archive_tick(self) -> dict[str, Any]:
             threshold_at = item.updated_at + timedelta(days=eff.inactive_days)
 
             if now >= threshold_at:
-                # Phase 2: past threshold — auto-archive.
+                # Phase 2a (DB): past threshold — auto-archive.
                 item.is_archived = True
                 item.archived_at = now
                 db.add(Notification(
@@ -187,27 +187,25 @@ def archive_tick(self) -> dict[str, Any]:
                     },
                 ))
                 archived += 1
-                # Email the uploader (best-effort).
                 uploader = db.get(User, item.uploader_id)
                 if uploader and uploader.email:
-                    mail_send(
-                        to=uploader.email,
-                        subject=f"[EKM] 文档已自动归档: {item.name}",
-                        body=(
+                    pending_mails.append({
+                        "to": uploader.email,
+                        "subject": f"[EKM] 文档已自动归档: {item.name}",
+                        "body": (
                             f"您的文档「{item.name}」已根据规则「{eff.rule_name}」"
                             f"自动归档（超过 {eff.inactive_days} 天未更新）。\n"
                             f"如需恢复，请访问: {settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
                         ),
-                    )
+                    })
                 continue
 
-            # Phase 1: inside reminder window?
+            # Phase 1 (DB): inside reminder window?
             window_start = threshold_at - reminder_window
             if now < window_start:
                 continue  # too early — no action
 
-            # Only send one reminder per window. If we've already sent
-            # one that's newer than window_start, skip.
+            # Only send one reminder per window.
             if (
                 item.archive_reminder_sent_at is not None
                 and item.archive_reminder_sent_at >= window_start
@@ -233,24 +231,36 @@ def archive_tick(self) -> dict[str, Any]:
 
             uploader = db.get(User, item.uploader_id)
             if uploader and uploader.email:
-                mail_send(
-                    to=uploader.email,
-                    subject=f"[EKM] 文档 {days_left} 天后将自动归档: {item.name}",
-                    body=(
+                pending_mails.append({
+                    "to": uploader.email,
+                    "subject": f"[EKM] 文档 {days_left} 天后将自动归档: {item.name}",
+                    "body": (
                         f"您的文档「{item.name}」将在 {days_left} 天后根据规则"
                         f"「{eff.rule_name}」自动归档。\n"
                         f"要保留该文档，请在此日期前更新或查看:\n"
                         f"{settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
                     ),
-                )
+                })
 
+        # Atomic DB boundary. If this raises, pending_mails is discarded
+        # and no false notifications go out — that's the whole point.
         db.commit()
 
-    log.info("archive tick: reminders=%d archived=%d", reminders, archived)
+    # Phase 2b (mail): DB is durable. Now fire emails. mailer.send_sync
+    # is already best-effort (logs + returns False on failure), so we
+    # don't wrap it here.
+    for m in pending_mails:
+        mail_send(to=m["to"], subject=m["subject"], body=m["body"])
+
+    log.info(
+        "archive tick: reminders=%d archived=%d mails_attempted=%d",
+        reminders, archived, len(pending_mails),
+    )
     return {
         "status": "ok",
         "reminders": reminders,
         "archived": archived,
+        "mails_attempted": len(pending_mails),
     }
 
 

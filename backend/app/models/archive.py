@@ -64,8 +64,14 @@ class ArchiveRule(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
     # Audit / ownership — so you know who to blame.
+    #
+    # ondelete=RESTRICT: refuse to delete a user who still authors rules.
+    # Rules are admin config, not content — if someone's leaving the team,
+    # an admin should reassign/delete their rules first. This also
+    # sidesteps the "SET DEFAULT on NOT NULL without server_default" bug
+    # Sage flagged as P1 on PR #87 review.
     created_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET DEFAULT"),
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(

@@ -77,7 +77,9 @@ def upgrade() -> None:
         ),
         sa.Column(
             "created_by_id", sa.Integer(),
-            sa.ForeignKey("users.id", ondelete="SET DEFAULT"),
+            # RESTRICT — can't delete a user who still owns rules. See
+            # the model for the rationale.
+            sa.ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
