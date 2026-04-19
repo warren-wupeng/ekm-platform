@@ -57,8 +57,9 @@ export default function LoginPage() {
       message.success('登录成功')
       router.replace('/dashboard')
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } }
-      const msg = axiosErr?.response?.data?.detail ?? '登录失败，请检查用户名或密码'
+      const axiosErr = err as { response?: { data?: { detail?: { message?: string } | string } } }
+      const detail = axiosErr?.response?.data?.detail
+      const msg = (typeof detail === 'object' ? detail?.message : detail) ?? '登录失败，请检查用户名或密码'
       message.error(msg)
     } finally {
       setLoading(false)

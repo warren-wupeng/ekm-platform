@@ -20,11 +20,14 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Auto redirect to login on 401
+// Auto redirect to login on 401 — but NOT for auth endpoints themselves,
+// so that login/refresh failures surface as proper errors in the UI.
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 && typeof window !== 'undefined') {
+    const url: string = err.config?.url ?? ''
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
+    if (err.response?.status === 401 && !isAuthEndpoint && typeof window !== 'undefined') {
       useAuthStore.getState().clearAuth()
       window.location.href = '/login'
     }
