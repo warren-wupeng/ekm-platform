@@ -92,6 +92,36 @@ def index_to_es(self, document_id: int) -> dict[str, Any]:
     return {"document_id": document_id, "indexed_chunks": indexed, "status": "indexed"}
 
 
+@celery_app.task(name="ekm.sharing.purge_expired", bind=True)
+def purge_expired_shares(self) -> dict[str, Any]:
+    """Hard-delete sharing_records whose deleted_at exceeds the retention
+    window. Runs daily via beat; safe to invoke manually.
+
+    The service layer's SharingError(\"RESTORE_WINDOW_EXPIRED\") already
+    prevents users from touching these rows, so we can remove them without
+    coordinating with live requests.
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete as sa_delete
+    from app.services.document_parse import SyncSession
+    from app.services.sharing import RETENTION_DAYS
+    from app.models.sharing import SharingRecord
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    with SyncSession() as db:
+        result = db.execute(
+            sa_delete(SharingRecord).where(
+                SharingRecord.deleted_at.is_not(None),
+                SharingRecord.deleted_at < cutoff,
+            )
+        )
+        purged = result.rowcount or 0
+        db.commit()
+
+    log.info("purge_expired_shares cutoff=%s purged=%d", cutoff.isoformat(), purged)
+    return {"cutoff": cutoff.isoformat(), "purged": purged, "status": "ok"}
+
+
 @celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=60)
 def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
     """Embed each DocumentChunk + upsert to Qdrant. Idempotent on re-run."""
