@@ -24,6 +24,7 @@ from app.routers import notifications
 from app.routers import archive as archive_router
 from app.routers import restore as restore_router
 from app.routers import batch as batch_router
+from app.routers import agent as agent_router
 
 
 @asynccontextmanager
@@ -100,6 +101,7 @@ app.include_router(notifications.router)
 app.include_router(archive_router.router)
 app.include_router(restore_router.router)
 app.include_router(batch_router.router)
+app.include_router(agent_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
