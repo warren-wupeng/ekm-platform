@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # LLM (LiteLLM)
     LLM_MODEL: str = "claude-sonnet-4-6"
-    LLM_API_BASE: str = "https://ai-gateway.happycapy.ai/api/v1"
+    LLM_BASE_URL: str = "https://ai-gateway.happycapy.ai/api/v1"
     LLM_API_KEY: str = ""
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.3

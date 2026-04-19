@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
 from app.worker.celery_app import celery_app
 
 
@@ -268,10 +270,14 @@ def archive_tick(self) -> dict[str, Any]:
     name="ekm.kg.pipeline",
     bind=True,
     # Extract stage can be slow (N LLM calls per doc) — spread retries
-    # so a transient Neo4j blip or LLM 429 gets room to clear.
+    # so a transient Neo4j blip or LLM 429 gets room to clear. Only
+    # retry on errors that *could* clear on their own; deterministic
+    # failures surface via `NonRetryableError` (see kg_pipeline module)
+    # and must terminate immediately so the frontend poll lands on
+    # FAILED without burning the autoretry budget.
     max_retries=3,
     default_retry_delay=60,
-    autoretry_for=(Exception,),
+    autoretry_for=(IOError, ConnectionError, TimeoutError, httpx.RequestError),
     retry_backoff=True,
     retry_backoff_max=600,
     retry_jitter=True,

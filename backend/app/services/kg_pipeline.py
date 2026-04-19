@@ -62,6 +62,19 @@ from app.services.document_parse import SyncSession, parse_and_persist
 log = logging.getLogger(__name__)
 
 
+class NonRetryableError(Exception):
+    """Deterministic pipeline failure — retrying won't help.
+
+    Examples: KnowledgeItem missing from DB, item has no file_path,
+    file_type is outside the supported set. These won't resolve on
+    their own; a retry just burns the autoretry budget and delays the
+    terminal FAILED state the frontend is polling for.
+
+    Sibling of Celery's `Reject`/`Ignore`, but keeps the typing at the
+    pipeline layer so tests don't need a Celery context.
+    """
+
+
 # File types we don't run the pipeline on. Anything outside DOCUMENT
 # has no text Tika can meaningfully extract for NER / embedding.
 _PIPELINE_TYPES = {FileType.DOCUMENT}
@@ -81,7 +94,8 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
     with SyncSession() as db:
         item = db.get(KnowledgeItem, document_id)
         if item is None:
-            raise ValueError(f"KnowledgeItem {document_id} not found")
+            # Deterministic — row was deleted between upload ack and task pick-up.
+            raise NonRetryableError(f"KnowledgeItem {document_id} not found")
         if item.file_type not in _PIPELINE_TYPES:
             _mark(
                 db, item,
@@ -109,7 +123,8 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
                 finished=True,
             )
             db.commit()
-            raise ValueError(f"KnowledgeItem {document_id} has no file_path")
+            # Deterministic — upload never landed a file. Retry won't help.
+            raise NonRetryableError(f"KnowledgeItem {document_id} has no file_path")
 
         # Flip to RUNNING + stamp start time + task id.
         _mark(
@@ -210,7 +225,10 @@ def _stage_index(document_id: int) -> dict[str, Any]:
     with SyncSession() as db:
         item = db.get(KnowledgeItem, document_id)
         if item is None:
-            raise ValueError(f"KnowledgeItem {document_id} vanished mid-pipeline")
+            # Row was deleted mid-pipeline — deterministic.
+            raise NonRetryableError(
+                f"KnowledgeItem {document_id} vanished mid-pipeline",
+            )
 
         chunks = db.execute(
             select(DocumentChunk.chunk_index, DocumentChunk.content)

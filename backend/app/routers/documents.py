@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.core.deps import CurrentUser, DB
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
+from app.models.user import UserRole
 from app.worker.tasks import parse_document
 
 
@@ -69,6 +70,15 @@ async def get_kg_status(document_id: int, db: DB, user: CurrentUser):
     )).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="document not found")
+
+    # Ownership check. `kg_error` can contain internal paths / stack
+    # context from the failing stage (parse/index/vectorize/extract),
+    # so we can't let arbitrary logged-in users enumerate other users'
+    # document status. Only the uploader (or an admin for ops triage)
+    # may read. Share recipients view the doc body via the sharing
+    # endpoints, not this pipeline-internals endpoint.
+    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="forbidden")
 
     return {
         "document_id": document_id,

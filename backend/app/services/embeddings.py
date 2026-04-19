@@ -20,7 +20,7 @@ class Embedder:
     def __init__(self):
         self.model = settings.EMBEDDING_MODEL
         self.dim = settings.EMBEDDING_DIM
-        self.api_base = settings.LLM_API_BASE or None
+        self.api_base = settings.LLM_BASE_URL or None
         self.api_key = settings.LLM_API_KEY or None
 
     def _kwargs(self) -> dict:
