@@ -33,7 +33,11 @@ class SharingRecord(Base):
     shared_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     shared_to_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     shared_to_department: Mapped[str | None] = mapped_column(String(100), nullable=True)  # dept-level share
-    permission: Mapped[SharePermission] = mapped_column(Enum(SharePermission), default=SharePermission.VIEW, nullable=False)
+    permission: Mapped[SharePermission] = mapped_column(
+        Enum(SharePermission, values_callable=lambda obj: [e.value for e in obj]),
+        default=SharePermission.VIEW,
+        nullable=False,
+    )
     token: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)  # public link token
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -54,7 +58,11 @@ class AuditLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     actor_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    action: Mapped[AuditAction] = mapped_column(Enum(AuditAction), nullable=False, index=True)
+    action: Mapped[AuditAction] = mapped_column(
+        Enum(AuditAction, values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        index=True,
+    )
     resource_type: Mapped[str | None] = mapped_column(String(100), nullable=True)  # "knowledge_item", "user", etc.
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
