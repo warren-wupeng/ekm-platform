@@ -166,9 +166,10 @@ services:
     profiles: ["worker"]   # opt-in: `docker compose --profile worker up`
 
   # ── Celery beat (periodic tasks) ──────────────────────────────────────
-  # Kicks off scheduled jobs like ekm.sharing.purge_expired. Separate from
-  # the worker process: beat enqueues, workers execute. One beat per
-  # deployment; running multiple beats would fire each job N times.
+  # Kicks off scheduled jobs like ekm.sharing.purge_expired and
+  # ekm.archive.tick. Separate from the worker process: beat enqueues,
+  # workers execute. Exactly ONE beat per deployment — running multiple
+  # would fire each job N times.
   beat:
     build: ./backend
     command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info"]
