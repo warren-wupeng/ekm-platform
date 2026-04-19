@@ -20,6 +20,25 @@ class FileType(str, PyEnum):
     OTHER = "other"
 
 
+class KGPipelineStatus(str, PyEnum):
+    """End-to-end KG extraction pipeline status on a KnowledgeItem.
+
+    The pipeline is orchestrated in `services/kg_pipeline.run_pipeline`
+    and covers four stages: parse → index → vectorize → extract. The
+    frontend polls this to drive the upload UI's "processing / ready /
+    failed" states.
+
+    SKIPPED is for file types we don't run the pipeline on (images,
+    archives, audio/video) — so the UI can render "不适用" instead of
+    "处理中" for a PNG that will never get chunks.
+    """
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -78,6 +97,31 @@ class KnowledgeItem(Base):
     # update). See services/archive.py for the "once per pre-archive window"
     # guard.
     archive_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+
+    # Knowledge-graph pipeline state (US-048). One outer Celery task
+    # (`ekm.kg.pipeline`) drives parse → index → vectorize → extract.
+    # `kg_status` is the top-level state the frontend polls; `kg_stage`
+    # records the last attempted stage so ops can see "failed at extract"
+    # without cross-referencing logs.
+    kg_status: Mapped[KGPipelineStatus] = mapped_column(
+        Enum(
+            KGPipelineStatus,
+            name="kg_pipeline_status",
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        default=KGPipelineStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    kg_stage: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    kg_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kg_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    kg_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    kg_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
 

@@ -264,6 +264,36 @@ def archive_tick(self) -> dict[str, Any]:
     }
 
 
+@celery_app.task(
+    name="ekm.kg.pipeline",
+    bind=True,
+    # Extract stage can be slow (N LLM calls per doc) — spread retries
+    # so a transient Neo4j blip or LLM 429 gets room to clear.
+    max_retries=3,
+    default_retry_delay=60,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def kg_pipeline(self, document_id: int) -> dict[str, Any]:
+    """End-to-end KG extraction pipeline for one document (US-048).
+
+    Fires automatically after a successful upload (see routers/files).
+    Walks four stages (parse → index → vectorize → extract) and writes
+    per-stage status back to `knowledge_items.kg_status`/`kg_stage`/
+    `kg_error` so the frontend can poll and render "处理中 / 已完成 /
+    失败（在 extract 阶段）".
+
+    Each stage is idempotent; a Celery-level retry safely re-runs from
+    the top. The retry ceiling is 3 before terminal FAILED lands — good
+    enough for transient infra flakes without burning through the LLM
+    budget on a poison document.
+    """
+    from app.services.kg_pipeline import run_pipeline
+    return run_pipeline(int(document_id), task_id=self.request.id)
+
+
 @celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=60)
 def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
     """Embed each DocumentChunk + upsert to Qdrant. Idempotent on re-run."""

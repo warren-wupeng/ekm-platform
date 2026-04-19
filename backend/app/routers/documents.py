@@ -56,6 +56,31 @@ async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
     return {"task_id": async_result.id, "status": "queued"}
 
 
+@router.get("/{document_id}/kg-status")
+async def get_kg_status(document_id: int, db: DB, user: CurrentUser):
+    """Return KG pipeline status for a document (US-048 polling endpoint).
+
+    Frontend polls this on the upload confirmation screen to show
+    "处理中 (parse) / 处理中 (extract) / 已完成 / 失败". The payload is
+    deliberately small — this is a hot poll path.
+    """
+    item = (await db.execute(
+        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
+    )).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    return {
+        "document_id": document_id,
+        "status": item.kg_status.value,
+        "stage": item.kg_stage,
+        "error": item.kg_error,
+        "task_id": item.kg_task_id,
+        "started_at": item.kg_started_at.isoformat() if item.kg_started_at else None,
+        "completed_at": item.kg_completed_at.isoformat() if item.kg_completed_at else None,
+    }
+
+
 @router.get("/{document_id}/chunks")
 async def list_chunks(document_id: int, db: DB, user: CurrentUser, limit: int = 20):
     """Return up to `limit` parsed chunks — handy for QA and for the UI to
