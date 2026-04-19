@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import ApiError, AsyncElasticsearch, BadRequestError, NotFoundError
 
 from app.core.config import settings
 
@@ -36,6 +36,24 @@ INDEX_TAGS = "ekm_tags"
 # Default to IK; if the plugin isn't installed, falls back to `standard`.
 _CJK_ANALYZER_INDEX = "ik_max_word"
 _CJK_ANALYZER_SEARCH = "ik_smart"
+
+
+def _is_already_exists(exc: ApiError) -> bool:
+    """Return True if this ES error is a benign 'index already exists' race.
+
+    ES returns HTTP 400 with error.type = "resource_already_exists_exception"
+    when a concurrent create lost the race. The error body shape is stable
+    across the 8.x client; fall back to the stringified message if the body
+    isn't the dict we expect (some transport layers wrap differently).
+    """
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("type") == "resource_already_exists_exception":
+            return True
+    # Last-resort substring match. Not pretty, but indices.create's API
+    # contract has been stable on this string since ES 5.
+    return "resource_already_exists_exception" in str(exc)
 
 
 def _chunk_mapping(cjk_analyzer_index: str, cjk_analyzer_search: str) -> dict[str, Any]:
@@ -223,10 +241,30 @@ class ESClient:
             return "standard", "standard"
 
     async def _create_if_missing(self, name: str, body: dict[str, Any]):
+        # The exists+create pair is TOCTOU-racy: when multiple workers
+        # start simultaneously (compose / fly boot), two can both see
+        # "not exists" and then both call create(), and the loser gets
+        # a 400 `resource_already_exists_exception`. Elasticsearch's
+        # create is not itself idempotent, so we handle that specific
+        # error as success — any other BadRequestError (e.g. mapping
+        # conflict) still bubbles.
         exists = await self.client.indices.exists(index=name)
         if exists:
             return
-        await self.client.indices.create(index=name, body=body)
+        try:
+            await self.client.indices.create(index=name, body=body)
+        except BadRequestError as exc:
+            if _is_already_exists(exc):
+                log.debug("ES index %s created concurrently by another worker", name)
+                return
+            raise
+        except ApiError as exc:
+            # Some client versions surface this under the generic ApiError
+            # rather than BadRequestError. Belt-and-braces.
+            if _is_already_exists(exc):
+                log.debug("ES index %s created concurrently by another worker", name)
+                return
+            raise
         log.info("created ES index: %s", name)
 
     # ── write path ────────────────────────────────────────────────────

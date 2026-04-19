@@ -56,22 +56,34 @@ async def search_all(
     """Run unified search across the requested content buckets."""
     requested = _normalize_types(types)
 
-    # Fan out concurrently — each bucket is an independent ES query.
-    jobs: dict[str, asyncio.Task[dict[str, Any]]] = {}
+    # Fan out concurrently — each bucket is an independent ES query and
+    # should land in parallel. `asyncio.gather(..., return_exceptions=True)`
+    # is the idiomatic form: per-bucket failures come back as the caught
+    # exception in the result slot (we then swap in an empty-bucket
+    # sentinel), while successful buckets return their payload. One
+    # broken index does NOT fail the whole search — partial result beats
+    # a 500 from the caller's perspective.
+    bucket_names: list[str] = []
+    coros: list = []
     if "documents" in requested:
-        jobs["documents"] = asyncio.create_task(_search_documents(q, size=size))
+        bucket_names.append("documents")
+        coros.append(_search_documents(q, size=size))
     if "posts" in requested:
-        jobs["posts"] = asyncio.create_task(_search_posts(q, size=size))
+        bucket_names.append("posts")
+        coros.append(_search_posts(q, size=size))
     if "tags" in requested:
-        jobs["tags"] = asyncio.create_task(_search_tags(q, size=size))
+        bucket_names.append("tags")
+        coros.append(_search_tags(q, size=size))
+
+    gathered = await asyncio.gather(*coros, return_exceptions=True)
 
     results: dict[str, dict[str, Any]] = {}
-    for bucket, task in jobs.items():
-        try:
-            results[bucket] = await task
-        except Exception as exc:  # pragma: no cover — ES live path
-            log.warning("unified-search bucket=%s failed: %s", bucket, exc)
+    for bucket, outcome in zip(bucket_names, gathered):
+        if isinstance(outcome, Exception):
+            log.warning("unified-search bucket=%s failed: %s", bucket, outcome)
             results[bucket] = {"total": 0, "hits": []}
+        else:
+            results[bucket] = outcome
 
     grand_total = sum(r.get("total", 0) for r in results.values())
     return {"query": q, "total": grand_total, "results": results}
