@@ -316,8 +316,20 @@ export default function EditorPage() {
                 placeholder="向 AI 提问…"
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 className="text-xs flex-1"
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) { e.preventDefault(); handleSend() }
+                // #90: switched off onPressEnter because it fires before
+                // IME composition end on some browsers (Chinese input
+                // methods confirm candidates with Enter). Using onKeyDown
+                // + nativeEvent.isComposing skips the confirm Enter and
+                // only sends on a "real" Enter press.
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Enter'
+                    && !e.shiftKey
+                    && !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault()
+                    void handleSend()
+                  }
                 }}
               />
               <Button
