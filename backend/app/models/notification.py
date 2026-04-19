@@ -28,12 +28,15 @@ from app.core.database import Base
 
 
 class NotificationType(str, enum.Enum):
-    COMMENT           = "comment"            # new reply on your post
-    LIKE              = "like"               # someone liked your reply
-    MENTION           = "mention"            # @user in a reply
-    KNOWLEDGE_UPDATE  = "knowledge_update"   # doc you care about changed
-    ARCHIVE_REMINDER  = "archive_reminder"   # your doc will auto-archive soon
-    AUTO_ARCHIVED     = "auto_archived"      # your doc was just auto-archived
+    COMMENT                    = "comment"                    # new reply on your post
+    LIKE                       = "like"                       # someone liked your reply
+    MENTION                    = "mention"                    # @user in a reply
+    KNOWLEDGE_UPDATE           = "knowledge_update"           # doc you care about changed
+    ARCHIVE_REMINDER           = "archive_reminder"           # your doc will auto-archive soon
+    AUTO_ARCHIVED              = "auto_archived"              # your doc was just auto-archived
+    RESTORE_REQUEST_SUBMITTED  = "restore_request_submitted"  # to KM Ops: new request to review
+    RESTORE_REQUEST_APPROVED   = "restore_request_approved"   # to submitter: your doc is back
+    RESTORE_REQUEST_REJECTED   = "restore_request_rejected"   # to submitter: with reason
 
 
 class Notification(Base):

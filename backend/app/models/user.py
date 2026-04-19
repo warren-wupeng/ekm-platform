@@ -15,6 +15,10 @@ class UserRole(str, PyEnum):
     ADMIN = "admin"
     EDITOR = "editor"
     VIEWER = "viewer"
+    # KM Ops — knowledge-management ops team. Can review archive restore
+    # requests, approve recoveries, etc. Lower privilege than ADMIN
+    # (which still owns config like archive rules), higher than EDITOR.
+    KM_OPS = "km_ops"
 
 
 class User(Base):
