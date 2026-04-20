@@ -28,7 +28,7 @@ litellm.telemetry = False
 class LLMClient:
     def __init__(self) -> None:
         self.model       = settings.LLM_MODEL
-        self.api_base    = settings.LLM_API_BASE or None
+        self.api_base    = settings.LLM_BASE_URL or None
         self.api_key     = settings.LLM_API_KEY or None
         self.max_tokens  = settings.LLM_MAX_TOKENS
         self.temperature = settings.LLM_TEMPERATURE

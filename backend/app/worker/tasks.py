@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
 from app.worker.celery_app import celery_app
 
 
@@ -262,6 +264,40 @@ def archive_tick(self) -> dict[str, Any]:
         "archived": archived,
         "mails_attempted": len(pending_mails),
     }
+
+
+@celery_app.task(
+    name="ekm.kg.pipeline",
+    bind=True,
+    # Extract stage can be slow (N LLM calls per doc) — spread retries
+    # so a transient Neo4j blip or LLM 429 gets room to clear. Only
+    # retry on errors that *could* clear on their own; deterministic
+    # failures surface via `NonRetryableError` (see kg_pipeline module)
+    # and must terminate immediately so the frontend poll lands on
+    # FAILED without burning the autoretry budget.
+    max_retries=3,
+    default_retry_delay=60,
+    autoretry_for=(IOError, ConnectionError, TimeoutError, httpx.RequestError),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def kg_pipeline(self, document_id: int) -> dict[str, Any]:
+    """End-to-end KG extraction pipeline for one document (US-048).
+
+    Fires automatically after a successful upload (see routers/files).
+    Walks four stages (parse → index → vectorize → extract) and writes
+    per-stage status back to `knowledge_items.kg_status`/`kg_stage`/
+    `kg_error` so the frontend can poll and render "处理中 / 已完成 /
+    失败（在 extract 阶段）".
+
+    Each stage is idempotent; a Celery-level retry safely re-runs from
+    the top. The retry ceiling is 3 before terminal FAILED lands — good
+    enough for transient infra flakes without burning through the LLM
+    budget on a poison document.
+    """
+    from app.services.kg_pipeline import run_pipeline
+    return run_pipeline(int(document_id), task_id=self.request.id)
 
 
 @celery_app.task(name="ekm.docs.vectorize", bind=True, max_retries=3, default_retry_delay=60)

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.core.deps import CurrentUser, DB
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
+from app.models.user import UserRole
 from app.worker.tasks import parse_document
 
 
@@ -54,6 +55,40 @@ async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
     await db.commit()
 
     return {"task_id": async_result.id, "status": "queued"}
+
+
+@router.get("/{document_id}/kg-status")
+async def get_kg_status(document_id: int, db: DB, user: CurrentUser):
+    """Return KG pipeline status for a document (US-048 polling endpoint).
+
+    Frontend polls this on the upload confirmation screen to show
+    "处理中 (parse) / 处理中 (extract) / 已完成 / 失败". The payload is
+    deliberately small — this is a hot poll path.
+    """
+    item = (await db.execute(
+        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
+    )).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    # Ownership check. `kg_error` can contain internal paths / stack
+    # context from the failing stage (parse/index/vectorize/extract),
+    # so we can't let arbitrary logged-in users enumerate other users'
+    # document status. Only the uploader (or an admin for ops triage)
+    # may read. Share recipients view the doc body via the sharing
+    # endpoints, not this pipeline-internals endpoint.
+    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    return {
+        "document_id": document_id,
+        "status": item.kg_status.value,
+        "stage": item.kg_stage,
+        "error": item.kg_error,
+        "task_id": item.kg_task_id,
+        "started_at": item.kg_started_at.isoformat() if item.kg_started_at else None,
+        "completed_at": item.kg_completed_at.isoformat() if item.kg_completed_at else None,
+    }
 
 
 @router.get("/{document_id}/chunks")
