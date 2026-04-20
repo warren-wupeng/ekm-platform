@@ -46,14 +46,8 @@ def upgrade() -> None:
         "ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'restore_request_rejected'"
     )
 
-    # 2. New restore_status enum — create_type=True because it's brand new.
-    restore_status = sa.Enum(
-        "pending", "approved", "rejected",
-        name="restore_status",
-    )
-    restore_status.create(op.get_bind(), checkfirst=True)
-
     # 3. archive_restore_requests table.
+    # Let op.create_table manage enum type lifecycle — no explicit .create() needed.
     op.create_table(
         "archive_restore_requests",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -79,11 +73,7 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending", "approved", "rejected",
-                name="restore_status",
-                create_type=False,  # created above
-            ),
+            sa.Enum("pending", "approved", "rejected", name="restore_status"),
             nullable=False,
             server_default=sa.text("'pending'"),
         ),

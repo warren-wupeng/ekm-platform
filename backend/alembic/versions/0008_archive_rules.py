@@ -55,11 +55,9 @@ def upgrade() -> None:
     )
 
     # 3. archive_rules table. Reuse existing filetype enum (created by 0001).
-    filetype_enum = sa.Enum(
-        "document", "image", "archive", "audio", "video", "other",
-        name="filetype",
-        create_type=False,
-    )
+    # Use sa.Enum(name=...) without values so SQLAlchemy's create_type defaults
+    # to False and _on_table_create does NOT fire a CREATE TYPE DDL event.
+    filetype_enum = sa.Enum(name="filetype")
     op.create_table(
         "archive_rules",
         sa.Column("id", sa.Integer(), primary_key=True),
