@@ -168,33 +168,31 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
         if other_mentions is None:
             exclusive_node_ids.append(node_id)
 
-    # Delete inter-entity edges where both endpoints are exclusive
-    # to this document. Edges where one endpoint is shared with
-    # another doc are preserved.
+    # Delete ALL non-MENTIONED_IN edges touching exclusive nodes.
+    # An exclusive node is only relevant to this document, so all its
+    # inter-entity edges (both outgoing and incoming) should be removed
+    # regardless of whether the other endpoint is shared. This ensures
+    # orphan detection works correctly afterward.
     if exclusive_node_ids:
-        exclusive_set = set(exclusive_node_ids)
-        inter_edges = db.execute(
+        outgoing = db.execute(
             select(KGEdge).where(
                 KGEdge.source_id.in_(exclusive_node_ids),
                 KGEdge.relation_type != "MENTIONED_IN",
             )
         ).scalars().all()
-        for edge in inter_edges:
-            if edge.target_id in exclusive_set or edge.target_id == doc_node.id:
-                db.delete(edge)
-                edges_deleted += 1
+        for edge in outgoing:
+            db.delete(edge)
+            edges_deleted += 1
 
-        # Also delete edges where the exclusive node is the target.
-        incoming_edges = db.execute(
+        incoming = db.execute(
             select(KGEdge).where(
                 KGEdge.target_id.in_(exclusive_node_ids),
                 KGEdge.relation_type != "MENTIONED_IN",
             )
         ).scalars().all()
-        for edge in incoming_edges:
-            if edge.source_id in exclusive_set or edge.source_id == doc_node.id:
-                db.delete(edge)
-                edges_deleted += 1
+        for edge in incoming:
+            db.delete(edge)
+            edges_deleted += 1
 
     db.flush()
 
@@ -218,8 +216,8 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
 
     db.flush()
 
-    # Neo4j mirror cleanup — best effort.
-    _clear_document_neo4j(document_id, doc_eid)
+    # NOTE: Neo4j cleanup is deferred to AFTER db.commit() — two-phase
+    # pattern. The caller (extract_and_persist) handles it.
 
     log.info(
         "kg_extract: cleared stale KG doc=%s edges=%d nodes=%d",
@@ -263,7 +261,11 @@ def _clear_document_neo4j(document_id: int, doc_eid: str) -> None:
         )
 
     try:
-        asyncio.run(_cleanup())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_cleanup())
+        finally:
+            loop.close()
     except Exception as exc:  # noqa: BLE001
         log.warning(
             "kg_extract: Neo4j cleanup failed doc=%s: %s", document_id, exc,
@@ -425,8 +427,13 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
 
     db.flush()
 
-    # Mirror to Neo4j — best effort. graph_sync swallows its own errors.
-    _mirror_to_neo4j(db, document_id, doc_node)
+    # Collect Neo4j work to run AFTER db.commit() — two-phase pattern.
+    # _mirror_to_neo4j reads from the committed Postgres state, so it
+    # must run after the caller commits.
+    neo4j_work = {
+        "mirror_args": (db, document_id, doc_node),
+        "clear_doc_eid": doc_eid if (cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0) else None,
+    }
 
     is_update = cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0
     log.info(
@@ -438,11 +445,27 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
         "entities": total_entities,
         "relations": total_relations,
         "chunks_processed": len(chunks),
+        "_neo4j_work": neo4j_work,
     }
     if is_update:
         result["incremental"] = True
         result["cleared"] = cleared
     return result
+
+
+def run_neo4j_sync(result: dict[str, Any]) -> None:
+    """Run deferred Neo4j work after Postgres commit. Best-effort."""
+    neo4j_work = result.pop("_neo4j_work", None)
+    if neo4j_work is None:
+        return
+
+    doc_eid = neo4j_work.get("clear_doc_eid")
+    if doc_eid:
+        _clear_document_neo4j(result["document_id"], doc_eid)
+
+    mirror_args = neo4j_work.get("mirror_args")
+    if mirror_args:
+        _mirror_to_neo4j(*mirror_args)
 
 
 # ── external_id helpers ──────────────────────────────────────────────
@@ -651,7 +674,11 @@ def _mirror_to_neo4j(
             )
 
     try:
-        asyncio.run(_push())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_push())
+        finally:
+            loop.close()
     except Exception as exc:  # noqa: BLE001
         log.warning("kg_extract: Neo4j mirror failed doc=%s: %s",
                     document_id, exc)

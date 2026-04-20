@@ -150,14 +150,16 @@ class TestClearDocumentKgExclusiveEntities:
         assert result["edges_deleted"] == 3
         # doc_node + 2 orphan entities = 3 nodes deleted
         assert result["nodes_deleted"] == 3
-        mock_neo4j.assert_called_once_with(1, "doc:1")
+        # Neo4j cleanup is deferred to after db.commit() (two-phase),
+        # so _clear_document_kg does NOT call it directly.
+        mock_neo4j.assert_not_called()
 
 
 class TestClearDocumentKgSharedEntity:
-    """One entity is shared with another doc → it and its edges survive."""
+    """One entity shared, one exclusive. Exclusive node + its edges are cleaned."""
 
     @patch("app.services.kg_extract._clear_document_neo4j")
-    def test_shared_entity_preserved(self, mock_neo4j):
+    def test_exclusive_cleaned_shared_preserved(self, mock_neo4j):
         db = MagicMock()
 
         doc_node = _make_node(100, "doc:1", "Document")
@@ -186,17 +188,16 @@ class TestClearDocumentKgSharedEntity:
                 # ent_b: HAS another MENTIONED_IN → shared
                 result.scalar_one_or_none.return_value = 999  # truthy
             elif n == 5:
-                # inter-entity edges where source_id in exclusive_node_ids (only ent_a)
+                # ALL outgoing edges from exclusive nodes (ent_a)
                 result.scalars.return_value.all.return_value = [inter_ab]
             elif n == 6:
-                # incoming edges where target in exclusive — none
+                # ALL incoming edges to exclusive nodes — none
                 result.scalars.return_value.all.return_value = []
             elif n == 7:
-                # orphan check for ent_a: inter_ab was NOT deleted (ent_b is shared)
-                # so ent_a still has the worksFor edge... wait, ent_b.id=202 is
-                # NOT in exclusive_set, so inter_ab (target=202) is NOT deleted.
-                # Therefore ent_a still has a remaining edge → not orphan.
-                result.scalar_one_or_none.return_value = 303  # truthy
+                # orphan check for ent_a: inter_ab WAS deleted (all
+                # outgoing edges from exclusive nodes are removed), so
+                # ent_a has zero remaining edges → orphan → deleted.
+                result.scalar_one_or_none.return_value = None
             else:
                 result.scalar_one_or_none.return_value = None
                 result.scalars.return_value.all.return_value = []
@@ -208,7 +209,8 @@ class TestClearDocumentKgSharedEntity:
 
         result = _clear_document_kg(db, 1)
 
-        # 2 MENTIONED_IN edges deleted, 0 inter-entity (target 202 not in exclusive set)
-        assert result["edges_deleted"] == 2
-        # 1 doc_node deleted, ent_a is NOT orphan (still has worksFor to ent_b)
-        assert result["nodes_deleted"] == 1
+        # 2 MENTIONED_IN + 1 inter-entity (worksFor) = 3 edges deleted
+        assert result["edges_deleted"] == 3
+        # doc_node + ent_a (orphan after edge cleanup) = 2 nodes deleted
+        # ent_b is shared → survives
+        assert result["nodes_deleted"] == 2

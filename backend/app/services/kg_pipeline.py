@@ -296,11 +296,13 @@ def _stage_vectorize(document_id: int) -> dict[str, Any]:
 
 def _stage_extract(document_id: int) -> dict[str, Any]:
     """Run LLM NER + KG persistence stage."""
-    from app.services.kg_extract import extract_and_persist
+    from app.services.kg_extract import extract_and_persist, run_neo4j_sync
 
     with SyncSession() as db:
         result = extract_and_persist(db, document_id)
         db.commit()
+    # Neo4j sync runs AFTER Postgres commit — two-phase pattern.
+    run_neo4j_sync(result)
     return result
 
 
