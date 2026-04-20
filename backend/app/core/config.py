@@ -40,10 +40,9 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.3
 
     # Embeddings (LiteLLM)
-    EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIM: int = 1536
-    EMBEDDING_BASE_URL: str = "https://openrouter.ai/api/v1"  # OpenRouter; AI Gateway doesn't support /embeddings
-    EMBEDDING_API_KEY: str = ""  # empty → falls back to LLM_API_KEY
+    EMBEDDING_API_KEY: str = ""  # OpenAI key for embeddings; empty → falls back to LLM_API_KEY
 
     # Qdrant
     QDRANT_COLLECTION: str = "ekm_chunks"
