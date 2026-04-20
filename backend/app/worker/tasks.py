@@ -337,3 +337,23 @@ def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
 
     log.info("vectorized doc=%s count=%d", document_id, count)
     return {"document_id": document_id, "vectorized": count, "status": "vectorized"}
+
+
+@celery_app.task(
+    name="ekm.docs.incremental_update",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+)
+def incremental_update(self, document_id: int) -> dict[str, Any]:
+    """Incremental document update: hash-diff chunks + K-Card (Issue #43).
+
+    Fires when a document is re-uploaded / updated. Only re-indexes
+    chunks that actually changed, preserving old chunks as
+    is_current=False for audit.
+    """
+    from app.services.document_update import run_incremental_update
+    return run_incremental_update(int(document_id))

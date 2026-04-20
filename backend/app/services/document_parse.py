@@ -75,12 +75,15 @@ def parse_and_persist(document_id: int) -> dict[str, Any]:
         db.execute(delete(DocumentChunk).where(DocumentChunk.knowledge_item_id == document_id))
         db.flush()
 
+        from app.services.chunk_updater import content_hash
+
         rows = [
             DocumentChunk(
                 knowledge_item_id=document_id,
                 chunk_index=c.index,
                 content=c.content,
                 token_count=c.char_count,  # char-count proxy; replaced in #22
+                content_hash=content_hash(c.content),
             )
             for c in chunks
         ]

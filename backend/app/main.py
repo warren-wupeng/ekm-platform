@@ -30,6 +30,7 @@ from app.routers import restore as restore_router
 from app.routers import batch as batch_router
 from app.routers import agent as agent_router
 from app.routers import kg as kg_router
+from app.routers import chunk_history as chunk_history_router
 from app.routers import kg_review as kg_review_router
 
 
@@ -115,6 +116,7 @@ app.include_router(restore_router.router)
 app.include_router(batch_router.router)
 app.include_router(agent_router.router)
 app.include_router(kg_router.router)
+app.include_router(chunk_history_router.router)
 app.include_router(kg_review_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
