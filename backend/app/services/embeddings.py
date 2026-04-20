@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
+import httpx
 from openai import OpenAI
 
 from app.core.config import settings
@@ -26,7 +27,10 @@ def _get_client() -> OpenAI:
     global _client
     if _client is None:
         api_key = settings.EMBEDDING_API_KEY or settings.LLM_API_KEY
-        _client = OpenAI(api_key=api_key)
+        _client = OpenAI(
+            api_key=api_key,
+            timeout=httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0),
+        )
     return _client
 
 
