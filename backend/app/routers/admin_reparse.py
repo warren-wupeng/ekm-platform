@@ -7,13 +7,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DB
-from app.core.rate_limit import limiter
 from app.models.document import DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
 from app.models.sharing import AuditAction, AuditLog
@@ -40,8 +38,7 @@ class ReparseResponse(BaseModel):
 
 
 @router.post("/reparse", response_model=ReparseResponse, status_code=202)
-@limiter.limit("10/minute", key_func=get_remote_address)
-async def admin_reparse(request: Request, body: ReparseRequest, db: DB, user: CurrentUser):
+async def admin_reparse(body: ReparseRequest, db: DB, user: CurrentUser):
     """Re-queue historical files through the Tika parse pipeline."""
     if user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
