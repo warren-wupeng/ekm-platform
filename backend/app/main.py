@@ -32,6 +32,7 @@ from app.routers import agent as agent_router
 from app.routers import kg as kg_router
 from app.routers import chunk_history as chunk_history_router
 from app.routers import kg_review as kg_review_router
+from app.routers import admin_reparse as admin_reparse_router
 
 
 @asynccontextmanager
@@ -118,6 +119,7 @@ app.include_router(agent_router.router)
 app.include_router(kg_router.router)
 app.include_router(chunk_history_router.router)
 app.include_router(kg_review_router.router)
+app.include_router(admin_reparse_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
