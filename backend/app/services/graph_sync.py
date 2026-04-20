@@ -11,12 +11,24 @@ Celery task for periodic full-reconciliation from Postgres.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from app.core.graph import graph
-from app.models.graph_vocab import ENTITY_TYPES, RELATION_TYPES
+from app.models.graph_vocab import ENTITY_TYPES, RELATION_TYPES  # noqa: F401  # re-exported for callers
 
 log = logging.getLogger(__name__)
+
+
+# Cypher can't parameterise labels or relationship types, so anything we
+# interpolate into the query text must be validated. We accept any
+# identifier-like string — Schema.org class/property names (e.g. "Person",
+# "worksFor", "SoftwareApplication") fit this shape — and reject anything
+# that could smuggle in `;`, whitespace, backticks, or keywords.
+#
+# Upper bound of 64 chars covers the longest Schema.org identifier
+# ("EducationalOccupationalCredential" = 33) with plenty of headroom.
+_SAFE_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 async def upsert_entity(
@@ -26,9 +38,12 @@ async def upsert_entity(
     properties: dict[str, Any] | None = None,
 ) -> None:
     """MERGE a node keyed on external_id. Label = :Entity:<Type>."""
-    if entity_type not in ENTITY_TYPES:
-        # Still store it, but tag as generic Entity so traversal still works.
-        log.info("unknown entity_type %r; falling back to Entity", entity_type)
+    # Validate *shape* rather than membership — the Schema.org ontology is
+    # ~700 classes and the extractor (`app.vendor.tom_kg`) can legitimately
+    # emit any of them. We still need a tight regex because `entity_type`
+    # is interpolated into the Cypher (labels can't be parameterised).
+    if not _SAFE_LABEL_RE.match(entity_type or ""):
+        log.info("malformed entity_type %r; falling back to Entity", entity_type)
         entity_type = "Entity"
 
     # Neo4j multi-label: we always apply :Entity (for uniform queries) and
@@ -56,8 +71,12 @@ async def upsert_relation(
     properties: dict[str, Any] | None = None,
 ) -> None:
     """MERGE a relationship between two entities. Safe to re-run."""
-    if relation_type not in RELATION_TYPES:
-        log.info("unknown relation_type %r; falling back to RELATED_TO", relation_type)
+    # Same shape-validation rationale as upsert_entity — Schema.org
+    # predicates (`worksFor`, `location`, `knows`, …) go straight through
+    # while anything with spaces/semicolons/backticks is kicked to the
+    # RELATED_TO fallback.
+    if not _SAFE_LABEL_RE.match(relation_type or ""):
+        log.info("malformed relation_type %r; falling back to RELATED_TO", relation_type)
         relation_type = "RELATED_TO"
 
     # Relationship types can't be parameterised — they're interpolated after
