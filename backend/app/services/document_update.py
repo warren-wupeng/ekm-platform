@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.document import DocumentChunk
 from app.models.knowledge import KnowledgeItem
-from app.services.chunk_updater import apply_diff, content_hash, diff_chunks
+from app.services.chunk_updater import ChunkDiff, apply_diff, content_hash, diff_chunks
 from app.services.document_parse import SyncSession
 
 log = logging.getLogger(__name__)
@@ -61,72 +61,38 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
                 "doc_version": diff.doc_version - 1,
             }
 
-        # Step 3: Apply diff to Postgres.
-        result = apply_diff(db, document_id, diff)
-        db.commit()
+        # Steps 3+4 combined: apply diff + sync search indexes inside a
+        # savepoint.  If ES/Qdrant writes fail, the savepoint rolls back
+        # so Postgres never has is_current=True chunks that search can't
+        # find (the "search blind-spot" Sage flagged).
+        try:
+            with db.begin_nested():
+                # Step 3: Apply diff to Postgres (within savepoint).
+                result = apply_diff(db, document_id, diff)
+                db.flush()
 
-        log.info(
-            "incremental_update doc=%d kept=%d removed=%d added=%d ver=%d",
-            document_id, result["kept"], result["removed"],
-            result["added"], result["doc_version"],
-        )
-
-        # Step 4: Re-index changed chunks in ES/Qdrant.
-        # Delete removed chunks from ES.
-        for chunk in diff.removed:
-            try:
-                from app.services.es_sync import _client as es_client
-                client = es_client()
-                client.delete(
-                    index="ekm_chunks",
-                    id=f"{document_id}:{chunk.chunk_index}",
-                    ignore=[404],
+                log.info(
+                    "incremental_update doc=%d kept=%d removed=%d added=%d ver=%d",
+                    document_id, result["kept"], result["removed"],
+                    result["added"], result["doc_version"],
                 )
-            except Exception as exc:  # noqa: BLE001
-                log.warning("ES delete chunk failed doc=%d idx=%d: %s",
-                            document_id, chunk.chunk_index, exc)
 
-        # Delete removed chunks from Qdrant.
-        for chunk in diff.removed:
-            try:
-                from app.services.qdrant_client import delete_points
-                point_id = document_id * 1_000_000 + chunk.chunk_index
-                delete_points([str(point_id)])
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Qdrant delete chunk failed doc=%d idx=%d: %s",
-                            document_id, chunk.chunk_index, exc)
-
-        # Index added chunks to ES.
-        if result["new_chunk_ids"]:
-            from sqlalchemy import select
-            new_db_chunks = db.execute(
-                select(DocumentChunk)
-                .where(DocumentChunk.id.in_(result["new_chunk_ids"]))
-                .order_by(DocumentChunk.chunk_index)
-            ).scalars().all()
-
-            try:
-                bulk_index_chunks(
-                    document_id,
-                    [(c.chunk_index, c.content) for c in new_db_chunks],
-                )
-            except Exception as exc:  # noqa: BLE001
-                log.warning("ES bulk index failed doc=%d: %s", document_id, exc)
-
-            # Vectorize added chunks to Qdrant.
-            try:
-                from app.services.embeddings import embedder
-                from app.services.qdrant_client import ensure_collection, upsert_chunks
-
-                ensure_collection()
-                vectors = embedder.embed([c.content for c in new_db_chunks])
-                triples = [
-                    (c.chunk_index, c.content, vec)
-                    for c, vec in zip(new_db_chunks, vectors)
-                ]
-                upsert_chunks(document_id, triples)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Qdrant upsert failed doc=%d: %s", document_id, exc)
+                # Step 4: sync search indexes — must succeed or rollback.
+                _sync_search_indexes(db, document_id, diff, result)
+            # Savepoint released — now commit the outer transaction.
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            # Savepoint rolled back — old chunks stay is_current=True,
+            # doc_version unchanged.  Postgres and search stay consistent.
+            log.error(
+                "incremental_update doc=%d search sync failed, diff rolled back: %s",
+                document_id, exc,
+            )
+            return {
+                "document_id": document_id,
+                "status": "search_sync_failed",
+                "error": str(exc)[:500],
+            }
 
         # Step 5: Generate K-Cards for added chunks (failure-safe).
         kcards_generated = 0
@@ -146,3 +112,60 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
         result["document_id"] = document_id
         result["status"] = "updated"
         return result
+
+
+def _sync_search_indexes(
+    db: Session,
+    document_id: int,
+    diff: ChunkDiff,
+    result: dict[str, Any],
+) -> None:
+    """Sync changed chunks to ES and Qdrant. Raises on failure.
+
+    Called inside a savepoint — if this raises, the caller rolls back
+    both the Postgres diff and this sync attempt, keeping Postgres and
+    search consistent.
+    """
+    from app.services.es_sync import bulk_index_chunks
+
+    # Delete removed chunks from ES.
+    for chunk in diff.removed:
+        from app.services.es_sync import _client as es_client
+        client = es_client()
+        client.delete(
+            index="ekm_chunks",
+            id=f"{document_id}:{chunk.chunk_index}",
+            ignore=[404],
+        )
+
+    # Delete removed chunks from Qdrant.
+    for chunk in diff.removed:
+        from app.services.qdrant_client import delete_points
+        point_id = document_id * 1_000_000 + chunk.chunk_index
+        delete_points([str(point_id)])
+
+    # Index added chunks to ES + Qdrant.
+    if result["new_chunk_ids"]:
+        from sqlalchemy import select
+
+        new_db_chunks = db.execute(
+            select(DocumentChunk)
+            .where(DocumentChunk.id.in_(result["new_chunk_ids"]))
+            .order_by(DocumentChunk.chunk_index)
+        ).scalars().all()
+
+        bulk_index_chunks(
+            document_id,
+            [(c.chunk_index, c.content) for c in new_db_chunks],
+        )
+
+        from app.services.embeddings import embedder
+        from app.services.qdrant_client import ensure_collection, upsert_chunks
+
+        ensure_collection()
+        vectors = embedder.embed([c.content for c in new_db_chunks])
+        triples = [
+            (c.chunk_index, c.content, vec)
+            for c, vec in zip(new_db_chunks, vectors)
+        ]
+        upsert_chunks(document_id, triples)
