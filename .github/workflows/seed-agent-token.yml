@@ -1,0 +1,13 @@
+name: Seed Agent Token
+on:
+  workflow_dispatch: {}
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Seed agent token
+        run: flyctl ssh console --app ekm-backend -C "python -m scripts.seed_agent_token"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
