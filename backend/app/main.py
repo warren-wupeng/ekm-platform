@@ -4,7 +4,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.routers import health
 from app.routers import auth
 from app.routers import files
@@ -24,6 +28,7 @@ from app.routers import notifications
 from app.routers import archive as archive_router
 from app.routers import restore as restore_router
 from app.routers import batch as batch_router
+from app.routers import agent as agent_router
 
 
 @asynccontextmanager
@@ -69,6 +74,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiting (Agent API)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -100,6 +109,7 @@ app.include_router(notifications.router)
 app.include_router(archive_router.router)
 app.include_router(restore_router.router)
 app.include_router(batch_router.router)
+app.include_router(agent_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])

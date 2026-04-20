@@ -32,6 +32,9 @@ neo4j==5.25.0
 # Document parsing
 tika==2.6.0
 
+# Rate limiting
+slowapi==0.1.9
+
 # Utils
 httpx==0.28.1
 python-dotenv==1.0.1

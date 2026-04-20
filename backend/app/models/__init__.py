@@ -9,6 +9,7 @@ from app.models.feedback import ChatFeedback, FeedbackRating
 from app.models.notification import Notification, NotificationType
 from app.models.archive import ArchiveRule
 from app.models.restore import ArchiveRestoreRequest, RestoreStatus
+from app.models.agent import AgentToken
 
 __all__ = [
     "User", "UserRole",
@@ -22,4 +23,5 @@ __all__ = [
     "Notification", "NotificationType",
     "ArchiveRule",
     "ArchiveRestoreRequest", "RestoreStatus",
+    "AgentToken",
 ]
