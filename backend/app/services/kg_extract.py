@@ -232,6 +232,7 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
             source=src, target=dst,
             relation_type=predicate,
             properties={"predicate_uri": rel.predicate_uri},
+            confidence=rel.confidence,
         ):
             total_relations += 1
 
@@ -340,8 +341,25 @@ def _upsert_edge(
     target: KGNode,
     relation_type: str,
     properties: dict[str, Any],
+    confidence: float | None = None,
 ) -> bool:
-    """Idempotent edge insert. Returns True iff a new row was created."""
+    """Idempotent edge insert. Returns True iff a new row was created.
+
+    When ``confidence`` is provided and below the threshold
+    (``KG_LOW_CONFIDENCE_THRESHOLD``), the edge is auto-flagged with
+    ``needs_review=True``. MENTIONED_IN edges (provenance) are never
+    flagged — they're structural, not extracted.
+    """
+    from app.core.config import settings
+
+    needs_review = False
+    if (
+        confidence is not None
+        and relation_type != "MENTIONED_IN"
+        and confidence < settings.KG_LOW_CONFIDENCE_THRESHOLD
+    ):
+        needs_review = True
+
     existing = db.execute(
         select(KGEdge).where(
             KGEdge.source_id == source.id,
@@ -350,18 +368,20 @@ def _upsert_edge(
         )
     ).scalar_one_or_none()
     if existing is not None:
-        # Merge properties — last-seen chunk / last-seen predicate_uri wins.
-        # This is a conscious choice: a single occurrences table would be
-        # more faithful but we don't yet have queries that need it.
         merged = dict(existing.properties or {})
         merged.update(properties)
         existing.properties = merged
+        if confidence is not None:
+            existing.confidence = confidence
+            existing.needs_review = needs_review
         return False
     db.add(KGEdge(
         source_id=source.id,
         target_id=target.id,
         relation_type=relation_type,
         properties=properties,
+        confidence=confidence,
+        needs_review=needs_review,
     ))
     db.flush()
     return True
@@ -450,11 +470,18 @@ def _mirror_to_neo4j(
             dst = node_by_id.get(e.target_id)
             if src is None or dst is None:
                 continue
+            # Merge review metadata into Neo4j edge properties so graph
+            # queries can filter on needs_review / confidence.
+            edge_props = dict(e.properties or {})
+            if e.confidence is not None:
+                edge_props["confidence"] = e.confidence
+            edge_props["needs_review"] = e.needs_review
+            edge_props["edge_id"] = e.id
             await upsert_relation(
                 source_external_id=src.external_id,
                 target_external_id=dst.external_id,
                 relation_type=e.relation_type,
-                properties=e.properties,
+                properties=edge_props,
             )
 
     try:
