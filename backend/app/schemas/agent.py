@@ -3,9 +3,12 @@
 Schemas here are the contract Tom's Agent (and others) build against.
 Keep them conservative — a loose schema today is a backward-compat
 nightmare tomorrow.
-"""
-from __future__ import annotations
 
+NOTE: Do NOT add ``from __future__ import annotations`` to this file.
+Pydantic v2's ForwardRef resolution breaks with postponed evaluation in
+certain import-order scenarios, causing ``/openapi.json`` to 500.
+Python 3.10+ supports all the syntax we need natively.
+"""
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
