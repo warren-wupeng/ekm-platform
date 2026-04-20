@@ -20,6 +20,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, DB
 from app.models.knowledge import KnowledgeItem
@@ -128,8 +129,14 @@ async def list_requests(
     status_filter: RestoreStatus | None = Query(default=None, alias="status"),
     mine: bool = Query(default=False, description="force-filter to own requests even for reviewers"),
 ) -> list[dict]:
-    q = select(ArchiveRestoreRequest).order_by(
-        ArchiveRestoreRequest.submitted_at.desc()
+    q = (
+        select(ArchiveRestoreRequest)
+        .options(
+            selectinload(ArchiveRestoreRequest.knowledge_item),
+            selectinload(ArchiveRestoreRequest.submitted_by),
+            selectinload(ArchiveRestoreRequest.reviewed_by),
+        )
+        .order_by(ArchiveRestoreRequest.submitted_at.desc())
     )
     # Non-reviewers can only see their own. `mine=1` is a convenience
     # toggle for reviewers who want their own queue in the UI.
@@ -139,7 +146,15 @@ async def list_requests(
         q = q.where(ArchiveRestoreRequest.status == status_filter)
 
     rows = (await db.execute(q)).scalars().all()
-    return [r.to_dict() for r in rows]
+    return [
+        {
+            **r.to_dict(),
+            "knowledge_item_name": r.knowledge_item.name if r.knowledge_item else None,
+            "submitted_by_name": r.submitted_by.display_name if r.submitted_by else None,
+            "reviewed_by_name": r.reviewed_by.display_name if r.reviewed_by else None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/{req_id}")

@@ -1,11 +1,10 @@
-"""Archive-rule admin API.
+"""Archive admin API.
 
-All endpoints require UserRole.ADMIN — ordinary editors shouldn't be able
-to configure retention policies. The tick task (worker) reads rules but
-never writes them.
-
-Shape:
-  GET    /api/v1/archive/rules             list
+Endpoints:
+  GET    /api/v1/archive/items             list archived knowledge items
+                                            - regular user: own uploads only
+                                            - km_ops/admin: all
+  GET    /api/v1/archive/rules             list rules (admin)
   POST   /api/v1/archive/rules             create
   GET    /api/v1/archive/rules/{id}        one
   PATCH  /api/v1/archive/rules/{id}        partial update
@@ -19,14 +18,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, DB
 from app.models.archive import ArchiveRule
 from app.models.knowledge import FileType, KnowledgeItem
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/api/v1/archive", tags=["archive"])
 
@@ -38,6 +38,65 @@ def _require_admin(user) -> None:
             detail="admin only",
         )
 
+
+# ── Archived items listing ─────────────────────────────────────────
+
+@router.get("/items")
+async def list_archived_items(
+    user: CurrentUser,
+    db: DB,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """List archived knowledge items.
+
+    Regular users see only items they uploaded. KM_OPS and ADMIN see all
+    (the archive management view).
+    """
+    q = (
+        select(KnowledgeItem)
+        .where(KnowledgeItem.is_archived.is_(True))
+        .options(selectinload(KnowledgeItem.uploader))
+        .order_by(KnowledgeItem.archived_at.desc().nullslast())
+    )
+    if user.role not in (UserRole.KM_OPS, UserRole.ADMIN):
+        q = q.where(KnowledgeItem.uploader_id == user.id)
+
+    # Total for pagination.
+    count_q = (
+        select(func.count())
+        .select_from(KnowledgeItem)
+        .where(KnowledgeItem.is_archived.is_(True))
+    )
+    if user.role not in (UserRole.KM_OPS, UserRole.ADMIN):
+        count_q = count_q.where(KnowledgeItem.uploader_id == user.id)
+    total = (await db.execute(count_q)).scalar_one()
+
+    rows = (await db.execute(
+        q.offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all()
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "file_type": item.file_type.value if hasattr(item.file_type, "value") else str(item.file_type),
+                "archived_at": item.archived_at.isoformat() if item.archived_at else None,
+                "uploader_name": item.uploader.display_name if item.uploader else None,
+                "uploader_id": item.uploader_id,
+                "category_id": item.category_id,
+                "description": item.description,
+            }
+            for item in rows
+        ],
+    }
+
+
+# ── Rule CRUD (admin only) ────────────────────────────────────────
 
 class RuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)

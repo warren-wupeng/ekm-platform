@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  Table, Tag, Button, Modal, Form, Input, Select, Space,
+  Table, Tag, Button, Modal, Form, Input, Space,
   Tabs, Badge, Tooltip, message, Popconfirm, Timeline,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -11,179 +11,150 @@ import {
   StarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import api from '@/lib/api'
 
-type ArchiveStatus = 'active' | 'archived' | 'pending_restore'
-type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+// ── Types aligned to backend responses ─────────────────────────────
 
 interface ArchivedItem {
-  id: string
+  id: number
   name: string
-  type: string
-  archivedAt: string
-  archivedBy: string
-  reason: string
-  status: ArchiveStatus
-  restoreRequest?: {
-    requestedBy: string
-    requestedAt: string
-    reason: string
-    approvalStatus: ApprovalStatus
-    reviewedBy?: string
-    reviewedAt?: string
-    comment?: string
-  }
+  file_type: string
+  archived_at: string | null
+  uploader_name: string | null
+  uploader_id: number
+  category_id: number | null
+  description: string | null
 }
 
-interface ApprovalRequest {
-  id: string
-  docName: string
-  requestedBy: string
-  requestedAt: string
-  reason: string
-  status: ApprovalStatus
-  reviewedBy?: string
-  reviewedAt?: string
+interface RestoreRequest {
+  id: number
+  knowledge_item_id: number
+  knowledge_item_name: string | null
+  submitted_by_id: number
+  submitted_by_name: string | null
+  submitted_at: string | null
+  reason: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  reviewed_by_id: number | null
+  reviewed_by_name: string | null
+  reviewed_at: string | null
+  review_note: string | null
 }
 
-const MOCK_ARCHIVED: ArchivedItem[] = [
-  {
-    id: 'a1', name: '旧版产品路线图 2024.pdf', type: '文档',
-    archivedAt: '2026-03-10', archivedBy: 'Warren Wu', reason: '版本已过期，由 v2 替代',
-    status: 'active',
-  },
-  {
-    id: 'a2', name: '竞品分析 Q3 2025.xlsx', type: '文档',
-    archivedAt: '2026-03-15', archivedBy: 'Kira', reason: '季度报告已归档',
-    status: 'pending_restore',
-    restoreRequest: {
-      requestedBy: 'Luca',
-      requestedAt: '2026-04-17',
-      reason: '需要查看历史数据对比',
-      approvalStatus: 'pending',
-    },
-  },
-  {
-    id: 'a3', name: '技术方案 v1（废弃）.docx', type: '文档',
-    archivedAt: '2026-02-20', archivedBy: 'Kira', reason: '方案已废弃，由新版本替代',
-    status: 'active',
-  },
-  {
-    id: 'a4', name: '2024 年度总结.pptx', type: '演示文稿',
-    archivedAt: '2026-01-15', archivedBy: 'Warren Wu', reason: '年度归档',
-    status: 'active',
-  },
-]
+// ── Display configs ────────────────────────────────────────────────
 
-const MOCK_APPROVALS: ApprovalRequest[] = [
-  {
-    id: 'r1', docName: '竞品分析 Q3 2025.xlsx',
-    requestedBy: 'Luca', requestedAt: '2026-04-17',
-    reason: '需要查看历史数据对比', status: 'pending',
-  },
-  {
-    id: 'r2', docName: '旧版 API 文档 v0.9.md',
-    requestedBy: 'Raven', requestedAt: '2026-04-10',
-    reason: '需要参考旧版接口定义', status: 'approved',
-    reviewedBy: 'Warren Wu', reviewedAt: '2026-04-11',
-  },
-  {
-    id: 'r3', docName: '试用期培训材料（2023）.pdf',
-    requestedBy: 'Mira', requestedAt: '2026-04-05',
-    reason: '更新培训材料时需参考', status: 'rejected',
-    reviewedBy: 'Warren Wu', reviewedAt: '2026-04-06',
-  },
-]
-
-const STATUS_CONFIG: Record<ArchiveStatus, { color: string; text: string }> = {
-  active:          { color: 'default', text: '已归档' },
-  archived:        { color: 'default', text: '已归档' },
-  pending_restore: { color: 'orange',  text: '待恢复审批' },
+const FILE_TYPE_LABEL: Record<string, string> = {
+  document: '文档',
+  image: '图片',
+  archive: '压缩包',
+  audio: '音频',
+  video: '视频',
+  other: '其他',
 }
 
-const APPROVAL_CONFIG: Record<ApprovalStatus, { color: string; text: string }> = {
+const APPROVAL_CONFIG: Record<string, { color: string; text: string }> = {
   pending:  { color: 'orange',  text: '待审批' },
   approved: { color: 'success', text: '已通过' },
   rejected: { color: 'error',   text: '已拒绝' },
 }
 
+// ── Component ──────────────────────────────────────────────────────
+
 export default function ArchivePage() {
-  const [items, setItems]       = useState<ArchivedItem[]>(MOCK_ARCHIVED)
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>(MOCK_APPROVALS)
+  const [items, setItems] = useState<ArchivedItem[]>([])
+  const [itemsTotal, setItemsTotal] = useState(0)
+  const [itemsPage, setItemsPage] = useState(1)
+  const [itemsLoading, setItemsLoading] = useState(false)
+
+  const [requests, setRequests] = useState<RestoreRequest[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+
   const [restoreModal, setRestoreModal] = useState<ArchivedItem | null>(null)
-  const [detailModal, setDetailModal]   = useState<ArchivedItem | null>(null)
-  const [reviewModal, setReviewModal]   = useState<ApprovalRequest | null>(null)
+  const [detailItem, setDetailItem] = useState<ArchivedItem | null>(null)
+  const [reviewModal, setReviewModal] = useState<RestoreRequest | null>(null)
   const [activeTab, setActiveTab] = useState('archive')
+
   const [form] = Form.useForm()
   const [reviewForm] = Form.useForm()
 
-  function handleRestoreRequest(values: { reason: string }) {
-    if (!restoreModal) return
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === restoreModal.id
-          ? {
-              ...i,
-              status: 'pending_restore' as ArchiveStatus,
-              restoreRequest: {
-                requestedBy: '我',
-                requestedAt: dayjs().format('YYYY-MM-DD'),
-                reason: values.reason,
-                approvalStatus: 'pending',
-              },
-            }
-          : i
-      )
-    )
-    setApprovals((prev) => [
-      {
-        id: `r${Date.now()}`,
-        docName: restoreModal.name,
-        requestedBy: '我',
-        requestedAt: dayjs().format('YYYY-MM-DD'),
-        reason: values.reason,
-        status: 'pending',
-      },
-      ...prev,
-    ])
-    message.success('恢复申请已提交，等待 KM Ops 审批')
-    setRestoreModal(null)
-    form.resetFields()
-  }
+  // ── Data fetching ──────────────────────────────────────────────
 
-  function handleApproval(id: string, approved: boolean, comment?: string) {
-    setApprovals((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: approved ? 'approved' : 'rejected',
-              reviewedBy: 'Warren Wu',
-              reviewedAt: dayjs().format('YYYY-MM-DD'),
-              ...(comment ? { comment } : {}),
-            }
-          : r
-      )
-    )
-    if (approved) {
-      // Find and restore the item
-      setItems((prev) =>
-        prev.map((i) => {
-          const req = approvals.find((r) => r.id === id)
-          if (req && i.name === req.docName) {
-            return { ...i, status: 'active' as ArchiveStatus }
-          }
-          return i
-        })
-      )
-      message.success('已批准恢复申请')
-    } else {
-      message.info('已拒绝恢复申请')
+  const fetchItems = useCallback(async (page = 1) => {
+    setItemsLoading(true)
+    try {
+      const { data } = await api.get('/api/v1/archive/items', {
+        params: { page, page_size: 20 },
+      })
+      setItems(data.items)
+      setItemsTotal(data.total)
+      setItemsPage(data.page)
+    } catch {
+      message.error('加载归档列表失败')
+    } finally {
+      setItemsLoading(false)
     }
-    setReviewModal(null)
-    reviewForm.resetFields()
+  }, [])
+
+  const fetchRequests = useCallback(async () => {
+    setRequestsLoading(true)
+    try {
+      const { data } = await api.get('/api/v1/archive/restore-requests')
+      setRequests(data)
+    } catch {
+      message.error('加载恢复申请失败')
+    } finally {
+      setRequestsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void fetchItems() }, [fetchItems])
+  useEffect(() => { void fetchRequests() }, [fetchRequests])
+
+  // ── Handlers ───────────────────────────────────────────────────
+
+  async function handleRestoreRequest(values: { reason: string }) {
+    if (!restoreModal) return
+    try {
+      await api.post('/api/v1/archive/restore-requests', {
+        knowledge_item_id: restoreModal.id,
+        reason: values.reason,
+      })
+      message.success('恢复申请已提交，等待 KM Ops 审批')
+      setRestoreModal(null)
+      form.resetFields()
+      void fetchItems()
+      void fetchRequests()
+    } catch {
+      message.error('提交恢复申请失败')
+    }
   }
 
-  const pendingCount = approvals.filter((r) => r.status === 'pending').length
+  async function handleApproval(id: number, approved: boolean, comment?: string) {
+    const action = approved ? 'approve' : 'reject'
+    try {
+      await api.post(`/api/v1/archive/restore-requests/${id}/${action}`, {
+        note: comment ?? null,
+      })
+      message.success(approved ? '已批准恢复申请' : '已拒绝恢复申请')
+      setReviewModal(null)
+      reviewForm.resetFields()
+      void fetchItems()
+      void fetchRequests()
+    } catch {
+      message.error('操作失败')
+    }
+  }
+
+  // ── Derived ────────────────────────────────────────────────────
+
+  const pendingCount = requests.filter((r) => r.status === 'pending').length
+
+  // Find the latest restore request for an archived item.
+  function findRequest(itemId: number): RestoreRequest | undefined {
+    return requests.find((r) => r.knowledge_item_id === itemId)
+  }
+
+  // ── Columns ────────────────────────────────────────────────────
 
   const archiveColumns: ColumnsType<ArchivedItem> = [
     {
@@ -196,34 +167,41 @@ export default function ArchivePage() {
     },
     {
       title: '类型',
-      dataIndex: 'type',
-      key: 'type',
+      dataIndex: 'file_type',
+      key: 'file_type',
       width: 90,
-      render: (t: string) => <Tag className="text-xs">{t}</Tag>,
+      render: (t: string) => <Tag className="text-xs">{FILE_TYPE_LABEL[t] ?? t}</Tag>,
     },
     {
       title: '归档时间',
-      dataIndex: 'archivedAt',
-      key: 'archivedAt',
-      width: 110,
-      render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
-      sorter: (a, b) => a.archivedAt.localeCompare(b.archivedAt),
-      defaultSortOrder: 'descend',
+      dataIndex: 'archived_at',
+      key: 'archived_at',
+      width: 120,
+      render: (v: string | null) => (
+        <span className="text-slate-400 text-xs">
+          {v ? dayjs(v).format('YYYY-MM-DD') : '-'}
+        </span>
+      ),
     },
     {
-      title: '归档人',
-      dataIndex: 'archivedBy',
-      key: 'archivedBy',
+      title: '上传者',
+      dataIndex: 'uploader_name',
+      key: 'uploader_name',
       width: 100,
-      render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
+      render: (v: string | null) => (
+        <span className="text-slate-400 text-xs">{v ?? '-'}</span>
+      ),
     },
     {
       title: '状态',
       key: 'status',
       width: 110,
       render: (_, record) => {
-        const cfg = STATUS_CONFIG[record.status]
-        return <Tag color={cfg.color} className="text-xs">{cfg.text}</Tag>
+        const req = findRequest(record.id)
+        if (req && req.status === 'pending') {
+          return <Tag color="orange" className="text-xs">待恢复审批</Tag>
+        }
+        return <Tag color="default" className="text-xs">已归档</Tag>
       },
     },
     {
@@ -231,68 +209,81 @@ export default function ArchivePage() {
       key: 'actions',
       width: 120,
       align: 'center',
-      render: (_, record) => (
-        <Space size={4}>
-          <Tooltip title="查看详情">
-            <Button
-              type="text" size="small"
-              icon={<ClockCircleOutlined />}
-              className="text-slate-400 hover:text-primary"
-              onClick={() => setDetailModal(record)}
-            />
-          </Tooltip>
-          {record.status === 'active' && (
-            <Tooltip title="申请恢复">
+      render: (_, record) => {
+        const req = findRequest(record.id)
+        const hasPending = req && req.status === 'pending'
+        return (
+          <Space size={4}>
+            <Tooltip title="查看详情">
               <Button
                 type="text" size="small"
-                icon={<RollbackOutlined />}
+                icon={<ClockCircleOutlined />}
                 className="text-slate-400 hover:text-primary"
-                onClick={() => setRestoreModal(record)}
+                onClick={() => setDetailItem(record)}
               />
             </Tooltip>
-          )}
-          {record.status === 'pending_restore' && (
-            <Tag color="orange" className="text-xs">审批中</Tag>
-          )}
-        </Space>
-      ),
+            {hasPending ? (
+              <Tag color="orange" className="text-xs">审批中</Tag>
+            ) : (
+              <Tooltip title="申请恢复">
+                <Button
+                  type="text" size="small"
+                  icon={<RollbackOutlined />}
+                  className="text-slate-400 hover:text-primary"
+                  onClick={() => setRestoreModal(record)}
+                />
+              </Tooltip>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
-  const approvalColumns: ColumnsType<ApprovalRequest> = [
+  const requestColumns: ColumnsType<RestoreRequest> = [
     {
       title: '文件名',
-      dataIndex: 'docName',
-      key: 'docName',
-      render: (v: string) => <span className="text-slate-700 text-sm">{v}</span>,
+      dataIndex: 'knowledge_item_name',
+      key: 'knowledge_item_name',
+      render: (v: string | null) => (
+        <span className="text-slate-700 text-sm">{v ?? '-'}</span>
+      ),
     },
     {
       title: '申请人',
-      dataIndex: 'requestedBy',
-      key: 'requestedBy',
+      dataIndex: 'submitted_by_name',
+      key: 'submitted_by_name',
       width: 90,
-      render: (v: string) => <span className="text-slate-500 text-xs">{v}</span>,
+      render: (v: string | null) => (
+        <span className="text-slate-500 text-xs">{v ?? '-'}</span>
+      ),
     },
     {
       title: '申请时间',
-      dataIndex: 'requestedAt',
-      key: 'requestedAt',
+      dataIndex: 'submitted_at',
+      key: 'submitted_at',
       width: 110,
-      render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
+      render: (v: string | null) => (
+        <span className="text-slate-400 text-xs">
+          {v ? dayjs(v).format('YYYY-MM-DD') : '-'}
+        </span>
+      ),
     },
     {
       title: '申请原因',
       dataIndex: 'reason',
       key: 'reason',
-      render: (v: string) => <span className="text-slate-500 text-xs">{v}</span>,
+      render: (v: string | null) => (
+        <span className="text-slate-500 text-xs">{v ?? '-'}</span>
+      ),
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 90,
-      render: (s: ApprovalStatus) => {
-        const cfg = APPROVAL_CONFIG[s]
+      render: (s: string) => {
+        const cfg = APPROVAL_CONFIG[s] ?? { color: 'default', text: s }
         return <Badge status={cfg.color as 'default'} text={<span className="text-xs">{cfg.text}</span>} />
       },
     },
@@ -331,12 +322,14 @@ export default function ArchivePage() {
           </Space>
         ) : (
           <span className="text-slate-400 text-xs">
-            {record.reviewedBy} · {record.reviewedAt}
+            {record.reviewed_by_name ?? '-'} · {record.reviewed_at ? dayjs(record.reviewed_at).format('YYYY-MM-DD') : '-'}
           </span>
         )
       ),
     },
   ]
+
+  // ── Render ─────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -370,7 +363,14 @@ export default function ArchivePage() {
                     columns={archiveColumns}
                     rowKey="id"
                     size="small"
-                    pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                    loading={itemsLoading}
+                    pagination={{
+                      current: itemsPage,
+                      total: itemsTotal,
+                      pageSize: 20,
+                      showTotal: (t) => `共 ${t} 条`,
+                      onChange: (p) => void fetchItems(p),
+                    }}
                   />
                 </div>
               ),
@@ -389,10 +389,11 @@ export default function ArchivePage() {
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-5">
                   <Table
-                    dataSource={approvals}
-                    columns={approvalColumns}
+                    dataSource={requests}
+                    columns={requestColumns}
                     rowKey="id"
                     size="small"
+                    loading={requestsLoading}
                     pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
                   />
                 </div>
@@ -419,7 +420,7 @@ export default function ArchivePage() {
             <div className="mb-4 p-3 bg-slate-50 rounded-lg">
               <p className="text-sm font-medium text-slate-700">{restoreModal.name}</p>
               <p className="text-xs text-slate-400 mt-1">
-                归档于 {restoreModal.archivedAt} · 原因：{restoreModal.reason}
+                归档于 {restoreModal.archived_at ? dayjs(restoreModal.archived_at).format('YYYY-MM-DD') : '-'}
               </p>
             </div>
             <Form form={form} layout="vertical" onFinish={handleRestoreRequest}>
@@ -430,7 +431,7 @@ export default function ArchivePage() {
               >
                 <Input.TextArea
                   rows={3}
-                  placeholder="请说明为什么需要恢复此文件…"
+                  placeholder="请说明为什么需要恢复此文件..."
                   maxLength={200}
                   showCount
                 />
@@ -462,14 +463,15 @@ export default function ArchivePage() {
             onFinish={(vals) => handleApproval(reviewModal.id, false, vals.comment)}
           >
             <div className="mb-4 p-3 bg-slate-50 rounded-lg">
-              <p className="text-sm font-medium text-slate-700">{reviewModal.docName}</p>
+              <p className="text-sm font-medium text-slate-700">{reviewModal.knowledge_item_name}</p>
               <p className="text-xs text-slate-400 mt-1">
-                {reviewModal.requestedBy} 申请于 {reviewModal.requestedAt}
+                {reviewModal.submitted_by_name} 申请于{' '}
+                {reviewModal.submitted_at ? dayjs(reviewModal.submitted_at).format('YYYY-MM-DD') : '-'}
               </p>
               <p className="text-xs text-slate-500 mt-1">原因：{reviewModal.reason}</p>
             </div>
             <Form.Item name="comment" label="拒绝说明（可选）">
-              <Input.TextArea rows={2} placeholder="说明拒绝原因…" maxLength={100} showCount />
+              <Input.TextArea rows={2} placeholder="说明拒绝原因..." maxLength={100} showCount />
             </Form.Item>
             <div className="flex justify-end gap-2">
               <Button onClick={() => { setReviewModal(null); reviewForm.resetFields() }}>
@@ -486,15 +488,17 @@ export default function ArchivePage() {
       {/* Detail modal */}
       <Modal
         title="归档详情"
-        open={!!detailModal}
-        onCancel={() => setDetailModal(null)}
-        footer={<Button onClick={() => setDetailModal(null)}>关闭</Button>}
+        open={!!detailItem}
+        onCancel={() => setDetailItem(null)}
+        footer={<Button onClick={() => setDetailItem(null)}>关闭</Button>}
       >
-        {detailModal && (
+        {detailItem && (
           <div className="space-y-4">
             <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-sm font-semibold text-slate-800">{detailModal.name}</p>
-              <p className="text-xs text-slate-400 mt-1">类型：{detailModal.type}</p>
+              <p className="text-sm font-semibold text-slate-800">{detailItem.name}</p>
+              <p className="text-xs text-slate-400 mt-1">
+                类型：{FILE_TYPE_LABEL[detailItem.file_type] ?? detailItem.file_type}
+              </p>
             </div>
             <Timeline
               items={[
@@ -504,37 +508,34 @@ export default function ArchivePage() {
                     <div>
                       <p className="text-sm font-medium text-slate-700">文件归档</p>
                       <p className="text-xs text-slate-400">
-                        {detailModal.archivedAt} · {detailModal.archivedBy}
+                        {detailItem.archived_at ? dayjs(detailItem.archived_at).format('YYYY-MM-DD') : '-'}{' '}
+                        · {detailItem.uploader_name ?? '-'}
                       </p>
-                      <p className="text-xs text-slate-500 mt-1">原因：{detailModal.reason}</p>
                     </div>
                   ),
                 },
-                ...(detailModal.restoreRequest
-                  ? [
-                      {
-                        dot: <RollbackOutlined className="text-orange-500" />,
-                        children: (
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">恢复申请</p>
-                            <p className="text-xs text-slate-400">
-                              {detailModal.restoreRequest.requestedAt} ·{' '}
-                              {detailModal.restoreRequest.requestedBy}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-1">
-                              原因：{detailModal.restoreRequest.reason}
-                            </p>
-                            <Tag
-                              color={APPROVAL_CONFIG[detailModal.restoreRequest.approvalStatus].color}
-                              className="text-xs mt-1"
-                            >
-                              {APPROVAL_CONFIG[detailModal.restoreRequest.approvalStatus].text}
-                            </Tag>
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
+...(findRequest(detailItem.id) ? [{
+                  dot: <RollbackOutlined className="text-orange-500" />,
+                  children: (() => {
+                    const req = findRequest(detailItem.id)!
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">恢复申请</p>
+                        <p className="text-xs text-slate-400">
+                          {req.submitted_at ? dayjs(req.submitted_at).format('YYYY-MM-DD') : '-'}{' '}
+                          · {req.submitted_by_name ?? '-'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">原因：{req.reason}</p>
+                        <Tag
+                          color={APPROVAL_CONFIG[req.status]?.color ?? 'default'}
+                          className="text-xs mt-1"
+                        >
+                          {APPROVAL_CONFIG[req.status]?.text ?? req.status}
+                        </Tag>
+                      </div>
+                    )
+                  })(),
+                }] : []),
               ]}
             />
           </div>
