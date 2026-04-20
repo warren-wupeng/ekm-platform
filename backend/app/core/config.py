@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     # Archive / retention — daily sweep defaults.
     ARCHIVE_REMINDER_DAYS_BEFORE: int = 7  # send reminder when threshold - N days
 
+    # KG quality — edges below this confidence are flagged needs_review=True.
+    KG_LOW_CONFIDENCE_THRESHOLD: float = 0.5
+
 
 @lru_cache
 def get_settings() -> Settings:

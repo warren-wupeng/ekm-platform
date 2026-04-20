@@ -25,6 +25,7 @@ class SchemaOrgRelation(BaseModel):
     predicate: str      # Schema.org property, e.g., "worksFor", "location"
     predicate_uri: str  # e.g., "https://schema.org/worksFor"
     object_id: str
+    confidence: float | None = None  # 0.0–1.0 when available from LLM
 
 
 class KnowledgeGraphEntry(BaseModel):
