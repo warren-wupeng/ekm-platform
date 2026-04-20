@@ -26,6 +26,14 @@ primary_region = "sin"
 
 # Worker does not serve HTTP — no [[services]] section.
 
+# Parse tasks read uploaded files from disk.  Mount the same volume as
+# ekm-backend.  Fly volumes are single-attach by default — Raven may
+# need to `flyctl volumes create ekm_uploads --region sin --size 1`
+# for the worker app if the backend volume can't be shared.
+[[mounts]]
+  source = "ekm_uploads"
+  destination = "/data/uploads"
+
 [processes]
   worker = "celery -A app.worker.celery_app worker --loglevel=info --concurrency=2"
   beat = "celery -A app.worker.celery_app beat --loglevel=info"
