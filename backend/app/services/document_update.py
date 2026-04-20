@@ -26,7 +26,6 @@ log = logging.getLogger(__name__)
 
 def run_incremental_update(document_id: int) -> dict[str, Any]:
     """Full incremental update for one document. Returns summary."""
-    from app.services.es_sync import bulk_index_chunks, delete_document, index_item
     from app.services.kcard import generate_and_persist_kcard
 
     with SyncSession() as db:
@@ -81,18 +80,15 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
                 _sync_search_indexes(db, document_id, diff, result)
             # Savepoint released — now commit the outer transaction.
             db.commit()
-        except Exception as exc:  # noqa: BLE001
+        except Exception:
             # Savepoint rolled back — old chunks stay is_current=True,
             # doc_version unchanged.  Postgres and search stay consistent.
-            log.error(
-                "incremental_update doc=%d search sync failed, diff rolled back: %s",
-                document_id, exc,
+            # Re-raise so Celery's autoretry_for triggers a retry.
+            log.exception(
+                "incremental_update doc=%d search sync failed, diff rolled back",
+                document_id,
             )
-            return {
-                "document_id": document_id,
-                "status": "search_sync_failed",
-                "error": str(exc)[:500],
-            }
+            raise
 
         # Step 5: Generate K-Cards for added chunks (failure-safe).
         kcards_generated = 0

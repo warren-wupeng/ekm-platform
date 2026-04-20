@@ -344,7 +344,7 @@ def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
     bind=True,
     max_retries=2,
     default_retry_delay=30,
-    autoretry_for=(IOError, ConnectionError, TimeoutError),
+    autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
 )
