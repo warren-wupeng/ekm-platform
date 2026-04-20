@@ -171,8 +171,16 @@ export default function AssistantPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="向 AI 助手提问…（Shift+Enter 换行）"
               autoSize={{ minRows: 1, maxRows: 6 }}
-              onPressEnter={(e) => {
-                if (!e.shiftKey) {
+              // #90: onPressEnter fires before IME composition end in
+              // some browsers, swallowing the candidate-select Enter of
+              // Chinese input methods. Using onKeyDown + isComposing
+              // guard lets IME users confirm candidates without sending.
+              onKeyDown={(e) => {
+                if (
+                  e.key === 'Enter'
+                  && !e.shiftKey
+                  && !e.nativeEvent.isComposing
+                ) {
                   e.preventDefault()
                   void handleSend()
                 }

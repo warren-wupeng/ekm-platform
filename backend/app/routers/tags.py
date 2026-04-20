@@ -23,8 +23,37 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+import logging
+
 from app.core.deps import CurrentUser, DB
 from app.models.knowledge import KnowledgeItem, Tag, TagAssignment
+from app.services.es_client import es
+
+
+_log = logging.getLogger(__name__)
+
+
+async def _es_index_tag(t: Tag) -> None:
+    """Mirror a Tag into ekm_tags for unified search (#42). Best-effort."""
+    try:
+        await es.index_tag(tag_id=t.id, body={
+            "id": t.id,
+            "kind": "tag",
+            "name": t.name,
+            "description": None,
+            "slug": None,
+            "color": t.color,
+            "usage_count": t.usage_count,
+        })
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES index_tag failed id=%s: %s", t.id, exc)
+
+
+async def _es_delete_tag(tag_id: int) -> None:
+    try:
+        await es.delete_tag(tag_id=tag_id, kind="tag")
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES delete_tag failed id=%s: %s", tag_id, exc)
 
 
 router = APIRouter(prefix="/api/v1", tags=["tags"])
@@ -89,6 +118,7 @@ async def create_tag(payload: TagCreate, db: DB, user: CurrentUser):
         await db.rollback()
         raise HTTPException(status_code=409, detail="tag name already exists")
     await db.refresh(tag)
+    await _es_index_tag(tag)
     return _tag_dict(tag)
 
 
@@ -110,6 +140,7 @@ async def update_tag(
         await db.rollback()
         raise HTTPException(status_code=409, detail="tag name already exists")
     await db.refresh(tag)
+    await _es_index_tag(tag)
     return _tag_dict(tag)
 
 
@@ -123,6 +154,7 @@ async def delete_tag(tag_id: int, db: DB, user: CurrentUser):
     # CASCADE on tag_assignments.tag_id cleans up assignments automatically.
     await db.delete(tag)
     await db.commit()
+    await _es_delete_tag(tag_id)
     return None
 
 

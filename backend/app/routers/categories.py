@@ -22,8 +22,37 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
+import logging
+
 from app.core.deps import CurrentUser, DB
 from app.models.knowledge import Category
+from app.services.es_client import es
+
+
+_log = logging.getLogger(__name__)
+
+
+async def _es_index_category(c: Category) -> None:
+    """Mirror a Category into ekm_tags (kind=category) for unified search."""
+    try:
+        await es.index_tag(tag_id=c.id, body={
+            "id": c.id,
+            "kind": "category",
+            "name": c.name,
+            "description": c.description,
+            "slug": c.slug,
+            "color": None,
+            "usage_count": 0,
+        })
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES index_category failed id=%s: %s", c.id, exc)
+
+
+async def _es_delete_category(cat_id: int) -> None:
+    try:
+        await es.delete_tag(tag_id=cat_id, kind="category")
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES delete_category failed id=%s: %s", cat_id, exc)
 
 
 router = APIRouter(prefix="/api/v1/categories", tags=["categories"])
@@ -144,6 +173,7 @@ async def create_category(
         await db.rollback()
         raise HTTPException(status_code=409, detail="slug already exists")
     await db.refresh(cat)
+    await _es_index_category(cat)
     return _to_dict(cat)
 
 
@@ -183,6 +213,7 @@ async def update_category(
         await db.rollback()
         raise HTTPException(status_code=409, detail="slug already exists")
     await db.refresh(cat)
+    await _es_index_category(cat)
     return _to_dict(cat)
 
 
@@ -205,4 +236,5 @@ async def delete_category(cat_id: int, db: DB, user: CurrentUser):
     )
     await db.delete(cat)
     await db.commit()
+    await _es_delete_category(cat_id)
     return None

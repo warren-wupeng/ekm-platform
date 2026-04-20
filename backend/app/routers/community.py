@@ -24,11 +24,52 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+import logging
+
 from app.core.deps import CurrentUser, DB
 from app.models.community import Post, Reply, ReplyLike
 from app.models.notification import NotificationType
 from app.models.user import User, UserRole
+from app.services.es_client import es
 from app.services.notify import dispatch as notify_dispatch
+
+
+_log = logging.getLogger(__name__)
+
+
+async def _es_index_post(p: Post) -> None:
+    """Mirror a Post into ekm_posts for unified search (#42).
+
+    Degradable: failures are logged and swallowed — the post is already
+    persisted in Postgres, which is authoritative. A follow-up reindex
+    job can heal missed updates.
+    """
+    try:
+        await es.index_post(post_id=p.id, body={
+            "id": p.id,
+            "title": p.title,
+            "body": p.body,
+            "author_id": p.author_id,
+            "reply_count": p.reply_count,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES index_post failed id=%s: %s", p.id, exc)
+
+
+async def _es_index_reply(r: Reply) -> None:
+    try:
+        await es.index_reply(reply_id=r.id, body={
+            "id": r.id,
+            "post_id": r.post_id,
+            "parent_reply_id": r.parent_reply_id,
+            "content": "" if r.deleted_at else r.content,
+            "author_id": r.author_id,
+            "is_deleted": r.deleted_at is not None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ES index_reply failed id=%s: %s", r.id, exc)
 
 
 # @username mentions — allow word chars including CJK. Stop at whitespace
@@ -137,6 +178,9 @@ async def create_post(payload: PostCreate, db: DB, user: CurrentUser):
     db.add(p)
     await db.commit()
     await db.refresh(p)
+    # Two-phase: commit first, then index. If ES is down the post is still
+    # visible via the normal API; only unified search is temporarily stale.
+    await _es_index_post(p)
     return _post_dict(p)
 
 
@@ -274,6 +318,10 @@ async def create_reply(
 
     await db.commit()
     await db.refresh(r)
+    # Post-commit indexing (#42). Also refresh the parent post so
+    # reply_count in ES stays in sync with the denormalised counter.
+    await _es_index_reply(r)
+    await _es_index_post(post)
     return _reply_dict(r)
 
 
@@ -294,6 +342,11 @@ async def delete_reply(reply_id: int, db: DB, user: CurrentUser):
     if post is not None:
         post.reply_count = max((post.reply_count or 0) - 1, 0)
     await db.commit()
+    # Re-index the reply (is_deleted=True blanks it in search) and refresh
+    # the post's reply_count mirror.
+    await _es_index_reply(r)
+    if post is not None:
+        await _es_index_post(post)
     return None
 
 
