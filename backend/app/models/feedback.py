@@ -43,7 +43,13 @@ class ChatFeedback(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     rating: Mapped[FeedbackRating] = mapped_column(
-        Enum(FeedbackRating, name="feedback_rating"), nullable=False, index=True,
+        # values_callable aligns with lowercase enum values created in 0005.
+        Enum(
+            FeedbackRating,
+            values_callable=lambda obj: [e.value for e in obj],
+            name="feedback_rating",
+        ),
+        nullable=False, index=True,
     )
     # Free-form — optional note "wrong source" / "hallucinated X" etc.
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
