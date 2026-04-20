@@ -23,6 +23,14 @@ celery==5.4.0
 
 # LLM
 litellm==1.52.16
+# openai SDK is pulled transitively by litellm, but Tom's vendored KG
+# constructor (`app/vendor/tom_kg`) imports it directly — pin explicitly
+# so a litellm upgrade can't silently yank it out from under us.
+openai==2.24.0
+
+# Knowledge graph — Schema.org alignment via Tom's vendored library.
+# rdflib parses schema.org JSON-LD in SchemaOrgLoader; `>=6.0.0` per upstream.
+rdflib==7.1.1
 
 # Search / Vector / Graph
 elasticsearch==8.15.1
