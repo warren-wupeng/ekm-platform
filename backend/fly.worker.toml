@@ -1,0 +1,35 @@
+# Celery worker — runs from the same Docker image as ekm-backend,
+# but overrides CMD to start Celery instead of Uvicorn.
+#
+# Deploy:
+#   fly deploy -c fly.worker.toml --remote-only
+#
+# Secrets: copy from ekm-backend (DATABASE_URL, REDIS_URL, LLM_API_KEY, etc.)
+#   fly secrets import -c fly.worker.toml < <(fly secrets list -a ekm-backend --json | jq -r '.[] | "\(.Name)=\(.Digest)"')
+#   — or manually: fly secrets set -a ekm-worker SECRET_KEY=... DATABASE_URL=...
+
+app = "ekm-worker"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "staging"
+  DEBUG = "false"
+  LLM_MODEL = "anthropic/claude-sonnet-4.6"
+  LLM_BASE_URL = "https://ai-gateway.happycapy.ai/api/v1"
+  ELASTICSEARCH_URL = "http://ekm-es.internal:9200"
+  QDRANT_URL = "http://ekm-qdrant.internal:6333"
+  NEO4J_URL = "bolt://ekm-neo4j.internal:7687"
+  TIKA_URL = "http://ekm-tika.internal:9998"
+
+# Worker does not serve HTTP — no [[services]] section.
+
+[processes]
+  worker = "celery -A app.worker.celery_app worker --loglevel=info --concurrency=2"
+  beat = "celery -A app.worker.celery_app beat --loglevel=info"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
