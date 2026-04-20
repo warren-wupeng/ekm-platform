@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # Embeddings (LiteLLM)
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIM: int = 1536
+    EMBEDDING_API_KEY: str = ""  # OpenAI key for embeddings; empty → falls back to LLM_API_KEY
 
     # Qdrant
     QDRANT_COLLECTION: str = "ekm_chunks"
