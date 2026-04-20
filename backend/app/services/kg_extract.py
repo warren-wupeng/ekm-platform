@@ -74,6 +74,11 @@ from app.vendor.tom_kg import KnowledgeGraphConstructor, SchemaOrgEntity  # noqa
 
 log = logging.getLogger(__name__)
 
+# Must mirror graph_sync._SAFE_LABEL_RE so what we store in Postgres
+# matches what Neo4j accepts.  Predicates that don't match get
+# normalised to "RELATED_TO" in both layers.
+_SAFE_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
 
 # ── Tuning knobs ──────────────────────────────────────────────────────
 
@@ -220,6 +225,8 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
         if src is None or dst is None or src.id == dst.id:
             continue
         predicate = (rel.predicate or "").strip() or "RELATED_TO"
+        if not _SAFE_LABEL_RE.fullmatch(predicate):
+            predicate = "RELATED_TO"
         if _upsert_edge(
             db,
             source=src, target=dst,

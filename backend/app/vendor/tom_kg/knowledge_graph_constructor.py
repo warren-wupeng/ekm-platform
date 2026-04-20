@@ -9,29 +9,41 @@ import json
 import re
 import os
 
+import httpx
+
 from .schema_loader import SchemaOrgLoader
 from .schemaorg_memory_entry import SchemaOrgEntity, SchemaOrgRelation
 from .schemaorg_entity_extractor import SchemaOrgEntityExtractor
 
+# Timeout for LLM calls: 10s connect, 120s read (extraction prompts can
+# be large), 10s write, 5s pool.  When hit, httpx.TimeoutException is
+# raised — Celery's autoretry_for includes httpx.RequestError (parent
+# class) so transient stalls get retried automatically.
+_LLM_TIMEOUT = httpx.Timeout(connect=10, read=120, write=10, pool=5)
+
 
 class LLMClient:
     """Simple LLM client wrapper for OpenAI API."""
-    
+
     def __init__(self, api_key: str = None, model: str = "gpt-4", base_url: str = None):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
         self.base_url = base_url
         self._client = None
-    
+
     def _get_client(self):
         if self._client is None:
             try:
                 from openai import OpenAI
-                self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+                self._client = OpenAI(
+                    api_key=self.api_key,
+                    base_url=self.base_url,
+                    timeout=_LLM_TIMEOUT,
+                )
             except ImportError:
                 raise ImportError("Please install openai: pip install openai")
         return self._client
-    
+
     def generate(self, prompt: str) -> str:
         """Generate response from LLM."""
         client = self._get_client()
