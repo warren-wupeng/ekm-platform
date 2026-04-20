@@ -102,22 +102,19 @@ class ReviewError(Exception):
 
 async def approve_edge(db: AsyncSession, edge_id: int, reviewer_id: int) -> KGEdge:
     """Approve a low-confidence edge. Idempotent."""
-    edge = await _get_edge_or_raise(db, edge_id)
+    edge = await _get_edge_or_raise(db, edge_id, for_update=True)
 
     edge.needs_review = False
     edge.reviewed_by_id = reviewer_id
     edge.reviewed_at = datetime.now(timezone.utc)
     await db.flush()
 
-    # Neo4j sync — best effort.
-    await _sync_edge_review_neo4j(edge.id, needs_review=False)
-
     return edge
 
 
 async def reject_edge(db: AsyncSession, edge_id: int, reviewer_id: int) -> KGEdge:
     """Soft-delete a rejected edge. Idempotent."""
-    edge = await _get_edge_or_raise(db, edge_id)
+    edge = await _get_edge_or_raise(db, edge_id, for_update=True)
 
     edge.deleted_at = datetime.now(timezone.utc)
     edge.reviewed_by_id = reviewer_id
@@ -125,14 +122,11 @@ async def reject_edge(db: AsyncSession, edge_id: int, reviewer_id: int) -> KGEdg
     edge.needs_review = False
     await db.flush()
 
-    # Neo4j sync — delete the relationship.
-    await _delete_edge_neo4j(edge)
-
     return edge
 
 
-async def _get_edge_or_raise(db: AsyncSession, edge_id: int) -> KGEdge:
-    edge = await db.get(KGEdge, edge_id)
+async def _get_edge_or_raise(db: AsyncSession, edge_id: int, *, for_update: bool = False) -> KGEdge:
+    edge = await db.get(KGEdge, edge_id, with_for_update=for_update)
     if edge is None:
         raise ReviewError("Edge not found", code="not_found")
     if edge.deleted_at is not None:
@@ -216,7 +210,7 @@ async def quality_stats(db: AsyncSession) -> dict[str, Any]:
 # ── Neo4j helpers (best-effort) ──────────────────────────────────────
 
 
-async def _sync_edge_review_neo4j(edge_id: int, *, needs_review: bool) -> None:
+async def sync_edge_review_neo4j(edge_id: int, *, needs_review: bool) -> None:
     """Update needs_review on a Neo4j relationship by edge_id."""
     try:
         from app.core.config import settings
@@ -232,7 +226,7 @@ async def _sync_edge_review_neo4j(edge_id: int, *, needs_review: bool) -> None:
         log.warning("Neo4j review sync failed edge=%s: %s", edge_id, exc)
 
 
-async def _delete_edge_neo4j(edge: KGEdge) -> None:
+async def delete_edge_neo4j(edge_id: int) -> None:
     """Delete a relationship from Neo4j by edge_id."""
     try:
         from app.core.config import settings
@@ -241,7 +235,7 @@ async def _delete_edge_neo4j(edge: KGEdge) -> None:
         from app.core.graph import graph
         await graph.run(
             "MATCH ()-[r]->() WHERE r.edge_id = $eid DELETE r",
-            {"eid": edge.id},
+            {"eid": edge_id},
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("Neo4j edge delete failed edge=%s: %s", edge.id, exc)
+        log.warning("Neo4j edge delete failed edge=%s: %s", edge_id, exc)
