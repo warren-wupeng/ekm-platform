@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # Embeddings (LiteLLM)
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIM: int = 1536
+    EMBEDDING_BASE_URL: str = ""  # empty → OpenAI default; AI Gateway doesn't support /embeddings
 
     # Qdrant
     QDRANT_COLLECTION: str = "ekm_chunks"

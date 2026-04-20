@@ -20,7 +20,9 @@ class Embedder:
     def __init__(self):
         self.model = settings.EMBEDDING_MODEL
         self.dim = settings.EMBEDDING_DIM
-        self.api_base = settings.LLM_BASE_URL or None
+        # Embedding uses a separate base URL — AI Gateway only supports
+        # chat completions, not /embeddings.  Empty → OpenAI default.
+        self.api_base = settings.EMBEDDING_BASE_URL or None
         self.api_key = settings.LLM_API_KEY or None
 
     def _kwargs(self) -> dict:
