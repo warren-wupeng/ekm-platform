@@ -25,11 +25,12 @@ Design notes:
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.agent_security import extract_prefix, verify_agent_token
 from app.core.database import get_db
 from app.models.agent import AgentToken
+
+
+log = logging.getLogger(__name__)
 
 
 # Known scopes. New entries here must be documented in the API docs.
@@ -78,14 +82,18 @@ def _unauthorized(detail: str) -> HTTPException:
 async def _resolve_agent(
     credentials: HTTPAuthorizationCredentials | None,
     db: AsyncSession,
+    request: Request,
 ) -> AgentCaller:
+    client_host = request.client.host if request.client else "unknown"
+
     if credentials is None:
+        log.warning("agent_auth_failed reason=missing_token client=%s", client_host)
         raise _unauthorized("Missing Bearer token")
 
     plaintext = credentials.credentials
     prefix = extract_prefix(plaintext)
     if prefix is None:
-        # Don't even hit the DB if the shape is obviously wrong.
+        log.warning("agent_auth_failed reason=malformed_token client=%s", client_host)
         raise _unauthorized("Invalid Agent token")
 
     stmt = select(AgentToken).where(
@@ -94,15 +102,24 @@ async def _resolve_agent(
     )
     row: AgentToken | None = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
+        log.warning(
+            "agent_auth_failed reason=unknown_or_inactive_prefix prefix=%s client=%s",
+            prefix, client_host,
+        )
         raise _unauthorized("Invalid Agent token")
 
     if row.expires_at is not None and row.expires_at < datetime.now(timezone.utc):
+        log.warning(
+            "agent_auth_failed reason=expired token_id=%d prefix=%s client=%s",
+            row.id, prefix, client_host,
+        )
         raise _unauthorized("Agent token expired")
 
     if not verify_agent_token(plaintext, row.token_hash):
-        # Prefix collision (or someone guessing) — hash mismatch is the
-        # real auth check. Log nothing here to avoid noise; DB-layer
-        # metrics will catch brute-force attempts.
+        log.warning(
+            "agent_auth_failed reason=hash_mismatch prefix=%s client=%s",
+            prefix, client_host,
+        )
         raise _unauthorized("Invalid Agent token")
 
     # Bump last_used_at. Part of the same AsyncSession so it lands on
@@ -129,12 +146,13 @@ def require_agent_scope(*required: str):
         )
 
     async def _dep(
+        request: Request,
         credentials: Annotated[
             HTTPAuthorizationCredentials | None, Depends(_bearer)
         ],
         db: Annotated[AsyncSession, Depends(get_db)],
     ) -> AgentCaller:
-        agent = await _resolve_agent(credentials, db)
+        agent = await _resolve_agent(credentials, db, request)
         if not set(required).issubset(agent.scopes):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

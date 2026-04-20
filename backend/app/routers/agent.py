@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core.agent_deps import AgentCaller, require_agent_scope
+from app.core.rate_limit import AGENT_RATE, limiter
 from app.core.graph import graph
 from app.schemas.agent import (
     KGNode,
@@ -72,7 +73,9 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
         "Requires scope: `knowledge:read`."
     ),
 )
+@limiter.limit(AGENT_RATE)
 async def knowledge_search(
+    request: Request,
     q: str = Query(..., min_length=1, max_length=500, description="Query string"),
     top_k: int = Query(
         10, ge=1, le=50,
@@ -150,7 +153,9 @@ async def knowledge_search(
         "Requires scope: `kg:read`."
     ),
 )
+@limiter.limit(AGENT_RATE)
 async def kg_query(
+    request: Request,
     body: KGQueryRequest,
     agent: AgentCaller = Depends(require_agent_scope("kg:read")),
 ) -> KGQueryResponse:
@@ -199,7 +204,9 @@ async def kg_query(
         "Requires scope: `kg:write`."
     ),
 )
+@limiter.limit(AGENT_RATE)
 async def kg_node_upsert(
+    request: Request,
     body: KGNodeUpsertRequest,
     agent: AgentCaller = Depends(require_agent_scope("kg:write")),
 ) -> KGNodeUpsertResponse:
@@ -241,7 +248,9 @@ async def kg_node_upsert(
         "Requires scope: `kg:read`."
     ),
 )
+@limiter.limit(AGENT_RATE)
 async def kg_path(
+    request: Request,
     source: str = Query(..., min_length=1, max_length=255, alias="source"),
     target: str = Query(..., min_length=1, max_length=255, alias="target"),
     max_hops: int = Query(3, ge=1, le=5),
