@@ -37,13 +37,17 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
             raise ValueError(f"KnowledgeItem {document_id} has no file_path")
 
         # Step 1: Re-parse.
-        from app.services.tika_client import tika
         import asyncio
+        from app.services.tika_client import tika
 
         async def _extract():
             return await tika.extract(item.file_path)
 
-        text, _meta = asyncio.run(_extract())
+        loop = asyncio.new_event_loop()
+        try:
+            text, _meta = loop.run_until_complete(_extract())
+        finally:
+            loop.close()
         log.info("incremental_update doc=%d re-parsed chars=%d", document_id, len(text))
 
         # Step 2: Diff.

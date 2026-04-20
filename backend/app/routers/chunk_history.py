@@ -8,6 +8,8 @@ from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DB
 from app.models.document import DocumentChunk
+from app.models.knowledge import KnowledgeItem
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/v1/documents", tags=["chunk-history"])
 
@@ -33,6 +35,13 @@ async def get_chunk_history(
     version: int | None = Query(None, ge=1, description="Filter by doc_version"),
 ):
     """Return all chunk versions for a document (including retired)."""
+    # Ownership check: uploader or ADMIN.
+    item = await db.get(KnowledgeItem, document_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
     stmt = (
         select(DocumentChunk)
         .where(DocumentChunk.knowledge_item_id == document_id)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,8 +27,9 @@ log = logging.getLogger(__name__)
 
 
 def content_hash(text: str) -> str:
-    """SHA-256 truncated to 16 hex chars. Fast, collision-safe for dedup."""
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+    """SHA-256 truncated to 16 hex chars. NFC-normalized for CJK stability."""
+    normalized = unicodedata.normalize("NFC", text)
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
 
 
 @dataclass

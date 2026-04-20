@@ -8,6 +8,7 @@ generation must not block the document update pipeline.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -26,15 +27,25 @@ _KCARD_PROMPT = """从以下文本提取知识卡片，用JSON输出：
 
 
 def generate_kcard(chunk_text: str) -> dict[str, Any] | None:
-    """Call LLM to generate a K-Card from chunk text. Returns parsed dict or None."""
+    """Call LLM to generate a K-Card from chunk text. Returns parsed dict or None.
+
+    Runs in sync context (Celery worker). Uses a fresh event loop to call
+    the async LLMClient.complete().
+    """
     from app.services.llm_client import llm
 
     truncated = chunk_text[:500]
     prompt = _KCARD_PROMPT.format(text=truncated)
+    messages = [{"role": "user", "content": prompt}]
 
     try:
-        raw = llm(prompt, max_tokens=256, temperature=0.2)
-        # Try to parse JSON from the response.
+        loop = asyncio.new_event_loop()
+        try:
+            raw = loop.run_until_complete(
+                llm.complete(messages, max_tokens=256, temperature=0.2)
+            )
+        finally:
+            loop.close()
         return _parse_json(raw)
     except Exception as exc:  # noqa: BLE001
         log.warning("K-Card LLM call failed: %s", exc)
