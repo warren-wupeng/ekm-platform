@@ -29,6 +29,7 @@ from app.routers import archive as archive_router
 from app.routers import restore as restore_router
 from app.routers import batch as batch_router
 from app.routers import agent as agent_router
+from app.routers import kg as kg_router
 
 
 @asynccontextmanager
@@ -46,9 +47,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.core.graph import graph
         await graph.ensure_constraints()
+        from app.routers.kg import ensure_fulltext_index
+        await ensure_fulltext_index()
     except Exception as e:
         # Same principle as ES: graph is a degradable feature.
-        log.warning("Neo4j constraint bootstrap skipped: %s", e)
+        log.warning("Neo4j bootstrap skipped: %s", e)
     yield
     # Shutdown: clean up connections
     from app.core.database import engine
@@ -110,11 +113,11 @@ app.include_router(archive_router.router)
 app.include_router(restore_router.router)
 app.include_router(batch_router.router)
 app.include_router(agent_router.router)
+app.include_router(kg_router.router)
 
 # Placeholder stubs — will be filled in as each feature issue is implemented
 # app.include_router(users.router,      prefix="/api/v1/users",     tags=["users"])
 # app.include_router(knowledge.router,  prefix="/api/v1/knowledge", tags=["knowledge"])
-# app.include_router(kg.router,         prefix="/api/v1/kg",        tags=["knowledge-graph"])
 
 
 @app.exception_handler(Exception)
