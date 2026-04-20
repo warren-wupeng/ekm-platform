@@ -428,10 +428,10 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
     db.flush()
 
     # Collect Neo4j work to run AFTER db.commit() — two-phase pattern.
-    # _mirror_to_neo4j reads from the committed Postgres state, so it
-    # must run after the caller commits.
+    # Only carry serializable scalars so the caller can invoke after the
+    # session is closed.
     neo4j_work = {
-        "mirror_args": (db, document_id, doc_node),
+        "mirror_document_id": document_id,
         "clear_doc_eid": doc_eid if (cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0) else None,
     }
 
@@ -454,7 +454,11 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
 
 
 def run_neo4j_sync(result: dict[str, Any]) -> None:
-    """Run deferred Neo4j work after Postgres commit. Best-effort."""
+    """Run deferred Neo4j work after Postgres commit. Best-effort.
+
+    Only uses scalar IDs from the result dict — no ORM objects or
+    sessions, which would be detached/closed by the time this runs.
+    """
     neo4j_work = result.pop("_neo4j_work", None)
     if neo4j_work is None:
         return
@@ -463,9 +467,9 @@ def run_neo4j_sync(result: dict[str, Any]) -> None:
     if doc_eid:
         _clear_document_neo4j(result["document_id"], doc_eid)
 
-    mirror_args = neo4j_work.get("mirror_args")
-    if mirror_args:
-        _mirror_to_neo4j(*mirror_args)
+    document_id = neo4j_work.get("mirror_document_id")
+    if document_id is not None:
+        _mirror_to_neo4j(document_id)
 
 
 # ── external_id helpers ──────────────────────────────────────────────
@@ -585,92 +589,113 @@ def _upsert_edge(
 
 # ── Neo4j mirror ─────────────────────────────────────────────────────
 
-def _mirror_to_neo4j(
-    db: Session,
-    document_id: int,
-    doc_node: KGNode,
-) -> None:
+def _mirror_to_neo4j(document_id: int) -> None:
     """Push this document's KG slice into Neo4j. Best-effort.
+
+    Opens its own SyncSession to read committed Postgres state — must
+    be called AFTER the main session has committed. Takes only the
+    document_id (scalar) so there are no detached ORM objects.
 
     Strategy: push the document node, every entity that has a
     MENTIONED_IN edge landing on it, and every inter-entity edge whose
-    endpoints both MENTIONED_IN this document. That's a tight superset
-    of "entities touched by this extraction run" without needing a
-    separate tracking table.
+    endpoints both MENTIONED_IN this document.
     """
     import asyncio
+
+    from app.services.document_parse import SyncSession
 
     if not settings.NEO4J_URL:
         return
 
-    # Entities mentioned in this document — one hop off the doc node.
-    mention_edges = db.execute(
-        select(KGEdge).where(
-            KGEdge.target_id == doc_node.id,
-            KGEdge.relation_type == "MENTIONED_IN",
-        )
-    ).scalars().all()
-    mentioned_source_ids = [e.source_id for e in mention_edges]
+    doc_eid = _doc_external_id(document_id)
 
-    if not mentioned_source_ids:
-        return
+    with SyncSession() as db:
+        doc_node = db.execute(
+            select(KGNode).where(KGNode.external_id == doc_eid)
+        ).scalar_one_or_none()
+        if doc_node is None:
+            return
 
-    mentioned_nodes = db.execute(
-        select(KGNode).where(KGNode.id.in_(mentioned_source_ids))
-    ).scalars().all()
-    node_by_id: dict[int, KGNode] = {n.id: n for n in mentioned_nodes}
-
-    # Inter-entity relations among the mentioned set. Avoid pushing
-    # unrelated edges from other documents that happen to touch the
-    # same nodes — this mirror is scoped to the current document's
-    # slice.
-    inter_edges: list[KGEdge] = []
-    if mentioned_source_ids:
-        inter_edges = db.execute(
+        # Entities mentioned in this document — one hop off the doc node.
+        mention_edges = db.execute(
             select(KGEdge).where(
-                KGEdge.source_id.in_(mentioned_source_ids),
-                KGEdge.target_id.in_(mentioned_source_ids),
+                KGEdge.target_id == doc_node.id,
+                KGEdge.relation_type == "MENTIONED_IN",
             )
         ).scalars().all()
+        mentioned_source_ids = [e.source_id for e in mention_edges]
 
+        if not mentioned_source_ids:
+            return
+
+        mentioned_nodes = db.execute(
+            select(KGNode).where(KGNode.id.in_(mentioned_source_ids))
+        ).scalars().all()
+        node_by_id: dict[int, KGNode] = {n.id: n for n in mentioned_nodes}
+
+        # Inter-entity relations among the mentioned set.
+        inter_edges: list[KGEdge] = []
+        if mentioned_source_ids:
+            inter_edges = db.execute(
+                select(KGEdge).where(
+                    KGEdge.source_id.in_(mentioned_source_ids),
+                    KGEdge.target_id.in_(mentioned_source_ids),
+                )
+            ).scalars().all()
+
+        # Snapshot all needed data as plain dicts before session closes.
+        doc_snapshot = {
+            "external_id": doc_node.external_id,
+            "label": doc_node.label,
+            "entity_type": doc_node.entity_type,
+            "properties": dict(doc_node.properties or {}),
+        }
+        node_snapshots = {
+            n.id: {
+                "external_id": n.external_id,
+                "label": n.label,
+                "entity_type": n.entity_type,
+                "properties": dict(n.properties or {}),
+            }
+            for n in mentioned_nodes
+        }
+        mention_snapshots = [
+            {"source_id": e.source_id, "relation_type": e.relation_type,
+             "properties": dict(e.properties or {})}
+            for e in mention_edges
+        ]
+        inter_snapshots = [
+            {"source_id": e.source_id, "target_id": e.target_id,
+             "relation_type": e.relation_type,
+             "properties": dict(e.properties or {})}
+            for e in inter_edges
+        ]
+
+    # Session closed — push snapshots to Neo4j.
     async def _push() -> None:
-        # Document first so MENTIONED_IN edges find their target.
-        await upsert_entity(
-            external_id=doc_node.external_id,
-            label=doc_node.label,
-            entity_type=doc_node.entity_type,
-            properties=doc_node.properties,
-        )
-        # Mentioned entities.
-        for node in mentioned_nodes:
-            await upsert_entity(
-                external_id=node.external_id,
-                label=node.label,
-                entity_type=node.entity_type,
-                properties=node.properties,
-            )
-        # Provenance edges (entity → Document).
-        for e in mention_edges:
-            src = node_by_id.get(e.source_id)
+        await upsert_entity(**doc_snapshot)
+        for snap in node_snapshots.values():
+            await upsert_entity(**snap)
+        for m in mention_snapshots:
+            src = node_snapshots.get(m["source_id"])
             if src is None:
                 continue
             await upsert_relation(
-                source_external_id=src.external_id,
-                target_external_id=doc_node.external_id,
-                relation_type=e.relation_type,
-                properties=e.properties,
+                source_external_id=src["external_id"],
+                target_external_id=doc_snapshot["external_id"],
+                relation_type=m["relation_type"],
+                properties=m["properties"],
             )
-        # Inter-entity edges. Schema.org predicates land here.
-        for e in inter_edges:
-            src = node_by_id.get(e.source_id)
-            dst = node_by_id.get(e.target_id)
+        for ie in inter_snapshots:
+            src = node_snapshots.get(ie["source_id"])
+            dst = node_snapshots.get(ie["target_id"])
             if src is None or dst is None:
                 continue
             await upsert_relation(
-                source_external_id=src.external_id,
-                target_external_id=dst.external_id,
-                relation_type=e.relation_type,
-                properties=e.properties,
+                source_external_id=src["external_id"],
+                target_external_id=dst["external_id"],
+                relation_type=ie["relation_type"],
+                properties=ie["properties"],
             )
 
     try:
