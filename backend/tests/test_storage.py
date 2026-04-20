@@ -1,4 +1,4 @@
-"""Tests for app.services.storage — local-disk fallback path."""
+"""Tests for app.services.storage — local-disk fallback path + guards."""
 import tempfile
 
 import pytest
@@ -9,6 +9,7 @@ def _local_storage(monkeypatch):
     """Force local-disk mode with a temp directory."""
     tmpdir = tempfile.mkdtemp()
     monkeypatch.setattr("app.core.config.settings.S3_BUCKET", "")
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "development")
     monkeypatch.setattr("app.core.config.settings.UPLOAD_DIR", tmpdir)
     yield tmpdir
 
@@ -50,3 +51,11 @@ def test_upload_creates_dir(monkeypatch, tmp_path):
     monkeypatch.setattr("app.core.config.settings.UPLOAD_DIR", nested)
     upload(b"x", "f.bin")
     assert (tmp_path / "a" / "b" / "f.bin").read_bytes() == b"x"
+
+
+def test_storage_error_importable():
+    from app.services.storage import StorageError
+
+    assert issubclass(StorageError, RuntimeError)
+    err = StorageError("test error")
+    assert str(err) == "test error"

@@ -1,4 +1,5 @@
 """File upload service — stores files via the storage abstraction (S3 or local)."""
+import asyncio
 import mimetypes
 import uuid
 from pathlib import Path
@@ -57,12 +58,15 @@ async def _read_and_validate(file: UploadFile) -> bytes:
     return content
 
 
-def _save(content: bytes, original_name: str) -> str:
-    """Write content to storage and return the storage key."""
+async def _save(content: bytes, original_name: str) -> str:
+    """Write content to storage and return the storage key.
+
+    Runs the (sync) boto3 call in a thread so we don't block the event loop.
+    """
     ext = _ext(original_name)
     stem = uuid.uuid4().hex
     key = f"{stem}.{ext}" if ext else stem
-    storage.upload(content, key)
+    await asyncio.to_thread(storage.upload, content, key)
     return key
 
 
@@ -73,7 +77,7 @@ async def upload_single(
     category_id: int | None = None,
 ) -> KnowledgeItem:
     content = await _read_and_validate(file)
-    rel_path = _save(content, file.filename or "upload")
+    rel_path = await _save(content, file.filename or "upload")
     mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
     ext = _ext(file.filename or "")
 
