@@ -4,9 +4,9 @@
 # Deploy:
 #   fly deploy -c fly.worker.toml --remote-only
 #
-# Secrets: copy from ekm-backend (DATABASE_URL, REDIS_URL, LLM_API_KEY, etc.)
-#   fly secrets import -c fly.worker.toml < <(fly secrets list -a ekm-backend --json | jq -r '.[] | "\(.Name)=\(.Digest)"')
-#   — or manually: fly secrets set -a ekm-worker SECRET_KEY=... DATABASE_URL=...
+# Secrets (via `fly secrets set -a ekm-worker`):
+#   DATABASE_URL, REDIS_URL, SECRET_KEY, LLM_API_KEY,
+#   S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
 
 app = "ekm-worker"
 primary_region = "sin"
@@ -23,8 +23,11 @@ primary_region = "sin"
   QDRANT_URL = "http://ekm-qdrant.internal:6333"
   NEO4J_URL = "bolt://ekm-neo4j.internal:7687"
   TIKA_URL = "http://ekm-tika.internal:9998"
+  # S3-compatible storage (Fly Tigris). Secrets: S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
+  S3_ENDPOINT_URL = "https://fly.storage.tigris.dev"
 
 # Worker does not serve HTTP — no [[services]] section.
+# No volume mount — files are read from S3/Tigris.
 
 [processes]
   worker = "celery -A app.worker.celery_app worker --loglevel=info --concurrency=2"

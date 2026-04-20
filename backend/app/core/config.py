@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "EKM API"
     APP_VERSION: str = "0.1.0"
+    APP_ENV: str = "development"  # "development" | "staging" | "production"
     DEBUG: bool = False
 
     # Database
@@ -52,7 +53,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # File storage
+    # File storage — S3-compatible object storage (Fly Tigris, MinIO, AWS S3).
+    # Leave S3_BUCKET empty to fall back to local disk (dev mode).
+    S3_BUCKET: str = ""
+    S3_ENDPOINT_URL: str = ""          # e.g. https://fly.storage.tigris.dev
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_REGION: str = "auto"
+    # Local fallback (dev / tests only when S3_BUCKET is empty)
     UPLOAD_DIR: str = "/tmp/ekm_uploads"
     MAX_UPLOAD_SIZE_MB: int = 100
 
