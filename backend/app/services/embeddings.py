@@ -1,7 +1,7 @@
-"""Embedding helper — routes through LiteLLM so we can swap providers.
+"""Embedding helper — routes through LiteLLM via OpenRouter.
 
-Uses a small, cheap model by default (text-embedding-3-small, 1536-dim).
-Override via EMBEDDING_MODEL env var when we upgrade.
+Uses a small, cheap model by default (openai/text-embedding-3-small, 1536-dim).
+Override via EMBEDDING_MODEL / EMBEDDING_BASE_URL env vars.
 """
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ class Embedder:
     def __init__(self):
         self.model = settings.EMBEDDING_MODEL
         self.dim = settings.EMBEDDING_DIM
-        # Embedding uses a separate base URL — AI Gateway only supports
-        # chat completions, not /embeddings.  Empty → OpenAI default.
+        # Embedding goes through OpenRouter (AI Gateway only supports
+        # chat completions, not /embeddings).
         self.api_base = settings.EMBEDDING_BASE_URL or None
-        self.api_key = settings.LLM_API_KEY or None
+        self.api_key = settings.EMBEDDING_API_KEY or settings.LLM_API_KEY or None
 
     def _kwargs(self) -> dict:
         kw = {"model": self.model}
