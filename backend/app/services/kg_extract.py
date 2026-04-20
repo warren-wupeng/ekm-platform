@@ -55,6 +55,20 @@ Design choices:
    This module raises `ValueError` for things kg_pipeline.py treats as
    deterministic failures (missing KnowledgeItem). The orchestrator
    wraps the call.
+
+8. Incremental update (Issue #65).
+   When a document is re-uploaded or re-parsed, the extract stage
+   detects an existing doc node and clears stale KG data before
+   re-extraction:
+     • MENTIONED_IN edges pointing at this doc node → deleted.
+     • Inter-entity edges where BOTH endpoints are only mentioned in
+       this document (not shared with others) → deleted.
+     • The doc node itself → deleted.
+     • Entity nodes left with zero edges (orphans) → deleted.
+     • Neo4j counterparts cleaned up via Cypher DELETE.
+   Shared entities (mentioned in other docs too) are preserved — only
+   their link to *this* doc is removed. Re-extraction then rebuilds
+   the fresh slice.
 """
 from __future__ import annotations
 
@@ -96,6 +110,168 @@ context window — the extractor embeds the full chunk text inline.
 """
 
 
+# ── Incremental cleanup (Issue #65) ──────────────────────────────────
+
+
+def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
+    """Remove stale KG data for a document before re-extraction.
+
+    Returns a summary dict ``{edges_deleted, nodes_deleted}`` for logging.
+
+    Algorithm (Strategy 1 — soft delete + rebuild):
+    1. Find the doc node via ``external_id = doc:{document_id}``.
+    2. Find all entity nodes that have a MENTIONED_IN edge to this doc.
+    3. Delete MENTIONED_IN edges pointing at the doc node.
+    4. For each mentioned entity, check if it still has any remaining
+       MENTIONED_IN edge to *another* doc. If not, the entity is
+       exclusive to this document and its inter-entity edges can be
+       removed.
+    5. Delete the doc node.
+    6. Delete orphan entity nodes (zero remaining edges).
+    """
+    doc_eid = _doc_external_id(document_id)
+    doc_node = db.execute(
+        select(KGNode).where(KGNode.external_id == doc_eid)
+    ).scalar_one_or_none()
+
+    if doc_node is None:
+        return {"edges_deleted": 0, "nodes_deleted": 0}
+
+    edges_deleted = 0
+    nodes_deleted = 0
+
+    # Step 2: entity nodes mentioned in this document.
+    mention_edges = db.execute(
+        select(KGEdge).where(
+            KGEdge.target_id == doc_node.id,
+            KGEdge.relation_type == "MENTIONED_IN",
+        )
+    ).scalars().all()
+    mentioned_node_ids = [e.source_id for e in mention_edges]
+
+    # Step 3: delete all MENTIONED_IN edges to this doc node.
+    for edge in mention_edges:
+        db.delete(edge)
+        edges_deleted += 1
+
+    # Step 4: for each mentioned entity, check if it's still referenced
+    # by another document. If not, delete its inter-entity edges too.
+    exclusive_node_ids: list[int] = []
+    for node_id in mentioned_node_ids:
+        other_mentions = db.execute(
+            select(KGEdge.id).where(
+                KGEdge.source_id == node_id,
+                KGEdge.relation_type == "MENTIONED_IN",
+                KGEdge.target_id != doc_node.id,
+            ).limit(1)
+        ).scalar_one_or_none()
+        if other_mentions is None:
+            exclusive_node_ids.append(node_id)
+
+    # Delete ALL non-MENTIONED_IN edges touching exclusive nodes.
+    # An exclusive node is only relevant to this document, so all its
+    # inter-entity edges (both outgoing and incoming) should be removed
+    # regardless of whether the other endpoint is shared. This ensures
+    # orphan detection works correctly afterward.
+    if exclusive_node_ids:
+        outgoing = db.execute(
+            select(KGEdge).where(
+                KGEdge.source_id.in_(exclusive_node_ids),
+                KGEdge.relation_type != "MENTIONED_IN",
+            )
+        ).scalars().all()
+        for edge in outgoing:
+            db.delete(edge)
+            edges_deleted += 1
+
+        incoming = db.execute(
+            select(KGEdge).where(
+                KGEdge.target_id.in_(exclusive_node_ids),
+                KGEdge.relation_type != "MENTIONED_IN",
+            )
+        ).scalars().all()
+        for edge in incoming:
+            db.delete(edge)
+            edges_deleted += 1
+
+    db.flush()
+
+    # Step 5: delete the doc node.
+    db.delete(doc_node)
+    nodes_deleted += 1
+
+    # Step 6: delete orphan entity nodes — those that were exclusive
+    # to this document and now have zero remaining edges.
+    for node_id in exclusive_node_ids:
+        remaining = db.execute(
+            select(KGEdge.id).where(
+                (KGEdge.source_id == node_id) | (KGEdge.target_id == node_id)
+            ).limit(1)
+        ).scalar_one_or_none()
+        if remaining is None:
+            orphan = db.get(KGNode, node_id)
+            if orphan is not None:
+                db.delete(orphan)
+                nodes_deleted += 1
+
+    db.flush()
+
+    # NOTE: Neo4j cleanup is deferred to AFTER db.commit() — two-phase
+    # pattern. The caller (extract_and_persist) handles it.
+
+    log.info(
+        "kg_extract: cleared stale KG doc=%s edges=%d nodes=%d",
+        document_id, edges_deleted, nodes_deleted,
+    )
+    return {"edges_deleted": edges_deleted, "nodes_deleted": nodes_deleted}
+
+
+def _clear_document_neo4j(document_id: int, doc_eid: str) -> None:
+    """Remove stale KG data from Neo4j for a document. Best effort."""
+    import asyncio
+
+    from app.core.config import settings
+
+    if not settings.NEO4J_URL:
+        return
+
+    async def _cleanup() -> None:
+        from app.core.graph import graph
+
+        # Delete all relationships connected to the doc node and entities
+        # that are only mentioned in this document, then delete orphan nodes.
+        # Step 1: delete relationships to/from the doc node.
+        await graph.run(
+            "MATCH (d:Entity {external_id: $doc_eid})-[r]-() DELETE r",
+            {"doc_eid": doc_eid},
+        )
+        # Step 2: delete the doc node itself.
+        await graph.run(
+            "MATCH (d:Entity {external_id: $doc_eid}) DELETE d",
+            {"doc_eid": doc_eid},
+        )
+        # Step 3: clean up orphan Entity nodes (no remaining relationships).
+        # Scoped: only nodes that had MENTIONED_IN to this doc — we can't
+        # efficiently identify them in Neo4j after edges are gone, so we
+        # rely on a broader orphan sweep that's still safe: an Entity with
+        # no relationships is by definition unused.
+        await graph.run(
+            "MATCH (e:Entity) WHERE NOT (e)--() DELETE e",
+            {},
+        )
+
+    try:
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_cleanup())
+        finally:
+            loop.close()
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "kg_extract: Neo4j cleanup failed doc=%s: %s", document_id, exc,
+        )
+
+
 # ── Extraction entry point ────────────────────────────────────────────
 
 def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
@@ -104,13 +280,27 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
     Called by the pipeline orchestrator after parse + index + vectorize
     have already run. Returns a summary dict for the task result.
 
-    Idempotent: `KGNode.external_id` is unique, so re-running upserts
-    the same nodes. New edges are deduped by the
-    `(source_id, target_id, relation_type)` unique constraint.
+    Incremental: if this document already has KG data (detected by the
+    existence of its doc node), clear the stale slice first — delete old
+    MENTIONED_IN edges, orphan entity nodes, and the doc node — then
+    re-extract fresh. First-time extraction follows the same path
+    (nothing to clear).
     """
     item = db.get(KnowledgeItem, document_id)
     if item is None:
         raise ValueError(f"KnowledgeItem {document_id} not found")
+
+    # ── Incremental: clear stale KG data if doc was previously extracted ──
+    doc_eid = _doc_external_id(document_id)
+    existing_doc_node = db.execute(
+        select(KGNode).where(KGNode.external_id == doc_eid)
+    ).scalar_one_or_none()
+
+    cleared: dict[str, int] = {"edges_deleted": 0, "nodes_deleted": 0}
+    if existing_doc_node is not None:
+        log.info("kg_extract: doc=%s has existing KG data, clearing before re-extraction",
+                 document_id)
+        cleared = _clear_document_kg(db, document_id)
 
     chunks = db.execute(
         select(DocumentChunk.chunk_index, DocumentChunk.content)
@@ -238,19 +428,49 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
 
     db.flush()
 
-    # Mirror to Neo4j — best effort. graph_sync swallows its own errors.
-    _mirror_to_neo4j(db, document_id, doc_node)
+    # Collect Neo4j work to run AFTER db.commit() — two-phase pattern.
+    # Only carry serializable scalars so the caller can invoke after the
+    # session is closed.
+    neo4j_work = {
+        "mirror_document_id": document_id,
+        "clear_doc_eid": doc_eid if (cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0) else None,
+    }
 
+    is_update = cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0
     log.info(
-        "kg_extract doc=%s entities=%d relations=%d chunks=%d",
-        document_id, total_entities, total_relations, len(chunks),
+        "kg_extract doc=%s entities=%d relations=%d chunks=%d incremental=%s",
+        document_id, total_entities, total_relations, len(chunks), is_update,
     )
-    return {
+    result: dict[str, Any] = {
         "document_id": document_id,
         "entities": total_entities,
         "relations": total_relations,
         "chunks_processed": len(chunks),
+        "_neo4j_work": neo4j_work,
     }
+    if is_update:
+        result["incremental"] = True
+        result["cleared"] = cleared
+    return result
+
+
+def run_neo4j_sync(result: dict[str, Any]) -> None:
+    """Run deferred Neo4j work after Postgres commit. Best-effort.
+
+    Only uses scalar IDs from the result dict — no ORM objects or
+    sessions, which would be detached/closed by the time this runs.
+    """
+    neo4j_work = result.pop("_neo4j_work", None)
+    if neo4j_work is None:
+        return
+
+    doc_eid = neo4j_work.get("clear_doc_eid")
+    if doc_eid:
+        _clear_document_neo4j(result["document_id"], doc_eid)
+
+    document_id = neo4j_work.get("mirror_document_id")
+    if document_id is not None:
+        _mirror_to_neo4j(document_id)
 
 
 # ── external_id helpers ──────────────────────────────────────────────
@@ -389,103 +609,129 @@ def _upsert_edge(
 
 # ── Neo4j mirror ─────────────────────────────────────────────────────
 
-def _mirror_to_neo4j(
-    db: Session,
-    document_id: int,
-    doc_node: KGNode,
-) -> None:
+def _mirror_to_neo4j(document_id: int) -> None:
     """Push this document's KG slice into Neo4j. Best-effort.
+
+    Opens its own SyncSession to read committed Postgres state — must
+    be called AFTER the main session has committed. Takes only the
+    document_id (scalar) so there are no detached ORM objects.
 
     Strategy: push the document node, every entity that has a
     MENTIONED_IN edge landing on it, and every inter-entity edge whose
-    endpoints both MENTIONED_IN this document. That's a tight superset
-    of "entities touched by this extraction run" without needing a
-    separate tracking table.
+    endpoints both MENTIONED_IN this document.
     """
     import asyncio
+
+    from app.services.document_parse import SyncSession
 
     if not settings.NEO4J_URL:
         return
 
-    # Entities mentioned in this document — one hop off the doc node.
-    mention_edges = db.execute(
-        select(KGEdge).where(
-            KGEdge.target_id == doc_node.id,
-            KGEdge.relation_type == "MENTIONED_IN",
-        )
-    ).scalars().all()
-    mentioned_source_ids = [e.source_id for e in mention_edges]
+    doc_eid = _doc_external_id(document_id)
 
-    if not mentioned_source_ids:
-        return
+    with SyncSession() as db:
+        doc_node = db.execute(
+            select(KGNode).where(KGNode.external_id == doc_eid)
+        ).scalar_one_or_none()
+        if doc_node is None:
+            return
 
-    mentioned_nodes = db.execute(
-        select(KGNode).where(KGNode.id.in_(mentioned_source_ids))
-    ).scalars().all()
-    node_by_id: dict[int, KGNode] = {n.id: n for n in mentioned_nodes}
-
-    # Inter-entity relations among the mentioned set. Avoid pushing
-    # unrelated edges from other documents that happen to touch the
-    # same nodes — this mirror is scoped to the current document's
-    # slice.
-    inter_edges: list[KGEdge] = []
-    if mentioned_source_ids:
-        inter_edges = db.execute(
+        # Entities mentioned in this document — one hop off the doc node.
+        mention_edges = db.execute(
             select(KGEdge).where(
-                KGEdge.source_id.in_(mentioned_source_ids),
-                KGEdge.target_id.in_(mentioned_source_ids),
+                KGEdge.target_id == doc_node.id,
+                KGEdge.relation_type == "MENTIONED_IN",
             )
         ).scalars().all()
+        mentioned_source_ids = [e.source_id for e in mention_edges]
 
+        if not mentioned_source_ids:
+            return
+
+        mentioned_nodes = db.execute(
+            select(KGNode).where(KGNode.id.in_(mentioned_source_ids))
+        ).scalars().all()
+        node_by_id: dict[int, KGNode] = {n.id: n for n in mentioned_nodes}
+
+        # Inter-entity relations among the mentioned set.
+        inter_edges: list[KGEdge] = []
+        if mentioned_source_ids:
+            inter_edges = db.execute(
+                select(KGEdge).where(
+                    KGEdge.source_id.in_(mentioned_source_ids),
+                    KGEdge.target_id.in_(mentioned_source_ids),
+                )
+            ).scalars().all()
+
+        # Snapshot all needed data as plain dicts before session closes.
+        doc_snapshot = {
+            "external_id": doc_node.external_id,
+            "label": doc_node.label,
+            "entity_type": doc_node.entity_type,
+            "properties": dict(doc_node.properties or {}),
+        }
+        node_snapshots = {
+            n.id: {
+                "external_id": n.external_id,
+                "label": n.label,
+                "entity_type": n.entity_type,
+                "properties": dict(n.properties or {}),
+            }
+            for n in mentioned_nodes
+        }
+        mention_snapshots = [
+            {"source_id": e.source_id, "relation_type": e.relation_type,
+             "properties": dict(e.properties or {})}
+            for e in mention_edges
+        ]
+        inter_snapshots = [
+            {"source_id": e.source_id, "target_id": e.target_id,
+             "relation_type": e.relation_type,
+             "properties": dict(e.properties or {})}
+            for e in inter_edges
+        ]
+
+    # Session closed — push snapshots to Neo4j.
     async def _push() -> None:
-        # Document first so MENTIONED_IN edges find their target.
-        await upsert_entity(
-            external_id=doc_node.external_id,
-            label=doc_node.label,
-            entity_type=doc_node.entity_type,
-            properties=doc_node.properties,
-        )
-        # Mentioned entities.
-        for node in mentioned_nodes:
-            await upsert_entity(
-                external_id=node.external_id,
-                label=node.label,
-                entity_type=node.entity_type,
-                properties=node.properties,
-            )
-        # Provenance edges (entity → Document).
-        for e in mention_edges:
-            src = node_by_id.get(e.source_id)
+        await upsert_entity(**doc_snapshot)
+        for snap in node_snapshots.values():
+            await upsert_entity(**snap)
+        for m in mention_snapshots:
+            src = node_snapshots.get(m["source_id"])
             if src is None:
                 continue
             await upsert_relation(
-                source_external_id=src.external_id,
-                target_external_id=doc_node.external_id,
-                relation_type=e.relation_type,
-                properties=e.properties,
+                source_external_id=src["external_id"],
+                target_external_id=doc_snapshot["external_id"],
+                relation_type=m["relation_type"],
+                properties=m["properties"],
             )
-        # Inter-entity edges. Schema.org predicates land here.
-        for e in inter_edges:
-            src = node_by_id.get(e.source_id)
-            dst = node_by_id.get(e.target_id)
+        for ie in inter_snapshots:
+            src = node_snapshots.get(ie["source_id"])
+            dst = node_snapshots.get(ie["target_id"])
             if src is None or dst is None:
                 continue
             # Merge review metadata into Neo4j edge properties so graph
             # queries can filter on needs_review / confidence.
-            edge_props = dict(e.properties or {})
-            if e.confidence is not None:
-                edge_props["confidence"] = e.confidence
-            edge_props["needs_review"] = e.needs_review
-            edge_props["edge_id"] = e.id
+            edge_props = dict(ie.get("properties") or {})
+            if ie.get("confidence") is not None:
+                edge_props["confidence"] = ie["confidence"]
+            edge_props["needs_review"] = ie.get("needs_review", False)
+            if ie.get("edge_id"):
+                edge_props["edge_id"] = ie["edge_id"]
             await upsert_relation(
-                source_external_id=src.external_id,
-                target_external_id=dst.external_id,
-                relation_type=e.relation_type,
+                source_external_id=src["external_id"],
+                target_external_id=dst["external_id"],
+                relation_type=ie["relation_type"],
                 properties=edge_props,
             )
 
     try:
-        asyncio.run(_push())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_push())
+        finally:
+            loop.close()
     except Exception as exc:  # noqa: BLE001
         log.warning("kg_extract: Neo4j mirror failed doc=%s: %s",
                     document_id, exc)
@@ -494,6 +740,7 @@ def _mirror_to_neo4j(
 # ── Type-only re-exports so tests / tooling can reach the Schema.org types.
 __all__ = [
     "extract_and_persist",
+    "_clear_document_kg",
     "MAX_CHUNKS_PER_DOC",
     "CHUNK_CHAR_CAP",
     "SchemaOrgEntity",
