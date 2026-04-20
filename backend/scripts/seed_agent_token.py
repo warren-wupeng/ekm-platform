@@ -11,6 +11,9 @@ Usage:
 
 Prints the plaintext token exactly once. Copy it — there's no way to
 recover it after this script exits.
+
+Idempotent: if a token with the same name already exists, prints its
+prefix and exits without creating a duplicate.
 """
 import asyncio
 import sys
@@ -19,8 +22,10 @@ from pathlib import Path
 # Ensure the backend package is importable when running as a script.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from sqlalchemy import select
+
 from app.core.agent_security import generate_agent_token
-from app.core.database import AsyncSessionFactory
+from app.core.database import AsyncSessionLocal
 from app.models.agent import AgentToken
 
 
@@ -31,9 +36,17 @@ SEED_CREATED_BY = 1
 
 
 async def main() -> None:
-    tok = generate_agent_token()
+    async with AsyncSessionLocal() as db:
+        # Idempotent: skip if already seeded.
+        existing = (await db.execute(
+            select(AgentToken).where(AgentToken.name == SEED_NAME)
+        )).scalar_one_or_none()
+        if existing is not None:
+            print(f"Token '{SEED_NAME}' already exists (prefix={existing.token_prefix}).")
+            print("Delete it manually if you need to re-seed.")
+            return
 
-    async with AsyncSessionFactory() as db:
+        tok = generate_agent_token()
         row = AgentToken(
             name=SEED_NAME,
             token_prefix=tok.prefix,
