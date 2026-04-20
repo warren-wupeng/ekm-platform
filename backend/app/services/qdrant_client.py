@@ -33,8 +33,23 @@ def _point_id(doc_id: int, chunk_index: int) -> int:
     return doc_id * _MAX_CHUNKS_PER_DOC + chunk_index
 
 
+# Module-level singleton — one connection per process, mirrors es_sync._es.
+_qc: QdrantClient | None = None
+
+
 def _client() -> QdrantClient:
-    return QdrantClient(url=settings.QDRANT_URL, timeout=15)
+    global _qc
+    if _qc is None:
+        _qc = QdrantClient(url=settings.QDRANT_URL, timeout=15)
+    return _qc
+
+
+def close() -> None:
+    """Explicitly close the Qdrant client. Call on shutdown / test teardown."""
+    global _qc
+    if _qc is not None:
+        _qc.close()
+        _qc = None
 
 
 def ensure_collection():
