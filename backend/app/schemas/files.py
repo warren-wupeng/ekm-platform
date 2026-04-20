@@ -16,7 +16,7 @@ class FileUploadedResponse(BaseModel):
     size: int
     mime_type: str | None
     file_type: str
-    storage_path: str
+    file_path: str | None
     uploader_id: int
     category_id: int | None
     created_at: datetime
