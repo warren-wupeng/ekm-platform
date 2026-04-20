@@ -80,7 +80,16 @@ class KnowledgeItem(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    file_type: Mapped[FileType] = mapped_column(Enum(FileType), default=FileType.OTHER, nullable=False)
+    # values_callable is load-bearing: the `filetype` Postgres enum type was
+    # created with lowercase values ("document", "image", …) in 0001, but
+    # SQLAlchemy's default is to serialize Python enum *names* (uppercase
+    # "DOCUMENT"). Mismatch → every insert raises
+    # `invalid input value for enum filetype: "DOCUMENT"`. Pin to `.value`
+    # so what we write matches what Postgres declared.
+    file_type: Mapped[FileType] = mapped_column(
+        Enum(FileType, values_callable=lambda obj: [e.value for e in obj]),
+        default=FileType.OTHER, nullable=False,
+    )
     mime_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
     size: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     download_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

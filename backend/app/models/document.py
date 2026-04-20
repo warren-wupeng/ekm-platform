@@ -61,8 +61,11 @@ class DocumentParseRecord(Base):
         nullable=False,
         index=True,
     )
+    # See knowledge.py file_type — same values_callable fix. `parsestatus`
+    # Postgres enum was created with lowercase values in 0002.
     status: Mapped[ParseStatus] = mapped_column(
-        Enum(ParseStatus), default=ParseStatus.PENDING, nullable=False,
+        Enum(ParseStatus, values_callable=lambda obj: [e.value for e in obj]),
+        default=ParseStatus.PENDING, nullable=False,
     )
     task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
