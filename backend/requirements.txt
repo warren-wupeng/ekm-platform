@@ -43,6 +43,9 @@ tika==2.6.0
 # Rate limiting
 slowapi==0.1.9
 
+# Object storage (S3-compatible — Fly Tigris, AWS S3, MinIO)
+boto3==1.35.81
+
 # Utils
 httpx==0.28.1
 python-dotenv==1.0.1

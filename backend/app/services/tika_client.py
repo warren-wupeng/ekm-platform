@@ -29,14 +29,19 @@ class TikaClient:
         self.base_url = (base_url or settings.TIKA_URL).rstrip("/")
         self.timeout = timeout
 
-    async def extract(self, file_path: str | Path) -> tuple[str, dict[str, Any]]:
+    async def extract(self, file_path_or_bytes: str | Path | bytes) -> tuple[str, dict[str, Any]]:
         """Extract text + metadata in a single round-trip via /rmeta/text.
 
+        Accepts a local file path (str/Path) **or** raw bytes.
         Returns (text, metadata_dict). Raises TikaError on non-2xx.
         """
-        p = Path(file_path)
-        if not p.exists():
-            raise TikaError(f"file not found: {p}")
+        if isinstance(file_path_or_bytes, bytes):
+            body = file_path_or_bytes
+        else:
+            p = Path(file_path_or_bytes)
+            if not p.exists():
+                raise TikaError(f"file not found: {p}")
+            body = p.read_bytes()
 
         # /rmeta/text returns a JSON array of dicts; for single-doc upload
         # there's one element whose X-TIKA:content holds the text.
@@ -44,8 +49,7 @@ class TikaClient:
         headers = {"Accept": "application/json"}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            with p.open("rb") as fh:
-                resp = await client.put(url, content=fh.read(), headers=headers)
+            resp = await client.put(url, content=body, headers=headers)
 
         if resp.status_code >= 400:
             raise TikaError(f"tika {resp.status_code}: {resp.text[:500]}")

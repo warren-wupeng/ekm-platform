@@ -35,12 +35,15 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
         if not item.file_path:
             raise ValueError(f"KnowledgeItem {document_id} has no file_path")
 
-        # Step 1: Re-parse.
+        # Step 1: Re-parse (download from storage, send bytes to Tika).
         import asyncio
+        from app.services import storage
         from app.services.tika_client import tika
 
+        file_bytes = storage.download(item.file_path)
+
         async def _extract():
-            return await tika.extract(item.file_path)
+            return await tika.extract(file_bytes)
 
         loop = asyncio.new_event_loop()
         try:

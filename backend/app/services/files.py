@@ -1,6 +1,5 @@
-"""File upload service — stores files locally (swap MinIO client here when ready)."""
+"""File upload service — stores files via the storage abstraction (S3 or local)."""
 import mimetypes
-import os
 import uuid
 from pathlib import Path
 
@@ -8,8 +7,8 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.config import settings
 from app.models.knowledge import FileType, KnowledgeItem
+from app.services import storage
 from app.schemas.files import (
     ALLOWED_EXTENSIONS,
     MAX_BATCH_MB,
@@ -58,15 +57,13 @@ async def _read_and_validate(file: UploadFile) -> bytes:
     return content
 
 
-def _save_to_disk(content: bytes, original_name: str) -> str:
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    # Preserve extension, randomise stem to avoid collisions
+def _save(content: bytes, original_name: str) -> str:
+    """Write content to storage and return the storage key."""
     ext = _ext(original_name)
     stem = uuid.uuid4().hex
-    rel_path = f"{stem}.{ext}" if ext else stem
-    (upload_dir / rel_path).write_bytes(content)
-    return rel_path  # relative storage path
+    key = f"{stem}.{ext}" if ext else stem
+    storage.upload(content, key)
+    return key
 
 
 async def upload_single(
@@ -76,7 +73,7 @@ async def upload_single(
     category_id: int | None = None,
 ) -> KnowledgeItem:
     content = await _read_and_validate(file)
-    rel_path = _save_to_disk(content, file.filename or "upload")
+    rel_path = _save(content, file.filename or "upload")
     mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
     ext = _ext(file.filename or "")
 

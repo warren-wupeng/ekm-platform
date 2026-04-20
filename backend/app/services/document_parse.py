@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
+from app.services import storage
 from app.services.chunker import chunk_text
 from app.services.tika_client import tika, TikaError
 
@@ -60,7 +61,8 @@ def parse_and_persist(document_id: int) -> dict[str, Any]:
         db.commit()
 
         try:
-            text, meta = _run(tika.extract(item.file_path))
+            file_bytes = storage.download(item.file_path)
+            text, meta = _run(tika.extract(file_bytes))
         except TikaError as e:
             log.exception("tika failed for doc %s", document_id)
             record.status = ParseStatus.FAILED
