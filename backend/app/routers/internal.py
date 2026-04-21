@@ -26,7 +26,7 @@ def _verify_service_key(x_service_key: str = Header(...)) -> None:
 # ── Content persistence (Hocuspocus onStoreDocument) ──────────────────
 
 class InternalContentUpdate(BaseModel):
-    html_content: str
+    html_content: str | None = None  # optional — Yjs server can't render HTML
     yjs_state: str  # base64-encoded Yjs document state
 
 

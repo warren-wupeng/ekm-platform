@@ -94,7 +94,7 @@ const server = Server.configure({
             'Content-Type': 'application/json',
             'X-Service-Key': INTERNAL_SERVICE_KEY,
           },
-          body: JSON.stringify({ content: updateBase64 }),
+          body: JSON.stringify({ yjs_state: updateBase64 }),
         }
       )
       if (!resp.ok) {
