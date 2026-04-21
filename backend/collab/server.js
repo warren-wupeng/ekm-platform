@@ -7,6 +7,7 @@ const StarterKit = require('@tiptap/starter-kit').default
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 const EKM_BACKEND_URL = process.env.EKM_BACKEND_URL || 'https://ekm-backend.fly.dev'
+const EKM_BACKEND_INTERNAL_URL = process.env.EKM_BACKEND_INTERNAL_URL || 'http://ekm-backend.internal:8000'
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || ''
 const PORT = parseInt(process.env.PORT || '1234')
 
@@ -53,10 +54,15 @@ const server = Server.configure({
     if (match) {
       const itemId = match[1]
       try {
-        const resp = await fetch(`${EKM_BACKEND_URL}/api/v1/knowledge/items/${itemId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const resp = await fetch(
+          `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/access?user_id=${user.id}`,
+          { headers: { 'X-Service-Key': INTERNAL_SERVICE_KEY } }
+        )
         if (!resp.ok) {
+          throw new Error(`Access denied to document ${itemId}`)
+        }
+        const { allowed } = await resp.json()
+        if (!allowed) {
           throw new Error(`Access denied to document ${itemId}`)
         }
       } catch (err) {
@@ -83,7 +89,7 @@ const server = Server.configure({
       const json = TiptapTransformer.fromYdoc(document, 'default')
       const html = generateHTML(json, [StarterKit])
 
-      const resp = await fetch(`${EKM_BACKEND_URL}/api/v1/internal/items/${itemId}/content`, {
+      const resp = await fetch(`${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
