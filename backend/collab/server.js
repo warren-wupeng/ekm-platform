@@ -1,9 +1,7 @@
 const { Server } = require('@hocuspocus/server')
 const { Redis } = require('@hocuspocus/extension-redis')
 const { Logger } = require('@hocuspocus/extension-logger')
-const { TiptapTransformer } = require('@hocuspocus/transformer')
-const { generateHTML } = require('@tiptap/html')
-const StarterKit = require('@tiptap/starter-kit').default
+const Y = require('yjs')
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 const EKM_BACKEND_URL = process.env.EKM_BACKEND_URL || 'https://ekm-backend.fly.dev'
@@ -25,88 +23,74 @@ const server = Server.configure({
     new Redis({
       host: redisHost,
       port: redisPort,
-      options: { db: redisDb },
+      options: {
+        db: redisDb,
+      },
     }),
   ],
 
-  // P1-2: Reject empty token, validate JWT against ekm-backend
   async onAuthenticate(data) {
     const token = data.token
     if (!token) {
-      throw new Error('Unauthorized: no token')
+      throw new Error('No token provided')
     }
 
-    let user
     try {
-      const resp = await fetch(`${EKM_BACKEND_URL}/api/v1/auth/me`, {
+      // Verify JWT and get user info
+      const authResp = await fetch(`${EKM_BACKEND_URL}/api/v1/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!resp.ok) {
-        throw new Error(`Auth failed: ${resp.status}`)
+      if (!authResp.ok) {
+        throw new Error(`Auth failed: ${authResp.status}`)
       }
-      user = await resp.json()
+      const user = await authResp.json()
+
+      // Check room-level access
+      const documentName = data.documentName
+      const itemId = documentName.replace('doc:', '')
+      const accessResp = await fetch(
+        `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/access?user_id=${user.id}`,
+        { headers: { 'X-Service-Key': INTERNAL_SERVICE_KEY } }
+      )
+      if (!accessResp.ok) {
+        throw new Error(`Access check failed: ${accessResp.status}`)
+      }
+      const access = await accessResp.json()
+      if (!access.allowed) {
+        throw new Error('Access denied')
+      }
+
+      return { user }
     } catch (err) {
-      throw new Error(`Unauthorized: ${err.message}`)
+      throw new Error(`Authentication error: ${err.message}`)
     }
-
-    // Check room-level access: documentName = 'doc:{item_id}'
-    const match = data.documentName.match(/^doc:(\d+)$/)
-    if (match) {
-      const itemId = match[1]
-      try {
-        const resp = await fetch(
-          `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/access?user_id=${user.id}`,
-          { headers: { 'X-Service-Key': INTERNAL_SERVICE_KEY } }
-        )
-        if (!resp.ok) {
-          throw new Error(`Access denied to document ${itemId}`)
-        }
-        const { allowed } = await resp.json()
-        if (!allowed) {
-          throw new Error(`Access denied to document ${itemId}`)
-        }
-      } catch (err) {
-        throw new Error(`Unauthorized: ${err.message}`)
-      }
-    }
-
-    return { user }
   },
 
-  // P1-3: Persist Y.Doc to ekm-backend via internal service endpoint
-  async onStoreDocument(data) {
-    const { documentName, document } = data
-
-    const match = documentName.match(/^doc:(\d+)$/)
-    if (!match) {
-      console.warn(`[onStoreDocument] Unknown documentName format: ${documentName}, skipping`)
-      return
-    }
-    const itemId = match[1]
+  async onStoreDocument({ documentName, document }) {
+    const itemId = documentName.replace('doc:', '')
 
     try {
-      // Convert Y.Doc → Tiptap JSON → HTML
-      const json = TiptapTransformer.fromYdoc(document, 'default')
-      const html = generateHTML(json, [StarterKit])
+      // Encode Y.Doc state as binary update
+      const update = Y.encodeStateAsUpdate(document)
+      const updateBase64 = Buffer.from(update).toString('base64')
 
-      const resp = await fetch(`${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Service-Key': INTERNAL_SERVICE_KEY,
-        },
-        body: JSON.stringify({ content: html }),
-      })
-
+      const resp = await fetch(
+        `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Service-Key': INTERNAL_SERVICE_KEY,
+          },
+          body: JSON.stringify({ content: updateBase64 }),
+        }
+      )
       if (!resp.ok) {
-        const text = await resp.text()
-        throw new Error(`Backend responded ${resp.status}: ${text}`)
+        console.error(`[onStoreDocument] PUT failed for item ${itemId}: ${resp.status}`)
       }
-
-      console.log(`[onStoreDocument] Persisted doc:${itemId}`)
     } catch (err) {
-      console.error(`[onStoreDocument] Failed to persist ${documentName}: ${err.message}`)
-      // Don't rethrow — Hocuspocus will retry on next change
+      // Do not throw — storage failure should not crash the collab session
+      console.error(`[onStoreDocument] Error for item ${itemId}:`, err.message)
     }
   },
 })
