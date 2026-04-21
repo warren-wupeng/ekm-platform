@@ -15,7 +15,7 @@ primary_region = "sin"
   dockerfile = "Dockerfile"
 
 [env]
-  APP_ENV = "staging"
+  APP_ENV = "production"
   DEBUG = "false"
   LLM_MODEL = "anthropic/claude-sonnet-4.6"
   LLM_BASE_URL = "https://ai-gateway.happycapy.ai/api/v1"
@@ -37,5 +37,5 @@ primary_region = "sin"
   size = "shared-cpu-1x"
   memory = "512mb"
 
-[restart]
+[[restart]]
   policy = "always"
