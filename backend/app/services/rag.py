@@ -13,6 +13,7 @@ touching the router.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import AsyncIterator
 
 from sqlalchemy import select
@@ -23,6 +24,8 @@ from app.models.knowledge import KnowledgeItem
 from app.services.embeddings import embedder
 from app.services.llm_client import llm
 from app.services.qdrant_client import search as qdrant_search
+
+log = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = (
@@ -86,8 +89,13 @@ async def stream_answer(
         },
     ]
 
-    async for delta in llm.stream(messages):
-        if delta:
-            yield {"event": "delta", "data": delta}
+    try:
+        async for delta in llm.stream(messages):
+            if delta:
+                yield {"event": "delta", "data": delta}
+    except Exception as exc:
+        log.exception("LLM stream failed: %s", exc)
+        yield {"event": "error", "data": f"LLM error: {type(exc).__name__}: {exc}"}
+        return
 
     yield {"event": "done", "data": "[DONE]"}
