@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   App, Table, Tag, Button, Modal, Form, Input, Select, Space,
@@ -58,10 +58,9 @@ const MOCK_RELATIONS: RelationType[] = [
   { id: 'r6', name: 'partOf',       displayName: '属于',      domain: 'Project',  range: 'Organization', source: 'custom',     description: '项目属于组织', usageCount: 78  },
 ]
 
-function buildTree(entities: EntityType[], t: (key: string) => string, locale: string): DataNode[] {
+function buildTree(entities: EntityType[], t: (key: string) => string, isEn: boolean): DataNode[] {
   const map = new Map<string, DataNode & { children: DataNode[] }>()
   const roots: DataNode[] = []
-  const isEn = locale === 'en'
 
   entities.forEach((e) => {
     map.set(e.name, {
@@ -93,7 +92,13 @@ function buildTree(entities: EntityType[], t: (key: string) => string, locale: s
 export default function OntologyPage() {
   const { message } = App.useApp()
   const { t, i18n } = useTranslation()
+  const isEn = i18n.language.startsWith('en')
   const [entities, setEntities]   = useState<EntityType[]>(MOCK_ENTITIES)
+  // Entity name → locale-aware display label (for domain/range columns)
+  const entityLabel = useMemo(
+    () => Object.fromEntries(entities.map((e) => [e.name, isEn ? e.name : e.displayName])),
+    [entities, isEn],
+  )
   const [relations, setRelations] = useState<RelationType[]>(MOCK_RELATIONS)
   const [activeTab, setActiveTab] = useState('entity')
   const [entityModal, setEntityModal]   = useState<EntityType | null | 'new'>(null)
@@ -168,8 +173,8 @@ export default function OntologyPage() {
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: r.color }} />
           <div>
-            <span className="text-sm font-medium text-slate-700">{i18n.language === 'en' ? r.name : r.displayName}</span>
-            <span className="text-xs text-slate-400 ml-2">{i18n.language === 'en' ? r.displayName : r.name}</span>
+            <span className="text-sm font-medium text-slate-700">{isEn ? r.name : r.displayName}</span>
+            <span className="text-xs text-slate-400 ml-2">{isEn ? r.displayName : r.name}</span>
           </div>
         </div>
       ),
@@ -258,8 +263,8 @@ export default function OntologyPage() {
       key: 'name',
       render: (_, r) => (
         <div>
-          <span className="text-sm font-medium text-slate-700">{i18n.language === 'en' ? r.name : r.displayName}</span>
-          <span className="text-xs text-slate-400 ml-2">{i18n.language === 'en' ? r.displayName : r.name}</span>
+          <span className="text-sm font-medium text-slate-700">{isEn ? r.name : r.displayName}</span>
+          <span className="text-xs text-slate-400 ml-2">{isEn ? r.displayName : r.name}</span>
         </div>
       ),
     },
@@ -269,9 +274,9 @@ export default function OntologyPage() {
       width: 180,
       render: (_, r) => (
         <span className="text-xs">
-          <Tag className="text-xs">{r.domain}</Tag>
+          <Tag className="text-xs">{entityLabel[r.domain] ?? r.domain}</Tag>
           <span className="text-slate-400 mx-1">→</span>
-          <Tag className="text-xs">{r.range}</Tag>
+          <Tag className="text-xs">{entityLabel[r.range] ?? r.range}</Tag>
         </span>
       ),
     },
@@ -338,7 +343,7 @@ export default function OntologyPage() {
     },
   ]
 
-  const treeData = buildTree(entities, t, i18n.language)
+  const treeData = buildTree(entities, t, isEn)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -460,7 +465,7 @@ export default function OntologyPage() {
             <Select
               allowClear
               placeholder={t('ontology.select_parent')}
-              options={entities.map((e) => ({ label: i18n.language === 'en' ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
+              options={entities.map((e) => ({ label: isEn ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
             />
           </Form.Item>
           <Form.Item name="description" label={t('ontology.col_description')}>
@@ -493,13 +498,13 @@ export default function OntologyPage() {
             <Form.Item name="domain" label={t('ontology.domain_label')} rules={[{ required: true }]}>
               <Select
                 placeholder={t('ontology.domain_placeholder')}
-                options={entities.map((e) => ({ label: i18n.language === 'en' ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
+                options={entities.map((e) => ({ label: isEn ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
               />
             </Form.Item>
             <Form.Item name="range" label={t('ontology.range_label')} rules={[{ required: true }]}>
               <Select
                 placeholder={t('ontology.range_placeholder')}
-                options={entities.map((e) => ({ label: i18n.language === 'en' ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
+                options={entities.map((e) => ({ label: isEn ? `${e.name} (${e.displayName})` : `${e.displayName} (${e.name})`, value: e.name }))}
               />
             </Form.Item>
           </div>
