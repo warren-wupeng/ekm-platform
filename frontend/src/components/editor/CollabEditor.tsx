@@ -90,7 +90,7 @@ export default function CollabEditor({
         seen.add(u.name)
         return true
       })
-      onUsersChange(unique)
+      onUsersChange?.(unique)
     }
 
     awareness?.on('change', updateUsers)
