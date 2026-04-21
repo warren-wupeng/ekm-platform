@@ -9,8 +9,9 @@ import {
 } from '@ant-design/icons'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
+// -- Mock data (content stays as-is; labels come from i18n) -------------------
 
 const RECENT_DOCS = [
   { id: 'd1', name: '技术架构设计 v5.docx',       type: 'document', date: '2026-04-17', views: 42 },
@@ -39,29 +40,41 @@ const AI_TIPS = [
   '知识图谱中有 3 个孤立节点待连接，点击查看',
 ]
 
-const QUICK_ACTIONS = [
-  { label: '搜索知识',   icon: <SearchOutlined />,  href: '/search',    color: 'text-blue-500',   bg: 'bg-blue-50' },
-  { label: '上传文件',   icon: <UploadOutlined />,   href: '/knowledge', color: 'text-green-500',  bg: 'bg-green-50' },
-  { label: 'AI 写作',    icon: <EditOutlined />,     href: '/editor',    color: 'text-purple-500', bg: 'bg-purple-50' },
-  { label: '社区发帖',   icon: <TeamOutlined />,     href: '/community', color: 'text-orange-500', bg: 'bg-orange-50' },
-  { label: '知识门户',   icon: <BookOutlined />,     href: '/portal',    color: 'text-cyan-500',   bg: 'bg-cyan-50' },
-  { label: '知识图谱',   icon: <ThunderboltOutlined />, href: '/knowledge-graph', color: 'text-pink-500', bg: 'bg-pink-50' },
-]
-
 const DEPT_COLOR: Record<string, string> = { 技术: 'blue', 产品: 'purple', HR: 'cyan', 市场: 'orange' }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// -- Component ----------------------------------------------------------------
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const { t } = useTranslation()
   const [notifOpen, setNotifOpen] = useState(false)
   const [tipIdx]   = useState(0)
 
   const displayName = user?.displayName ?? 'Kira Chen'
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
+  const greeting = hour < 12
+    ? t('dashboard.greeting_morning')
+    : hour < 18
+      ? t('dashboard.greeting_afternoon')
+      : t('dashboard.greeting_evening')
   const unreadCount = NOTIFICATIONS.filter((n) => n.unread).length
+
+  const QUICK_ACTIONS = [
+    { label: t('dashboard.quick_search'),    icon: <SearchOutlined />,        href: '/search',          color: 'text-blue-500',   bg: 'bg-blue-50' },
+    { label: t('dashboard.quick_upload'),    icon: <UploadOutlined />,         href: '/knowledge',       color: 'text-green-500',  bg: 'bg-green-50' },
+    { label: t('dashboard.quick_editor'),    icon: <EditOutlined />,           href: '/editor',          color: 'text-purple-500', bg: 'bg-purple-50' },
+    { label: t('dashboard.quick_community'), icon: <TeamOutlined />,           href: '/community',       color: 'text-orange-500', bg: 'bg-orange-50' },
+    { label: t('dashboard.quick_portal'),    icon: <BookOutlined />,           href: '/portal',          color: 'text-cyan-500',   bg: 'bg-cyan-50' },
+    { label: t('dashboard.quick_graph'),     icon: <ThunderboltOutlined />,    href: '/knowledge-graph', color: 'text-pink-500',   bg: 'bg-pink-50' },
+  ]
+
+  const STATS = [
+    { label: t('dashboard.stat_uploads'),       value: '12',  unit: t('dashboard.unit_docs'),  color: 'text-blue-600',   icon: <UploadOutlined /> },
+    { label: t('dashboard.stat_total'),         value: '247', unit: t('dashboard.unit_items'), color: 'text-green-600',  icon: <BookOutlined /> },
+    { label: t('dashboard.stat_interactions'),  value: '55',  unit: t('dashboard.unit_times'), color: 'text-orange-600', icon: <TeamOutlined /> },
+    { label: t('dashboard.stat_likes'),         value: '128', unit: '',                         color: 'text-pink-600',   icon: <FireOutlined /> },
+  ]
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -77,15 +90,15 @@ export default function DashboardPage() {
             </Avatar>
             <div>
               <h1 className="text-lg font-bold text-slate-800">
-                {greeting}，{displayName.split(' ')[0]}
+                {greeting}, {displayName.split(' ')[0]}
               </h1>
-              <p className="text-sm text-slate-400 mt-0.5">今天是个好日子，开始高效工作吧</p>
+              <p className="text-sm text-slate-400 mt-0.5">{t('dashboard.subtitle')}</p>
             </div>
           </div>
 
           {/* Notification bell */}
           <div className="relative">
-            <Tooltip title="通知" placement="bottom">
+            <Tooltip title={t('dashboard.notifications')} placement="bottom">
               <button
                 className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
                 onClick={() => setNotifOpen((v) => !v)}
@@ -99,8 +112,8 @@ export default function DashboardPage() {
             {notifOpen && (
               <div className="absolute right-0 top-11 w-80 bg-white rounded-2xl border border-slate-100 shadow-xl z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-700">通知</span>
-                  <button className="text-xs text-primary">全部已读</button>
+                  <span className="text-sm font-semibold text-slate-700">{t('dashboard.notifications')}</span>
+                  <button className="text-xs text-primary">{t('dashboard.mark_all_read')}</button>
                 </div>
                 <div>
                   {NOTIFICATIONS.map((n) => (
@@ -151,13 +164,13 @@ export default function DashboardPage() {
             <div className="px-4 pt-4 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ClockCircleOutlined className="text-slate-400" />
-                <span className="text-sm font-semibold text-slate-700">最近访问</span>
+                <span className="text-sm font-semibold text-slate-700">{t('dashboard.section_recent')}</span>
               </div>
               <button
                 className="text-xs text-primary hover:opacity-70 transition flex items-center gap-1"
                 onClick={() => router.push('/knowledge')}
               >
-                查看全部 <ArrowRightOutlined />
+                {t('dashboard.view_all')} <ArrowRightOutlined />
               </button>
             </div>
             <div className="divide-y divide-slate-50">
@@ -166,7 +179,7 @@ export default function DashboardPage() {
                   <FileTextOutlined className="text-primary text-sm flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-700 truncate">{d.name}</p>
-                    <p className="text-[10px] text-slate-400">{d.date} · 查看 {d.views} 次</p>
+                    <p className="text-[10px] text-slate-400">{d.date} · {d.views} {t('dashboard.views')}</p>
                   </div>
                 </div>
               ))}
@@ -178,13 +191,13 @@ export default function DashboardPage() {
             <div className="px-4 pt-4 pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <StarOutlined className="text-slate-400" />
-                <span className="text-sm font-semibold text-slate-700">为你推荐</span>
+                <span className="text-sm font-semibold text-slate-700">{t('dashboard.section_recommended')}</span>
               </div>
               <button
                 className="text-xs text-primary hover:opacity-70 transition flex items-center gap-1"
                 onClick={() => router.push('/portal')}
               >
-                更多 <ArrowRightOutlined />
+                {t('dashboard.more')} <ArrowRightOutlined />
               </button>
             </div>
             <div className="divide-y divide-slate-50">
@@ -199,7 +212,7 @@ export default function DashboardPage() {
                       <Tag color={DEPT_COLOR[r.department] ?? 'default'} className="text-[10px] m-0 px-1">
                         {r.department}
                       </Tag>
-                      <span className="text-[10px] text-slate-400">{r.likes} 点赞</span>
+                      <span className="text-[10px] text-slate-400">{r.likes} {t('dashboard.likes')}</span>
                     </div>
                   </div>
                 </div>
@@ -210,12 +223,7 @@ export default function DashboardPage() {
 
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: '本月上传',   value: '12',   unit: '份',  color: 'text-blue-600',   icon: <UploadOutlined /> },
-            { label: '知识总量',   value: '247',  unit: '篇',  color: 'text-green-600',  icon: <BookOutlined /> },
-            { label: '社区互动',   value: '55',   unit: '次',  color: 'text-orange-600', icon: <TeamOutlined /> },
-            { label: '获赞总数',   value: '128',  unit: '',    color: 'text-pink-600',   icon: <FireOutlined /> },
-          ].map((s) => (
+          {STATS.map((s) => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-100 p-4">
               <div className={`text-xl mb-1 ${s.color}`}>{s.icon}</div>
               <p className="text-xl font-bold text-slate-800">{s.value}<span className="text-sm font-normal text-slate-400 ml-0.5">{s.unit}</span></p>
