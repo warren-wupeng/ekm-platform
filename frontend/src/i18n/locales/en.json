@@ -486,7 +486,8 @@
     "endpoint_distribution": "Endpoint Call Distribution",
     "calls_count": "{{count}} ({{pct}}%)",
     "key_show": "Show Key",
-    "key_hide": "Hide Key"
+    "key_hide": "Hide Key",
+    "pagination_total": "Total {{total}} items"
   },
   "history": {
     "page_title": "Version History",

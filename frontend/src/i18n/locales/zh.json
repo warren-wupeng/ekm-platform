@@ -486,7 +486,8 @@
     "endpoint_distribution": "接口调用分布",
     "calls_count": "{{count}} 次（{{pct}}%）",
     "key_show": "显示 Key",
-    "key_hide": "隐藏 Key"
+    "key_hide": "隐藏 Key",
+    "pagination_total": "共 {{total}} 条"
   },
   "history": {
     "page_title": "版本历史",
