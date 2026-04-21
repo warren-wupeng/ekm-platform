@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserMe
+from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserMe, UserMeUpdate
 from app.services.auth import AuthError, authenticate_user, get_current_user, issue_tokens, refresh_tokens
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -60,4 +60,27 @@ async def me(
         user = await get_current_user(db, credentials.credentials)
     except AuthError as e:
         raise _auth_error_to_http(e)
+    return user
+
+
+@router.put("/me", response_model=UserMe, summary="更新当前用户信息")
+async def update_me(
+    body: UserMeUpdate,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+    try:
+        user = await get_current_user(db, credentials.credentials)
+    except AuthError as e:
+        raise _auth_error_to_http(e)
+    if body.display_name is not None:
+        user.display_name = body.display_name
+    if body.avatar_url is not None:
+        user.avatar_url = body.avatar_url
+    if body.department is not None:
+        user.department = body.department
+    await db.commit()
+    await db.refresh(user)
     return user

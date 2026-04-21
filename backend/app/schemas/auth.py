@@ -27,3 +27,9 @@ class UserMe(BaseModel):
     role: str
 
     model_config = {"from_attributes": True}
+
+
+class UserMeUpdate(BaseModel):
+    display_name: str | None = None
+    avatar_url: str | None = None
+    department: str | None = None

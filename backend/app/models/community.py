@@ -28,9 +28,10 @@ class Post(Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    # Denormalised counter; maintained by the router on reply insert/delete
-    # so listing the timeline doesn't require a JOIN+COUNT per row.
+    # Denormalised counters; maintained by the router so listing the timeline
+    # doesn't require a JOIN+COUNT per row.
     reply_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    like_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )
@@ -41,6 +42,9 @@ class Post(Base):
     author: Mapped["User"] = relationship("User")  # noqa: F821
     replies: Mapped[list["Reply"]] = relationship(
         "Reply", back_populates="post", cascade="all, delete-orphan",
+    )
+    likes: Mapped[list["PostLike"]] = relationship(
+        "PostLike", cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -107,3 +111,22 @@ class ReplyLike(Base):
     )
 
     reply: Mapped["Reply"] = relationship("Reply", back_populates="likes")
+
+
+class PostLike(Base):
+    """A single user's like on a post. Unique (post_id, user_id) = idempotent."""
+    __tablename__ = "post_likes"
+    __table_args__ = (
+        UniqueConstraint("post_id", "user_id", name="uq_post_likes_post_user"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    post_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )

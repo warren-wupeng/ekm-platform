@@ -301,7 +301,8 @@
     "sort_downloads": "下载量",
     "sort_likes": "点赞数",
     "hot_top10": "热门 Top 10",
-    "no_matching_docs": "暂无匹配文档"
+    "no_matching_docs": "暂无匹配文档",
+    "no_categories": "暂无分类"
   },
   "community": {
     "page_title": "社区",
@@ -491,7 +492,8 @@
     "calls_count": "{{count}} 次（{{pct}}%）",
     "key_show": "显示 Key",
     "key_hide": "隐藏 Key",
-    "pagination_total": "共 {{total}} 条"
+    "pagination_total": "共 {{total}} 条",
+    "key_created_once": "API Key 已创建 — 请立即复制，此后无法再次查看完整 Key"
   },
   "history": {
     "page_title": "版本历史",
@@ -507,7 +509,11 @@
     "rollback_success": "已回滚到 {{version}}，当前版本已保存为新历史记录",
     "compare_label": "对比：",
     "added_lines": "+{{count}} 行",
-    "removed_lines": "-{{count}} 行"
+    "removed_lines": "-{{count}} 行",
+    "no_versions": "暂无版本记录",
+    "no_content": "暂无内容",
+    "select_version": "请选择版本查看内容",
+    "current_label": "v{{v}}（当前）"
   },
   "ontology": {
     "page_title": "Ontology 管理",

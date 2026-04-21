@@ -1,29 +1,31 @@
 'use client'
 import { useState } from 'react'
+import useSWR from 'swr'
 import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Select, Table, Tag, Tabs, Statistic, Card,
-  Space, Tooltip, Popconfirm, Badge, Switch,
+  Space, Tooltip, Popconfirm, Badge, Alert,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   CodeOutlined, KeyOutlined, SendOutlined, PlusOutlined,
   DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
-  BarChartOutlined, ReloadOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { nanoid } from 'nanoid'
+import api from '@/lib/api'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface ApiKey {
-  id: string
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ApiToken {
+  id: number
   name: string
-  key: string
-  created: string
-  lastUsed: string
-  callCount: number
-  active: boolean
+  token_prefix: string
+  scopes: string[]
+  is_active: boolean
+  created_at: string | null
 }
 
 interface RequestLog {
@@ -44,171 +46,195 @@ interface EndpointDef {
   defaultBody: string
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_KEYS: ApiKey[] = [
-  { id: 'k1', name: '开发测试', key: 'ekm_dev_4x8mK9pQrL2nT7vZ', created: '2026-04-01', lastUsed: '2026-04-18', callCount: 1243, active: true },
-  { id: 'k2', name: '生产环境', key: 'ekm_prod_9aRmW3cDeFgH1jKL', created: '2026-03-15', lastUsed: '2026-04-17', callCount: 8720, active: true },
-  { id: 'k3', name: '旧版（已停用）', key: 'ekm_old_Xb5YzQpNuVsT2wMo', created: '2026-01-10', lastUsed: '2026-03-01', callCount: 340, active: false },
-]
-
-const MOCK_LOGS: RequestLog[] = [
-  { id: 'l1', method: 'POST', endpoint: '/api/v1/search', status: 200, latencyMs: 143, timestamp: '2026-04-18 14:32:10', requestBody: '{"query":"知识管理","limit":10}', responseBody: '{"results":[...],"total":34}' },
-  { id: 'l2', method: 'POST', endpoint: '/api/v1/kg/query', status: 200, latencyMs: 287, timestamp: '2026-04-18 14:30:55', requestBody: '{"entity":"Kira Chen","depth":2}', responseBody: '{"nodes":[...],"edges":[...]}' },
-  { id: 'l3', method: 'GET',  endpoint: '/api/v1/documents/k1', status: 200, latencyMs: 56, timestamp: '2026-04-18 14:28:01', requestBody: '', responseBody: '{"id":"k1","name":"EKM产品需求文档v2.pdf",...}' },
-  { id: 'l4', method: 'POST', endpoint: '/api/v1/ai/summarize', status: 200, latencyMs: 1840, timestamp: '2026-04-18 14:25:33', requestBody: '{"docId":"k1"}', responseBody: '{"summary":"EKM 平台核心需求包含..."}' },
-  { id: 'l5', method: 'POST', endpoint: '/api/v1/search', status: 429, latencyMs: 12, timestamp: '2026-04-18 14:20:00', requestBody: '{"query":"test"}', responseBody: '{"error":"Rate limit exceeded"}' },
-  { id: 'l6', method: 'POST', endpoint: '/api/v1/kg/extract', status: 500, latencyMs: 3200, timestamp: '2026-04-18 14:15:44', requestBody: '{"docId":"k7"}', responseBody: '{"error":"Internal server error"}' },
-]
-
 const ENDPOINTS: EndpointDef[] = [
-  { method: 'POST', path: '/api/v1/search',       description: '全文搜索',          defaultBody: '{\n  "query": "知识管理",\n  "limit": 10,\n  "filters": {}\n}' },
-  { method: 'POST', path: '/api/v1/kg/query',      description: 'KG 图查询',         defaultBody: '{\n  "entity": "EKM Platform",\n  "depth": 2\n}' },
-  { method: 'POST', path: '/api/v1/kg/extract',    description: 'KG 实体抽取',       defaultBody: '{\n  "docId": "k1"\n}' },
-  { method: 'POST', path: '/api/v1/ai/summarize',  description: 'AI 文档摘要',       defaultBody: '{\n  "docId": "k1"\n}' },
-  { method: 'POST', path: '/api/v1/ai/recommend',  description: '相关内容推荐',      defaultBody: '{\n  "docId": "k1",\n  "limit": 5\n}' },
-  { method: 'GET',  path: '/api/v1/documents/{id}','description': '获取文档详情',   defaultBody: '' },
-  { method: 'GET',  path: '/api/v1/health',        description: 'API 健康检查',     defaultBody: '' },
+  { method: 'GET',  path: '/api/v1/search',            description: '全文搜索',      defaultBody: '' },
+  { method: 'GET',  path: '/api/v1/knowledge',         description: '知识库列表',    defaultBody: '' },
+  { method: 'GET',  path: '/api/v1/categories',        description: '分类树',        defaultBody: '' },
+  { method: 'POST', path: '/api/v1/chat/stream',       description: 'RAG 对话',     defaultBody: '{\n  "query": "知识管理",\n  "top_k": 5\n}' },
+  { method: 'GET',  path: '/api/v1/health',            description: 'API 健康检查',  defaultBody: '' },
 ]
 
 const STATUS_COLOR: Record<number, string> = { 200: 'success', 201: 'success', 400: 'warning', 401: 'warning', 429: 'warning', 500: 'error', 503: 'error' }
 function statusColor(code: number) { return STATUS_COLOR[code] ?? 'default' }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
 export default function DeveloperPage() {
   const { t } = useTranslation()
   const { message } = App.useApp()
-  const [apiKeys, setApiKeys]   = useState<ApiKey[]>(MOCK_KEYS)
-  const [logs, setLogs]         = useState<RequestLog[]>(MOCK_LOGS)
   const [activeTab, setActiveTab] = useState('console')
 
+  // Agent tokens from API
+  const { data, isLoading: keysLoading, mutate: mutateKeys } = useSWR<{ tokens: ApiToken[] }>(
+    '/api/v1/agent-tokens',
+    (url: string) => api.get(url).then((r) => r.data),
+  )
+  const apiTokens: ApiToken[] = data?.tokens ?? []
+
+  // Newly-created plaintext token — shown once only
+  const [newPlaintext, setNewPlaintext] = useState<string | null>(null)
+
+  // Session-local request logs (cleared on refresh)
+  const [logs, setLogs] = useState<RequestLog[]>([])
+
   // Console state
-  const [selectedEp, setSelectedEp]     = useState<EndpointDef>(ENDPOINTS[0])
-  const [requestBody, setRequestBody]   = useState(ENDPOINTS[0].defaultBody)
-  const [selectedKeyId, setSelectedKeyId] = useState(MOCK_KEYS[0].id)
-  const [sending, setSending]           = useState(false)
-  const [response, setResponse]         = useState('')
+  const [selectedEp, setSelectedEp]         = useState<EndpointDef>(ENDPOINTS[0])
+  const [requestBody, setRequestBody]       = useState(ENDPOINTS[0].defaultBody)
+  const [sending, setSending]               = useState(false)
+  const [response, setResponse]             = useState('')
   const [responseStatus, setResponseStatus] = useState<number | null>(null)
-  const [responseMs, setResponseMs]     = useState<number | null>(null)
+  const [responseMs, setResponseMs]         = useState<number | null>(null)
 
-  // API key UI
-  const [newKeyName, setNewKeyName] = useState('')
-  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
+  // API key create UI
+  const [newKeyName, setNewKeyName]   = useState('')
+  const [creating, setCreating]       = useState(false)
+  const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set())
 
-  function toggleReveal(id: string) {
-    setRevealedKeys((prev) => {
+  function toggleReveal(id: number) {
+    setRevealedIds((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
   }
 
-  function copyKey(key: string) {
-    navigator.clipboard.writeText(key)
+  function copyText(text: string) {
+    navigator.clipboard.writeText(text)
     message.success(t('developer.key_copied'))
   }
 
-  function createKey() {
+  async function createKey() {
     if (!newKeyName.trim()) { message.warning(t('developer.key_name_required')); return }
-    const newKey: ApiKey = {
-      id: nanoid(6), name: newKeyName.trim(),
-      key: `ekm_${nanoid(18)}`, created: dayjs().format('YYYY-MM-DD'),
-      lastUsed: '—', callCount: 0, active: true,
+    setCreating(true)
+    try {
+      const res = await api.post('/api/v1/agent-tokens', { name: newKeyName.trim(), scopes: ['knowledge:read'] })
+      setNewPlaintext(res.data.token ?? null)
+      setNewKeyName('')
+      mutateKeys()
+      message.success(t('developer.key_created'))
+    } catch {
+      message.error(t('common.error_generic'))
+    } finally {
+      setCreating(false)
     }
-    setApiKeys((prev) => [newKey, ...prev])
-    setNewKeyName('')
-    message.success(t('developer.key_created'))
   }
 
-  function revokeKey(id: string) {
-    setApiKeys((prev) => prev.map((k) => k.id === id ? { ...k, active: false } : k))
-    message.success(t('developer.key_revoked'))
+  async function revokeKey(id: number) {
+    try {
+      await api.delete(`/api/v1/agent-tokens/${id}`)
+      mutateKeys()
+      message.success(t('developer.key_revoked'))
+    } catch {
+      message.error(t('common.error_generic'))
+    }
   }
 
   async function sendRequest() {
-    const key = apiKeys.find((k) => k.id === selectedKeyId)
-    if (!key?.active) { message.error(t('developer.key_invalid')); return }
     setSending(true)
     setResponse('')
     setResponseStatus(null)
     const t0 = Date.now()
-    await new Promise((r) => setTimeout(r, 300 + Math.random() * 1200))
-    const ms = Date.now() - t0
-
-    // Mock response
-    const isError = Math.random() < 0.1
-    const status  = isError ? 500 : 200
-    const mockResp = isError
-      ? JSON.stringify({ error: 'Internal server error', requestId: nanoid(8) }, null, 2)
-      : JSON.stringify({
-          success: true,
-          data: selectedEp.path.includes('search')
-            ? { results: [{ id: 'k1', title: '技术架构设计.docx', score: 0.92 }], total: 1 }
-            : selectedEp.path.includes('kg')
-            ? { nodes: [{ id: 'n1', label: 'EKM Platform', type: 'Project' }], edges: [] }
-            : { summary: 'EKM 平台是一个企业级知识管理系统…' },
-          latencyMs: ms,
-          requestId: nanoid(8),
-        }, null, 2)
-
-    setResponse(mockResp)
-    setResponseStatus(status)
-    setResponseMs(ms)
-
-    // Append to log
-    const newLog: RequestLog = {
-      id: nanoid(6), method: selectedEp.method, endpoint: selectedEp.path,
-      status, latencyMs: ms, timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-      requestBody: requestBody.trim(), responseBody: mockResp,
+    try {
+      let res
+      if (selectedEp.method === 'GET') {
+        res = await api.get(selectedEp.path)
+      } else {
+        const body = requestBody.trim() ? JSON.parse(requestBody) : undefined
+        res = await api.post(selectedEp.path, body)
+      }
+      const ms     = Date.now() - t0
+      const text   = JSON.stringify(res.data, null, 2)
+      const status = res.status
+      setResponse(text)
+      setResponseStatus(status)
+      setResponseMs(ms)
+      appendLog(selectedEp.method, selectedEp.path, status, ms, requestBody, text)
+    } catch (err: any) {
+      const ms     = Date.now() - t0
+      const status = err?.response?.status ?? 500
+      const text   = JSON.stringify(err?.response?.data ?? { error: 'Request failed' }, null, 2)
+      setResponse(text)
+      setResponseStatus(status)
+      setResponseMs(ms)
+      appendLog(selectedEp.method, selectedEp.path, status, ms, requestBody, text)
+    } finally {
+      setSending(false)
     }
-    setLogs((prev) => [newLog, ...prev])
-    setSending(false)
   }
 
-  // Stats
+  function appendLog(method: string, endpoint: string, status: number, ms: number, reqBody: string, respBody: string) {
+    const entry: RequestLog = {
+      id: nanoid(6), method, endpoint, status, latencyMs: ms,
+      timestamp: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      requestBody: reqBody.trim(), responseBody: respBody,
+    }
+    setLogs((prev) => [entry, ...prev])
+  }
+
   const totalCalls  = logs.length
   const successRate = Math.round(logs.filter((l) => l.status < 400).length / Math.max(totalCalls, 1) * 100)
   const avgLatency  = Math.round(logs.reduce((s, l) => s + l.latencyMs, 0) / Math.max(totalCalls, 1))
   const errorCount  = logs.filter((l) => l.status >= 400).length
 
-  const keyColumns: ColumnsType<ApiKey> = [
+  const keyColumns: ColumnsType<ApiToken> = [
     {
       title: t('developer.col_name'), dataIndex: 'name', key: 'name',
       render: (v: string, r) => (
         <span className="flex items-center gap-2">
           <span className="text-sm font-medium text-slate-700">{v}</span>
-          {!r.active && <Tag color="default" className="text-xs">{t('developer.revoked')}</Tag>}
+          {!r.is_active && <Tag color="default" className="text-xs">{t('developer.revoked')}</Tag>}
         </span>
       ),
     },
     {
       title: t('developer.col_key'), key: 'key',
-      render: (_, r) => (
-        <span className="flex items-center gap-2 font-mono text-xs text-slate-500">
-          {revealedKeys.has(r.id) ? r.key : r.key.replace(/(?<=.{12}).+(?=.{4})/, '••••••••')}
-          <Tooltip title={revealedKeys.has(r.id) ? t('developer.key_hide') : t('developer.key_show')}>
-            <button className="text-slate-400 hover:text-slate-600" onClick={() => toggleReveal(r.id)}>
-              {revealedKeys.has(r.id) ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-            </button>
-          </Tooltip>
-          <Tooltip title={t('common.copy')}>
-            <button className="text-slate-400 hover:text-primary" onClick={() => copyKey(r.key)}>
-              <CopyOutlined />
-            </button>
-          </Tooltip>
+      render: (_, r) => {
+        const display = revealedIds.has(r.id) ? `${r.token_prefix}••••••••` : `${r.token_prefix.slice(0, 8)}••••`
+        return (
+          <span className="flex items-center gap-2 font-mono text-xs text-slate-500">
+            {display}
+            <Tooltip title={revealedIds.has(r.id) ? t('developer.key_hide') : t('developer.key_show')}>
+              <button className="text-slate-400 hover:text-slate-600" onClick={() => toggleReveal(r.id)}>
+                {revealedIds.has(r.id) ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              </button>
+            </Tooltip>
+            <Tooltip title={t('common.copy')}>
+              <button className="text-slate-400 hover:text-primary" onClick={() => copyText(r.token_prefix)}>
+                <CopyOutlined />
+              </button>
+            </Tooltip>
+          </span>
+        )
+      },
+    },
+    {
+      title: t('developer.col_created'), dataIndex: 'created_at', key: 'created_at', width: 110,
+      render: (v: string | null) => <span className="text-xs text-slate-400">{v?.slice(0, 10) ?? '—'}</span>,
+    },
+    {
+      title: 'Scopes', dataIndex: 'scopes', key: 'scopes',
+      render: (scopes: string[]) => (
+        <span className="flex gap-1 flex-wrap">
+          {scopes.map((s) => <Tag key={s} className="text-[10px] m-0">{s}</Tag>)}
         </span>
       ),
     },
-    { title: t('developer.col_created'), dataIndex: 'created', key: 'created', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
-    { title: t('developer.col_last_used'), dataIndex: 'lastUsed', key: 'lastUsed', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
-    { title: t('developer.col_calls'), dataIndex: 'callCount', key: 'callCount', width: 90, align: 'center', render: (v: number) => <span className="text-xs text-slate-600 font-medium">{v.toLocaleString()}</span>, sorter: (a, b) => a.callCount - b.callCount },
     {
       title: t('developer.col_actions'), key: 'actions', width: 100, align: 'center',
       render: (_, r) => (
         <Space size={4}>
-          {r.active && (
-            <Popconfirm title={t('developer.revoke_confirm')} description={t('developer.revoke_desc')}
-              onConfirm={() => revokeKey(r.id)} okText={t('common.revoke')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}>
-              <Button size="small" danger ghost icon={<DeleteOutlined />} className="text-xs">{t('common.revoke')}</Button>
+          {r.is_active && (
+            <Popconfirm
+              title={t('developer.revoke_confirm')}
+              description={t('developer.revoke_desc')}
+              onConfirm={() => revokeKey(r.id)}
+              okText={t('common.revoke')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+            >
+              <Button size="small" danger ghost icon={<DeleteOutlined />} className="text-xs">
+                {t('common.revoke')}
+              </Button>
             </Popconfirm>
           )}
         </Space>
@@ -251,17 +277,6 @@ export default function DeveloperPage() {
                   {/* Left: request builder */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
                     <p className="text-sm font-semibold text-slate-700">{t('developer.build_request')}</p>
-
-                    {/* API Key selector */}
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block">API Key</label>
-                      <Select
-                        value={selectedKeyId}
-                        onChange={setSelectedKeyId}
-                        style={{ width: '100%' }}
-                        options={apiKeys.filter((k) => k.active).map((k) => ({ label: k.name, value: k.id }))}
-                      />
-                    </div>
 
                     {/* Endpoint selector */}
                     <div>
@@ -347,6 +362,27 @@ export default function DeveloperPage() {
               label: <span><KeyOutlined className="mr-1" />{t('developer.tab_keys')}</span>,
               children: (
                 <div className="space-y-4">
+                  {/* One-time plaintext reveal */}
+                  {newPlaintext && (
+                    <Alert
+                      type="success"
+                      showIcon
+                      closable
+                      onClose={() => setNewPlaintext(null)}
+                      message={t('developer.key_created_once')}
+                      description={
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="font-mono text-xs bg-white px-2 py-1 rounded border border-slate-200 flex-1 break-all">
+                            {newPlaintext}
+                          </code>
+                          <Button size="small" icon={<CopyOutlined />} onClick={() => copyText(newPlaintext)}>
+                            {t('common.copy')}
+                          </Button>
+                        </div>
+                      }
+                    />
+                  )}
+
                   {/* Create new key */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
                     <p className="text-sm font-semibold text-slate-700 mb-3">{t('developer.create_key_title')}</p>
@@ -358,13 +394,21 @@ export default function DeveloperPage() {
                         style={{ maxWidth: 300 }}
                         onPressEnter={createKey}
                       />
-                      <Button type="primary" icon={<PlusOutlined />} onClick={createKey}>
+                      <Button type="primary" icon={<PlusOutlined />} loading={creating} onClick={createKey}>
                         {t('common.save')}
                       </Button>
                     </div>
                   </div>
+
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
-                    <Table dataSource={apiKeys} columns={keyColumns} rowKey="id" size="small" pagination={false} />
+                    <Table
+                      dataSource={apiTokens}
+                      columns={keyColumns}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      loading={keysLoading}
+                    />
                   </div>
                 </div>
               ),
@@ -382,8 +426,10 @@ export default function DeveloperPage() {
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-slate-700">{t('developer.recent_requests', { count: logs.length })}</p>
-                    <Button size="small" icon={<ReloadOutlined />} onClick={() => setLogs(MOCK_LOGS)}>{t('common.reset')}</Button>
+                    <p className="text-sm font-semibold text-slate-700">
+                      {t('developer.recent_requests', { count: logs.length })}
+                    </p>
+                    <Button size="small" onClick={() => setLogs([])}>{t('common.reset')}</Button>
                   </div>
                   <Table
                     dataSource={logs}
@@ -419,9 +465,9 @@ export default function DeveloperPage() {
                   <div className="grid grid-cols-4 gap-4">
                     {[
                       { title: t('developer.stat_total_calls'), value: totalCalls, suffix: t('dashboard.unit_times'), color: '#7c3aed' },
-                      { title: t('developer.stat_success_rate'), value: successRate, suffix: '%', color: '#16a34a' },
-                      { title: t('developer.stat_avg_latency'), value: avgLatency,  suffix: 'ms', color: '#2563eb' },
-                      { title: t('developer.stat_errors'), value: errorCount,  suffix: t('dashboard.unit_times'), color: '#dc2626' },
+                      { title: t('developer.stat_success_rate'), value: successRate, suffix: '%',                       color: '#16a34a' },
+                      { title: t('developer.stat_avg_latency'), value: avgLatency,  suffix: 'ms',                      color: '#2563eb' },
+                      { title: t('developer.stat_errors'),      value: errorCount,  suffix: t('dashboard.unit_times'), color: '#dc2626' },
                     ].map((s) => (
                       <Card key={s.title} className="rounded-2xl border-slate-100">
                         <Statistic
@@ -438,7 +484,7 @@ export default function DeveloperPage() {
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
                     <p className="text-sm font-semibold text-slate-700 mb-4">{t('developer.endpoint_distribution')}</p>
                     <div className="space-y-2">
-                      {ENDPOINTS.slice(0, 5).map((ep) => {
+                      {ENDPOINTS.map((ep) => {
                         const count = logs.filter((l) => l.endpoint === ep.path).length
                         const pct   = Math.round(count / Math.max(totalCalls, 1) * 100)
                         return (

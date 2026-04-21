@@ -9,6 +9,7 @@ import {
   EditOutlined, SaveOutlined, SendOutlined, ArrowLeftOutlined,
   PictureOutlined, DeleteOutlined,
 } from '@ant-design/icons'
+import api from '@/lib/api'
 
 // ── Minimal markdown → HTML renderer ─────────────────────────────────────────
 
@@ -162,10 +163,16 @@ export default function NewPostPage() {
     if (!title.trim()) { message.warning(t('community.new.title_required')); return }
     if (!content.trim()) { message.warning(t('community.new.content_required')); return }
     setPublishing(true)
-    await new Promise((r) => setTimeout(r, 800))  // mock API
-    localStorage.removeItem(DRAFT_KEY)
-    message.success(t('community.new.published'))
-    router.push('/community')
+    try {
+      await api.post('/api/v1/posts', { title: title.trim(), body: content.trim() })
+      localStorage.removeItem(DRAFT_KEY)
+      message.success(t('community.new.published'))
+      router.push('/community')
+    } catch {
+      message.error(t('common.error_generic'))
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const wordCount = content.length

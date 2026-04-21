@@ -22,12 +22,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
 import logging
 
 from app.core.deps import CurrentUser, DB
-from app.models.community import Post, Reply, ReplyLike
+from app.models.community import Post, PostLike, Reply, ReplyLike
 from app.models.notification import NotificationType
 from app.models.user import User, UserRole
 from app.services.es_client import es
@@ -111,13 +112,16 @@ class ReplyCreate(BaseModel):
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
-def _post_dict(p: Post) -> dict:
+def _post_dict(p: Post, liked_by_me: bool = False) -> dict:
     return {
         "id": p.id,
         "author_id": p.author_id,
+        "author_name": p.author.display_name if p.author else "",
         "title": p.title,
         "body": p.body,
         "reply_count": p.reply_count,
+        "like_count": p.like_count,
+        "liked_by_me": liked_by_me,
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
 
@@ -164,11 +168,22 @@ async def list_posts(
     offset = (page - 1) * page_size
     total = (await db.execute(select(func.count()).select_from(Post))).scalar_one()
     rows = (await db.execute(
-        select(Post).order_by(Post.created_at.desc()).offset(offset).limit(page_size)
+        select(Post).options(selectinload(Post.author)).order_by(Post.created_at.desc()).offset(offset).limit(page_size)
     )).scalars().all()
+    # Bulk-check which posts the current user has liked
+    post_ids = [p.id for p in rows]
+    liked_set: set[int] = set()
+    if post_ids:
+        liked_rows = (await db.execute(
+            select(PostLike.post_id).where(
+                PostLike.post_id.in_(post_ids),
+                PostLike.user_id == user.id,
+            )
+        )).scalars().all()
+        liked_set = set(liked_rows)
     return {
         "page": page, "page_size": page_size, "total": total,
-        "posts": [_post_dict(p) for p in rows],
+        "posts": [_post_dict(p, liked_by_me=p.id in liked_set) for p in rows],
     }
 
 
@@ -178,6 +193,7 @@ async def create_post(payload: PostCreate, db: DB, user: CurrentUser):
     db.add(p)
     await db.commit()
     await db.refresh(p)
+    await db.refresh(p, attribute_names=["author"])
     # Two-phase: commit first, then index. If ES is down the post is still
     # visible via the normal API; only unified search is temporarily stale.
     await _es_index_post(p)
@@ -186,8 +202,51 @@ async def create_post(payload: PostCreate, db: DB, user: CurrentUser):
 
 @posts_router.get("/{post_id}")
 async def get_post(post_id: int, db: DB, user: CurrentUser):
+    p = (await db.execute(
+        select(Post).options(selectinload(Post.author)).where(Post.id == post_id)
+    )).scalar_one_or_none()
+    if p is None:
+        raise HTTPException(status_code=404, detail="post not found")
+    liked = (await db.execute(
+        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+    )).scalar_one_or_none()
+    return _post_dict(p, liked_by_me=liked is not None)
+
+
+@posts_router.put("/{post_id}/like")
+async def like_post(post_id: int, db: DB, user: CurrentUser):
+    """Idempotent: PUT returns the current like state regardless of prior."""
     p = await _load_post(db, post_id)
-    return _post_dict(p)
+    existing = (await db.execute(
+        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+    )).scalar_one_or_none()
+    if existing:
+        return {"post_id": post_id, "liked": True, "like_count": p.like_count}
+    db.add(PostLike(post_id=post_id, user_id=user.id))
+    p.like_count = (p.like_count or 0) + 1
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Raced with a concurrent PUT — unique constraint caught it.
+        await db.rollback()
+        p = await _load_post(db, post_id)
+        return {"post_id": post_id, "liked": True, "like_count": p.like_count}
+    return {"post_id": post_id, "liked": True, "like_count": p.like_count}
+
+
+@posts_router.delete("/{post_id}/like")
+async def unlike_post(post_id: int, db: DB, user: CurrentUser):
+    """Idempotent: DELETE returns the current like state regardless of prior."""
+    p = await _load_post(db, post_id)
+    existing = (await db.execute(
+        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+    )).scalar_one_or_none()
+    if not existing:
+        return {"post_id": post_id, "liked": False, "like_count": p.like_count}
+    await db.delete(existing)
+    p.like_count = max((p.like_count or 0) - 1, 0)
+    await db.commit()
+    return {"post_id": post_id, "liked": False, "like_count": p.like_count}
 
 
 # ─── Replies ────────────────────────────────────────────────────────────────
