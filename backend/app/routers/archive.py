@@ -4,6 +4,8 @@ Endpoints:
   GET    /api/v1/archive/items             list archived knowledge items
                                             - regular user: own uploads only
                                             - km_ops/admin: all
+  POST   /api/v1/archive/request           manually archive an item
+                                            - owner or admin can archive
   GET    /api/v1/archive/rules             list rules (admin)
   POST   /api/v1/archive/rules             create
   GET    /api/v1/archive/rules/{id}        one
@@ -93,6 +95,50 @@ async def list_archived_items(
             }
             for item in rows
         ],
+    }
+
+
+# ── Manual archive request ────────────────────────────────────────
+
+class ArchiveRequestIn(BaseModel):
+    knowledge_item_id: int
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/request", status_code=status.HTTP_200_OK)
+async def archive_item(
+    body: ArchiveRequestIn,
+    user: CurrentUser,
+    db: DB,
+):
+    """Manually archive a knowledge item.
+
+    Owner or admin can archive. Already-archived items are a no-op (200).
+    """
+    item = (await db.execute(
+        select(KnowledgeItem).where(KnowledgeItem.id == body.knowledge_item_id)
+    )).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="knowledge item not found",
+        )
+    # Permission: owner or admin
+    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="only item owner or admin can archive",
+        )
+    if not item.is_archived:
+        item.is_archived = True
+        item.archived_at = datetime.now(timezone.utc)
+        await db.flush()
+        await db.commit()
+    return {
+        "id": item.id,
+        "name": item.name,
+        "is_archived": item.is_archived,
+        "archived_at": item.archived_at.isoformat() if item.archived_at else None,
     }
 
 
