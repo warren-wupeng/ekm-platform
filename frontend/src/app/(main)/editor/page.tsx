@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import {
-  Button, Input, Tag, Divider, Spin, Tooltip, message,
+  App, Button, Input, Tag, Divider, Spin, Tooltip,
 } from 'antd'
 import {
   RobotOutlined, ThunderboltOutlined, EditOutlined,
@@ -86,6 +86,7 @@ function simulateAI(action: AIAction, context: string): Promise<string> {
 }
 
 export default function EditorPage() {
+  const { message } = App.useApp()
   const router = useRouter()
   const [doc, setDoc]           = useState(INITIAL_DOC)
   const [selected, setSelected] = useState('')

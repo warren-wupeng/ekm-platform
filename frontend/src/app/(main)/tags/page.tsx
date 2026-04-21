@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import {
-  Button, Input, Tag, Select, Popconfirm, message,
+  App, Button, Input, Tag, Select, Popconfirm,
   Modal, Form, ColorPicker, Tabs, Checkbox, Tooltip,
 } from 'antd'
 import {
@@ -172,6 +172,7 @@ function CategoryTree({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TagsPage() {
+  const { message } = App.useApp()
   const [categories, setCategories]       = useState<Category[]>(INIT_CATEGORIES)
   const [tags, setTags]                   = useState<TagItem[]>(INIT_TAGS)
   const [tagSearch, setTagSearch]         = useState('')

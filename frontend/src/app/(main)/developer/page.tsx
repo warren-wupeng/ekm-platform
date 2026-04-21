@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import {
-  Button, Input, Select, Table, Tag, Tabs, Statistic, Card,
-  Space, Tooltip, Popconfirm, message, Badge, Switch,
+  App, Button, Input, Select, Table, Tag, Tabs, Statistic, Card,
+  Space, Tooltip, Popconfirm, Badge, Switch,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -74,6 +74,7 @@ function statusColor(code: number) { return STATUS_COLOR[code] ?? 'default' }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DeveloperPage() {
+  const { message } = App.useApp()
   const [apiKeys, setApiKeys]   = useState<ApiKey[]>(MOCK_KEYS)
   const [logs, setLogs]         = useState<RequestLog[]>(MOCK_LOGS)
   const [activeTab, setActiveTab] = useState('console')

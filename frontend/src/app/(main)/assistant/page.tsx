@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Input, Tag, Tooltip, message as antdMessage } from 'antd'
+import { App, Button, Input, Tag, Tooltip } from 'antd'
 import {
   SendOutlined, ClearOutlined, RobotOutlined, UserOutlined,
   FileTextOutlined, LinkOutlined,
@@ -24,6 +24,7 @@ interface Message {
 const SOURCE_PANEL_W = 320
 
 export default function AssistantPage() {
+  const { message: antdMessage } = App.useApp()
   const { t } = useTranslation()
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])

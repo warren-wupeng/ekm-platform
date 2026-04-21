@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Form, Input, Divider, message } from 'antd'
+import { App, Button, Form, Input, Divider } from 'antd'
 import {
   UserOutlined, LockOutlined, ApartmentOutlined,
   ReadOutlined, TeamOutlined, BranchesOutlined,
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const router = useRouter()
   const { t } = useTranslation()
   const { setAuth } = useAuthStore()
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [ssoLoading, setSsoLoading] = useState(false)
   const [form] = Form.useForm()

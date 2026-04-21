@@ -1,8 +1,8 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Table, Tag, Button, Modal, Form, Input, Space,
-  Tabs, Badge, Tooltip, message, Popconfirm, Timeline,
+  App, Table, Tag, Button, Modal, Form, Input, Space,
+  Tabs, Badge, Tooltip, Popconfirm, Timeline,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -49,6 +49,7 @@ interface RestoreRequest {
 // ── Component ──────────────────────────────────────────────────────
 
 export default function ArchivePage() {
+  const { message } = App.useApp()
   const { t } = useTranslation()
 
   const FILE_TYPE_LABEL: Record<string, string> = {

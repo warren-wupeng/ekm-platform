@@ -19,8 +19,8 @@ import {
 import type { Node, Edge, Connection, NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
-  Button, Input, Drawer, Descriptions, Tag, Tooltip, Select,
-  Space, Popconfirm, message, Modal, Form,
+  App, Button, Input, Drawer, Descriptions, Tag, Tooltip, Select,
+  Space, Popconfirm, Modal, Form,
 } from 'antd'
 import {
   SearchOutlined, PlusOutlined, DeleteOutlined,
@@ -107,6 +107,7 @@ const INIT_EDGES: Edge[] = [
 ]
 
 function KGCanvasInner() {
+  const { message } = App.useApp()
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<EntityData>>(INIT_NODES as Node<EntityData>[])
   const [edges, setEdges, onEdgesChange] = useEdgesState(INIT_EDGES)

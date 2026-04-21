@@ -1,8 +1,8 @@
 'use client'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
-  Input, Select, Space, Segmented, Empty, Spin, Tag, Tooltip,
-  AutoComplete, Skeleton, message,
+  App, Input, Select, Space, Segmented, Empty, Spin, Tag, Tooltip,
+  AutoComplete, Skeleton,
 } from 'antd'
 import {
   SearchOutlined, FilterOutlined, SortAscendingOutlined,
@@ -35,6 +35,7 @@ const DEFAULT_FILTERS: SearchFilters = {
 }
 
 export default function SearchPage() {
+  const { message } = App.useApp()
   const [query, setQuery]         = useState('')
   const [inputVal, setInputVal]   = useState('')
   const [filters, setFilters]     = useState<SearchFilters>(DEFAULT_FILTERS)

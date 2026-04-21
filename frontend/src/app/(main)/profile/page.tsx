@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Avatar, Tag, Button, Tabs, Form, Input, Select, message, Badge, Drawer } from 'antd'
+import { App, Avatar, Tag, Button, Tabs, Form, Input, Select, Badge, Drawer } from 'antd'
 import {
   EditOutlined, FileTextOutlined, TeamOutlined,
   CheckOutlined, LikeOutlined, StarOutlined,
@@ -53,6 +53,7 @@ const NOTIF_ICON: Record<string, React.ReactNode> = {
 }
 
 export default function ProfilePage() {
+  const { message } = App.useApp()
   const { user } = useAuth()
   const [editing, setEditing]               = useState(false)
   const [msgOpen, setMsgOpen]               = useState(false)

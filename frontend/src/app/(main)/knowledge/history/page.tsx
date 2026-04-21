@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Button, Tag, Tooltip, Popconfirm, message, Badge } from 'antd'
+import { App, Button, Tag, Tooltip, Popconfirm, Badge } from 'antd'
 import {
   ClockCircleOutlined, RollbackOutlined, StarOutlined,
   StarFilled, ArrowLeftOutlined, SwapOutlined,
@@ -157,6 +157,7 @@ const LINE_TEXT_STYLE: Record<string, string> = {
 }
 
 export default function VersionHistoryPage() {
+  const { message } = App.useApp()
   const router = useRouter()
   const [versions, setVersions] = useState<VersionRecord[]>(MOCK_VERSIONS)
   const [selectedLeft, setSelectedLeft]   = useState<VersionRecord>(MOCK_VERSIONS[1])
