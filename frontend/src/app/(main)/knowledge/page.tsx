@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin, Alert } from 'antd'
+import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin, Alert, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useTranslation } from 'react-i18next'
 import {
@@ -9,8 +9,9 @@ import {
   DeleteOutlined, EyeOutlined, TagOutlined, FireOutlined,
   FilePdfOutlined, FileWordOutlined, FileExcelOutlined, FilePptOutlined,
   FileZipOutlined, FileImageOutlined, FileTextOutlined, FileOutlined,
-  SoundOutlined, VideoCameraOutlined, HistoryOutlined,
+  SoundOutlined, VideoCameraOutlined, HistoryOutlined, InboxOutlined,
 } from '@ant-design/icons'
+import api from '@/lib/api'
 import UploadZone from '@/components/upload/UploadZone'
 import { formatFileSize } from '@/lib/mockUpload'
 import { useKnowledgeList } from '@/lib/useKnowledgeList'
@@ -91,6 +92,16 @@ export default function KnowledgePage() {
     // Reload the list so the newly indexed file appears; still keep the
     // panel open so the user can see the completed parse state.
     refresh()
+  }
+
+  async function handleArchive(id: string) {
+    try {
+      await api.post('/api/v1/archive/request', { knowledge_item_id: Number(id) })
+      message.success(t('knowledge.archived') ?? '已归档')
+      removeItem(id)
+    } catch {
+      message.error(t('common.error') ?? '操作失败')
+    }
   }
 
   function handleDelete(id: string) {
@@ -211,6 +222,20 @@ export default function KnowledgePage() {
               onClick={() => router.push(`/knowledge/history?id=${record.id}`)}
             />
           </Tooltip>
+          <Popconfirm
+            title={t('knowledge.archive_confirm') ?? '确认归档此文件？'}
+            onConfirm={() => handleArchive(record.id)}
+            okText={t('common.confirm') ?? '确认'}
+            cancelText={t('common.cancel')}
+          >
+            <Tooltip title={t('knowledge.archive_button') ?? '归档'}>
+              <Button
+                type="text" size="small"
+                icon={<InboxOutlined />}
+                className="text-slate-400 hover:text-orange-500"
+              />
+            </Tooltip>
+          </Popconfirm>
           <Popconfirm
             title={t('knowledge.delete_confirm')}
             description={t('knowledge.delete_confirm')}
