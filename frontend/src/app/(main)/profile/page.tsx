@@ -83,7 +83,7 @@ export default function ProfilePage() {
               <p className="text-sm text-slate-500 mt-0.5">{email}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {user?.department && <Tag color="blue" className="text-xs">{user.department}</Tag>}
-                {user?.roles?.length > 0 && <Tag color="purple" className="text-xs">{user.roles[0]}</Tag>}
+                {user?.roles?.[0] && <Tag color="purple" className="text-xs">{user.roles[0]}</Tag>}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
