@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Tag, Spin, Tooltip, Badge,
@@ -9,14 +9,13 @@ import {
   RobotOutlined, ThunderboltOutlined, EditOutlined,
   FileTextOutlined, SearchOutlined, SendOutlined,
   CopyOutlined, CheckOutlined, ArrowLeftOutlined,
-  BulbOutlined, CloudOutlined, WifiOutlined,
+  WifiOutlined, DisconnectOutlined,
 } from '@ant-design/icons'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import OnlineUsers from '@/components/editor/OnlineUsers'
-import type { CollabUser } from '@/components/editor/CollabEditor'
+import type { CollabUser, ConnectionStatus } from '@/components/editor/CollabEditor'
 
-// Lazy-load CollabEditor to avoid SSR issues with Yjs
 const CollabEditor = dynamic(
   () => import('@/components/editor/CollabEditor'),
   { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><Spin /></div> },
@@ -45,7 +44,11 @@ const MOCK_REFS: KnowledgeRef[] = [
 ]
 
 const COLLAB_URL = process.env.NEXT_PUBLIC_COLLAB_URL ?? 'ws://localhost:1234'
-const SAVE_DEBOUNCE_MS = 5000
+
+// TODO: replace with real auth context hook
+function useCurrentUser() {
+  return { username: 'demo-user' }
+}
 
 function simulateAI(action: AIAction, _context: string): Promise<string> {
   return new Promise((resolve) => {
@@ -73,11 +76,10 @@ export default function EditorPage() {
   const { message } = App.useApp()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { username } = useCurrentUser()
 
   const docId = searchParams.get('id') ?? 'draft'
   const roomName = `doc:${docId}`
-  // TODO: get from auth context once integrated
-  const userName = 'Kira'
 
   const ACTION_PROMPTS: Record<AIAction, string> = {
     summarize: t('editor.prompt_summarize'),
@@ -94,20 +96,19 @@ export default function EditorPage() {
   const [showRefs, setShowRefs] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [onlineUsers, setOnlineUsers] = useState<CollabUser[]>([])
-  const [saving, setSaving] = useState(false)
-  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [connStatus, setConnStatus] = useState<ConnectionStatus>('connecting')
 
-  // Current editor HTML content for save
+  // P1-3: Content persistence is handled server-side by Hocuspocus onStoreDocument.
+  // The manual Save button triggers a one-shot snapshot to the REST API as a fallback.
+  const [saving, setSaving] = useState(false)
   const latestHtml = useRef('')
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSave = useCallback(async () => {
     if (!latestHtml.current) return
     setSaving(true)
     try {
-      // TODO: PUT /api/v1/items/{docId} with latestHtml.current
+      // TODO: PUT /api/v1/items/{docId} — fallback save, primary persistence is server-side
       await new Promise((r) => setTimeout(r, 500)) // mock
-      setLastSaved(new Date())
       message.success(t('editor.save_success'))
     } catch {
       message.error(t('editor.save_failed'))
@@ -116,28 +117,7 @@ export default function EditorPage() {
     }
   }, [docId, message, t])
 
-  const handleContentUpdate = useCallback(
-    (html: string) => {
-      latestHtml.current = html
-      // Debounced auto-save
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => {
-        void handleSave()
-      }, SAVE_DEBOUNCE_MS)
-    },
-    [handleSave],
-  )
-
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    }
-  }, [])
-
   async function handleAction(action: AIAction) {
-    // With Tiptap, selection text is obtained via the editor instance.
-    // For now, use a placeholder since the AI sidebar is mock anyway.
     if (action === 'recommend') {
       setShowRefs(true)
       setMessages((prev) => [
@@ -177,6 +157,8 @@ export default function EditorPage() {
     })
   }
 
+  const isConnected = connStatus === 'connected'
+
   return (
     <div className="h-screen flex flex-col bg-slate-50">
       {/* Header */}
@@ -195,19 +177,15 @@ export default function EditorPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Save status indicator */}
-          {lastSaved && (
-            <Tooltip title={lastSaved.toLocaleTimeString()}>
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <CloudOutlined />
-                {t('editor.saved')}
-              </span>
-            </Tooltip>
-          )}
-          {/* Connection status */}
-          <Tooltip title={t('editor.collab_connected')}>
-            <Badge status="success" />
-            <WifiOutlined className="text-green-500 text-xs" />
+          {/* Connection status — P2-4: bound to provider.status */}
+          <Tooltip title={isConnected ? t('editor.collab_connected') : t('editor.collab_disconnected')}>
+            <span className="flex items-center gap-1">
+              <Badge status={isConnected ? 'success' : 'error'} />
+              {isConnected
+                ? <WifiOutlined className="text-green-500 text-xs" />
+                : <DisconnectOutlined className="text-red-400 text-xs" />
+              }
+            </span>
           </Tooltip>
           <Button
             size="small"
@@ -225,10 +203,10 @@ export default function EditorPage() {
         {/* Editor area — Tiptap with Yjs collaboration */}
         <CollabEditor
           roomName={roomName}
-          userName={userName}
+          userName={username}
           collabUrl={COLLAB_URL}
           onUsersChange={setOnlineUsers}
-          onContentUpdate={handleContentUpdate}
+          onConnectionChange={setConnStatus}
           placeholder={t('editor.placeholder')}
         />
 

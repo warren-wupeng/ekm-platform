@@ -587,6 +587,7 @@
     "saved": "Saved",
     "save_success": "Document saved",
     "save_failed": "Failed to save document",
-    "collab_connected": "Collaboration connected"
+    "collab_connected": "Collaboration connected",
+    "collab_disconnected": "Collaboration disconnected"
   }
 }

@@ -587,6 +587,7 @@
     "saved": "已保存",
     "save_success": "文档已保存",
     "save_failed": "保存失败",
-    "collab_connected": "协作已连接"
+    "collab_connected": "协作已连接",
+    "collab_disconnected": "协作已断开"
   }
 }

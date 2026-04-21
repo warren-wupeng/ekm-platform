@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -8,10 +8,6 @@ import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import * as Y from 'yjs'
 
-/**
- * Hash a username to a stable colour from a small palette.
- * Deterministic so the same user always gets the same colour.
- */
 const CURSOR_COLORS = [
   '#f56565', '#ed8936', '#ecc94b', '#48bb78',
   '#38b2ac', '#4299e1', '#667eea', '#9f7aea',
@@ -31,20 +27,15 @@ export interface CollabUser {
   color: string
 }
 
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
+
 interface CollabEditorProps {
-  /** Yjs document room name, e.g. "doc:item_id" */
   roomName: string
-  /** Current user's display name */
   userName: string
-  /** Hocuspocus WebSocket URL (from NEXT_PUBLIC_COLLAB_URL) */
   collabUrl: string
-  /** JWT token for Hocuspocus auth */
   token?: string
-  /** Called when online user list changes */
   onUsersChange?: (users: CollabUser[]) => void
-  /** Called on every content update (debounced externally) */
-  onContentUpdate?: (html: string) => void
-  /** Placeholder when doc is empty */
+  onConnectionChange?: (status: ConnectionStatus) => void
   placeholder?: string
 }
 
@@ -54,26 +45,35 @@ export default function CollabEditor({
   collabUrl,
   token,
   onUsersChange,
-  onContentUpdate,
+  onConnectionChange,
   placeholder,
 }: CollabEditorProps) {
-  const ydoc = useMemo(() => new Y.Doc(), [roomName])
+  const cursorColor = useMemo(() => hashColor(userName), [userName])
 
-  const provider = useMemo(() => {
-    return new HocuspocusProvider({
+  // Refs to hold the current ydoc/provider so the editor can reference them
+  const ydocRef = useRef<Y.Doc | null>(null)
+  const providerRef = useRef<HocuspocusProvider | null>(null)
+  const [ready, setReady] = useState(false)
+
+  // P1-1 fix: useEffect lifecycle — destroy + recreate on roomName/collabUrl/token change
+  useEffect(() => {
+    const ydoc = new Y.Doc()
+    const provider = new HocuspocusProvider({
       url: collabUrl,
       name: roomName,
       document: ydoc,
       token: token ?? '',
+      onStatus: ({ status }: { status: string }) => {
+        onConnectionChange?.(status as ConnectionStatus)
+      },
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabUrl, roomName, ydoc, token])
 
-  // Track online users via awareness
-  useEffect(() => {
-    if (!onUsersChange) return
+    ydocRef.current = ydoc
+    providerRef.current = provider
+    setReady(true)
+
+    // Track online users via awareness
     const awareness = provider.awareness
-
     function updateUsers() {
       const states = awareness?.getStates()
       if (!states) return
@@ -83,7 +83,6 @@ export default function CollabEditor({
           users.push({ name: state.user.name, color: state.user.color })
         }
       })
-      // Deduplicate by name (same user in multiple tabs)
       const seen = new Set<string>()
       const unique = users.filter((u) => {
         if (seen.has(u.name)) return false
@@ -92,44 +91,45 @@ export default function CollabEditor({
       })
       onUsersChange?.(unique)
     }
-
     awareness?.on('change', updateUsers)
     updateUsers()
-    return () => { awareness?.off('change', updateUsers) }
-  }, [provider, onUsersChange])
 
-  const cursorColor = useMemo(() => hashColor(userName), [userName])
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({}),
-      Collaboration.configure({
-        document: ydoc,
-      }),
-      CollaborationCursor.configure({
-        provider,
-        user: { name: userName, color: cursorColor },
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        class:
-          'prose prose-sm max-w-none h-full px-6 py-4 focus:outline-none text-slate-700 leading-relaxed',
-        'data-placeholder': placeholder ?? '',
-      },
-    },
-    onUpdate: ({ editor: ed }) => {
-      onContentUpdate?.(ed.getHTML())
-    },
-  })
-
-  // Cleanup on unmount
-  useEffect(() => {
     return () => {
+      awareness?.off('change', updateUsers)
       provider.destroy()
       ydoc.destroy()
+      ydocRef.current = null
+      providerRef.current = null
+      setReady(false)
     }
-  }, [provider, ydoc])
+    // onUsersChange/onConnectionChange excluded — stable callbacks expected
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomName, collabUrl, token])
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({}),
+        ...(ydocRef.current
+          ? [
+              Collaboration.configure({ document: ydocRef.current }),
+              CollaborationCursor.configure({
+                provider: providerRef.current!,
+                user: { name: userName, color: cursorColor },
+              }),
+            ]
+          : []),
+      ],
+      editorProps: {
+        attributes: {
+          class:
+            'prose prose-sm max-w-none h-full px-6 py-4 focus:outline-none text-slate-700 leading-relaxed',
+          'data-placeholder': placeholder ?? '',
+        },
+      },
+    },
+    [ready, userName, cursorColor],
+  )
 
   return (
     <div className="flex-1 overflow-y-auto bg-white collab-editor">
@@ -146,7 +146,6 @@ export default function CollabEditor({
           pointer-events: none;
           height: 0;
         }
-        /* Collaboration cursor styles */
         .collaboration-cursor__caret {
           border-left: 1px solid;
           border-right: 1px solid;
