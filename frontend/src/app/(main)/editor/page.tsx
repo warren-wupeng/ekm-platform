@@ -1,16 +1,26 @@
 'use client'
-import { useState, useRef } from 'react'
+
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  App, Button, Input, Tag, Divider, Spin, Tooltip,
+  App, Button, Input, Tag, Spin, Tooltip, Badge,
 } from 'antd'
 import {
   RobotOutlined, ThunderboltOutlined, EditOutlined,
   FileTextOutlined, SearchOutlined, SendOutlined,
   CopyOutlined, CheckOutlined, ArrowLeftOutlined,
-  BulbOutlined, ReloadOutlined,
+  BulbOutlined, CloudOutlined, WifiOutlined,
 } from '@ant-design/icons'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import OnlineUsers from '@/components/editor/OnlineUsers'
+import type { CollabUser } from '@/components/editor/CollabEditor'
+
+// Lazy-load CollabEditor to avoid SSR issues with Yjs
+const CollabEditor = dynamic(
+  () => import('@/components/editor/CollabEditor'),
+  { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><Spin /></div> },
+)
 
 type AIAction = 'summarize' | 'continue' | 'rewrite' | 'recommend'
 
@@ -34,44 +44,21 @@ const MOCK_REFS: KnowledgeRef[] = [
   { id: 'r3', title: 'EKM 技术架构设计', excerpt: 'AI 层采用混合策略：开发环境使用 API，生产关键路径自建 vLLM…', relevance: 0.81 },
 ]
 
-// ACTION_PROMPTS built inside component via t()
+const COLLAB_URL = process.env.NEXT_PUBLIC_COLLAB_URL ?? 'ws://localhost:1234'
+const SAVE_DEBOUNCE_MS = 5000
 
-const INITIAL_DOC = `# AI 技术选型调研报告
-
-## 背景
-
-EKM 平台需要接入 LLM 能力，支持文档摘要、智能搜索和 AI 写作辅助。本文调研当前主流的 LLM 接入方案，给出选型建议。
-
-## 方案对比
-
-### 方案一：OpenAI API
-
-优点：接入简单，模型能力强，维护成本低
-缺点：数据出境风险，成本随用量线性增长，存在 API 可用性依赖
-
-### 方案二：自建 vLLM
-
-优点：数据不出境，延迟可控，成本边际递减
-缺点：初期硬件投入高，需要专职 MLOps 维护
-
-## 建议
-
-`
-
-function simulateAI(action: AIAction, context: string): Promise<string> {
+function simulateAI(action: AIAction, _context: string): Promise<string> {
   return new Promise((resolve) => {
     setTimeout(() => {
       switch (action) {
         case 'summarize':
-          resolve(`**摘要**\n\n本文对比了 EKM 平台接入 LLM 的两种主要方案：OpenAI API 与自建 vLLM。OpenAI API 接入便捷但有数据出境风险；自建 vLLM 数据安全可控但初期成本高。建议采用混合策略，开发和非敏感场景用 API，生产关键路径自建。`)
+          resolve('**摘要**\n\n本文对比了 EKM 平台接入 LLM 的两种主要方案：OpenAI API 与自建 vLLM。OpenAI API 接入便捷但有数据出境风险；自建 vLLM 数据安全可控但初期成本高。建议采用混合策略，开发和非敏感场景用 API，生产关键路径自建。')
           break
         case 'continue':
-          resolve(`采用混合策略：**开发环境和非敏感数据场景使用 OpenAI API**，快速迭代；**生产环境的文档索引和内部搜索场景部署 Qwen-14B via vLLM**，确保数据不出境。
-
-预计第一阶段（0-3 个月）以 API 为主，月均成本约 $2,000；第二阶段（3-6 个月）完成 vLLM 部署，边际成本降低 60%。`)
+          resolve('采用混合策略：**开发环境和非敏感数据场景使用 OpenAI API**，快速迭代；**生产环境的文档索引和内部搜索场景部署 Qwen-14B via vLLM**，确保数据不出境。\n\n预计第一阶段（0-3 个月）以 API 为主，月均成本约 $2,000；第二阶段（3-6 个月）完成 vLLM 部署，边际成本降低 60%。')
           break
         case 'rewrite':
-          resolve(`经过改写：\n\n在综合考量数据安全、成本控制和技术复杂度后，**推荐采用分阶段混合策略**。初期（Q2 2026）优先接入 OpenAI API 以快速验证产品价值；中期（Q3 2026）完成核心场景的 vLLM 迁移，将数据主权和成本控制落地。此策略可将首年总体成本控制在预算范围内，同时不影响产品上线节奏。`)
+          resolve('经过改写：\n\n在综合考量数据安全、成本控制和技术复杂度后，**推荐采用分阶段混合策略**。初期（Q2 2026）优先接入 OpenAI API 以快速验证产品价值；中期（Q3 2026）完成核心场景的 vLLM 迁移，将数据主权和成本控制落地。此策略可将首年总体成本控制在预算范围内，同时不影响产品上线节奏。')
           break
         case 'recommend':
           resolve('')
@@ -85,40 +72,72 @@ export default function EditorPage() {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const docId = searchParams.get('id') ?? 'draft'
+  const roomName = `doc:${docId}`
+  // TODO: get from auth context once integrated
+  const userName = 'Kira'
 
   const ACTION_PROMPTS: Record<AIAction, string> = {
-    summarize:   t('editor.prompt_summarize'),
-    continue:    t('editor.prompt_continue'),
-    rewrite:     t('editor.prompt_rewrite'),
-    recommend:   t('editor.prompt_recommend'),
+    summarize: t('editor.prompt_summarize'),
+    continue: t('editor.prompt_continue'),
+    rewrite: t('editor.prompt_rewrite'),
+    recommend: t('editor.prompt_recommend'),
   }
-  const [doc, setDoc]           = useState(INITIAL_DOC)
-  const [selected, setSelected] = useState('')
+
   const [messages, setMessages] = useState<AIMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: t('editor.welcome_message'),
-    },
+    { id: 'welcome', role: 'assistant', content: t('editor.welcome_message') },
   ])
   const [inputVal, setInputVal] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
   const [showRefs, setShowRefs] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [onlineUsers, setOnlineUsers] = useState<CollabUser[]>([])
+  const [saving, setSaving] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
-  function getSelection() {
-    const ta = textareaRef.current
-    if (!ta) return ''
-    return ta.value.substring(ta.selectionStart, ta.selectionEnd)
-  }
+  // Current editor HTML content for save
+  const latestHtml = useRef('')
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleSave = useCallback(async () => {
+    if (!latestHtml.current) return
+    setSaving(true)
+    try {
+      // TODO: PUT /api/v1/items/{docId} with latestHtml.current
+      await new Promise((r) => setTimeout(r, 500)) // mock
+      setLastSaved(new Date())
+      message.success(t('editor.save_success'))
+    } catch {
+      message.error(t('editor.save_failed'))
+    } finally {
+      setSaving(false)
+    }
+  }, [docId, message, t])
+
+  const handleContentUpdate = useCallback(
+    (html: string) => {
+      latestHtml.current = html
+      // Debounced auto-save
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => {
+        void handleSave()
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [handleSave],
+  )
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [])
 
   async function handleAction(action: AIAction) {
-    const sel = getSelection()
-    if ((action === 'rewrite') && !sel) {
-      message.info(t('editor.select_text_first'))
-      return
-    }
+    // With Tiptap, selection text is obtained via the editor instance.
+    // For now, use a placeholder since the AI sidebar is mock anyway.
     if (action === 'recommend') {
       setShowRefs(true)
       setMessages((prev) => [
@@ -128,13 +147,11 @@ export default function EditorPage() {
       ])
       return
     }
-    const userMsg = sel
-      ? `${ACTION_PROMPTS[action]}：\n\n> ${sel.substring(0, 100)}${sel.length > 100 ? '…' : ''}`
-      : ACTION_PROMPTS[action]
 
+    const userMsg = ACTION_PROMPTS[action]
     setMessages((prev) => [...prev, { id: Date.now() + 'u', role: 'user', content: userMsg }])
     setLoading(true)
-    const result = await simulateAI(action, sel || doc)
+    const result = await simulateAI(action, '')
     setLoading(false)
     setMessages((prev) => [...prev, { id: Date.now() + 'a', role: 'assistant', content: result, action }])
   }
@@ -149,22 +166,8 @@ export default function EditorPage() {
     setLoading(false)
     setMessages((prev) => [
       ...prev,
-      {
-        id: Date.now() + 'a',
-        role: 'assistant',
-        content: t('editor.chat_reply_template', { q }),
-      },
+      { id: Date.now() + 'a', role: 'assistant', content: t('editor.chat_reply_template', { q }) },
     ])
-  }
-
-  function insertContent(content: string) {
-    const ta = textareaRef.current
-    if (ta) {
-      const pos = ta.selectionEnd
-      const newDoc = doc.substring(0, pos) + '\n\n' + content + '\n' + doc.substring(pos)
-      setDoc(newDoc)
-      message.success(t('editor.insert_to_doc'))
-    }
   }
 
   function copyContent(id: string, content: string) {
@@ -181,27 +184,53 @@ export default function EditorPage() {
         <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => router.back()} className="text-slate-500" />
         <div>
           <h1 className="text-base font-semibold text-slate-800">{t('editor.page_title')}</h1>
-          <p className="text-xs text-slate-400">{t('editor.doc_filename')}</p>
+          <p className="text-xs text-slate-400">
+            {docId === 'draft' ? t('editor.doc_filename') : `doc:${docId}`}
+          </p>
         </div>
+
+        {/* Online users */}
+        <div className="ml-4">
+          <OnlineUsers users={onlineUsers} />
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
-          <Button size="small" type="primary" icon={<CheckOutlined />}>
+          {/* Save status indicator */}
+          {lastSaved && (
+            <Tooltip title={lastSaved.toLocaleTimeString()}>
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <CloudOutlined />
+                {t('editor.saved')}
+              </span>
+            </Tooltip>
+          )}
+          {/* Connection status */}
+          <Tooltip title={t('editor.collab_connected')}>
+            <Badge status="success" />
+            <WifiOutlined className="text-green-500 text-xs" />
+          </Tooltip>
+          <Button
+            size="small"
+            type="primary"
+            icon={<CheckOutlined />}
+            loading={saving}
+            onClick={handleSave}
+          >
             {t('editor.save')}
           </Button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Editor area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <textarea
-            ref={textareaRef}
-            value={doc}
-            onChange={(e) => setDoc(e.target.value)}
-            className="flex-1 resize-none p-6 font-mono text-sm text-slate-700 bg-white focus:outline-none leading-relaxed"
-            style={{ fontFamily: "'JetBrains Mono', monospace, 'SF Mono'" }}
-            placeholder={t('editor.placeholder')}
-          />
-        </div>
+        {/* Editor area — Tiptap with Yjs collaboration */}
+        <CollabEditor
+          roomName={roomName}
+          userName={userName}
+          collabUrl={COLLAB_URL}
+          onUsersChange={setOnlineUsers}
+          onContentUpdate={handleContentUpdate}
+          placeholder={t('editor.placeholder')}
+        />
 
         {/* AI Sidebar */}
         <div
@@ -222,8 +251,8 @@ export default function EditorPage() {
             <div className="grid grid-cols-2 gap-1.5">
               {[
                 { action: 'summarize' as AIAction, icon: <FileTextOutlined />, label: t('editor.action_summarize') },
-                { action: 'continue'  as AIAction, icon: <ThunderboltOutlined />, label: t('editor.action_continue') },
-                { action: 'rewrite'   as AIAction, icon: <EditOutlined />, label: t('editor.action_rewrite') },
+                { action: 'continue' as AIAction, icon: <ThunderboltOutlined />, label: t('editor.action_continue') },
+                { action: 'rewrite' as AIAction, icon: <EditOutlined />, label: t('editor.action_rewrite') },
                 { action: 'recommend' as AIAction, icon: <SearchOutlined />, label: t('editor.action_recommend') },
               ].map(({ action, icon, label }) => (
                 <Button
@@ -266,14 +295,6 @@ export default function EditorPage() {
                           {copiedId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
                         </button>
                       </Tooltip>
-                      <Tooltip title={t('editor.insert_to_doc')}>
-                        <button
-                          className="text-slate-400 hover:text-primary text-[10px]"
-                          onClick={() => insertContent(msg.content)}
-                        >
-                          <BulbOutlined /> {t('editor.insert_to_doc')}
-                        </button>
-                      </Tooltip>
                     </div>
                   )}
                 </div>
@@ -296,7 +317,7 @@ export default function EditorPage() {
             <div className="border-t border-slate-100 px-4 py-3 max-h-48 overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-slate-500 font-medium">{t('editor.related_knowledge')}</p>
-                <button className="text-slate-300 hover:text-slate-500 text-xs" onClick={() => setShowRefs(false)}>×</button>
+                <button className="text-slate-300 hover:text-slate-500 text-xs" onClick={() => setShowRefs(false)}>x</button>
               </div>
               {MOCK_REFS.map((ref) => (
                 <div key={ref.id} className="mb-2 p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
@@ -321,17 +342,8 @@ export default function EditorPage() {
                 placeholder={t('editor.input_placeholder')}
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 className="text-xs flex-1"
-                // #90: switched off onPressEnter because it fires before
-                // IME composition end on some browsers (Chinese input
-                // methods confirm candidates with Enter). Using onKeyDown
-                // + nativeEvent.isComposing skips the confirm Enter and
-                // only sends on a "real" Enter press.
                 onKeyDown={(e) => {
-                  if (
-                    e.key === 'Enter'
-                    && !e.shiftKey
-                    && !e.nativeEvent.isComposing
-                  ) {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     void handleSend()
                   }
