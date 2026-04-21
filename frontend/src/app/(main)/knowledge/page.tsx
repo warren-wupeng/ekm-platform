@@ -140,7 +140,7 @@ export default function KnowledgePage() {
       sorter: (a, b) => a.size - b.size,
     },
     {
-      title: t('common.actions'),
+      title: t('knowledge.col_tags'),
       dataIndex: 'tags',
       key: 'tags',
       width: 160,

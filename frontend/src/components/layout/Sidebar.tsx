@@ -136,7 +136,7 @@ export default function Sidebar() {
 
       {/* Toggle button */}
       <div className={clsx('flex mb-2', expanded ? 'justify-end px-3' : 'justify-center')}>
-        <Tooltip title={expanded ? t('nav.dashboard') : undefined} placement="right">
+        <Tooltip title={expanded ? t('common.collapse') : t('common.expand')} placement="right">
           <button
             onClick={toggleSidebar}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-700 transition-all text-sm"

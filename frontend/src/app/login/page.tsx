@@ -152,11 +152,10 @@ export default function LoginPage() {
               <ApartmentOutlined className="text-white text-sm" />
             </div>
             <span className="text-slate-800 text-lg font-semibold flex-1">EKM</span>
-            <LanguageSwitcher />
           </div>
 
-          {/* Desktop language switcher */}
-          <div className="hidden md:flex justify-end mb-4">
+          {/* Language switcher — single instance, always visible */}
+          <div className="flex justify-end mb-4">
             <LanguageSwitcher />
           </div>
 
@@ -166,7 +165,7 @@ export default function LoginPage() {
           <Form form={form} onFinish={handleLogin} layout="vertical" size="large">
             <Form.Item
               name="username"
-              rules={[{ required: true, message: t('login.username_placeholder') }]}
+              rules={[{ required: true, message: t('login.username_required') }]}
             >
               <Input
                 prefix={<UserOutlined className="text-slate-400" />}
@@ -178,7 +177,7 @@ export default function LoginPage() {
 
             <Form.Item
               name="password"
-              rules={[{ required: true, message: t('login.password_placeholder') }]}
+              rules={[{ required: true, message: t('login.password_required') }]}
             >
               <Input.Password
                 prefix={<LockOutlined className="text-slate-400" />}

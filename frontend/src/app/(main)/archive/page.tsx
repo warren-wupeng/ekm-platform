@@ -139,7 +139,7 @@ export default function ArchivePage() {
       await api.post(`/api/v1/archive/restore-requests/${id}/${action}`, {
         note: comment ?? null,
       })
-      message.success(approved ? t('archive.review_success') : t('archive.review_success'))
+      message.success(approved ? t('archive.review_approve_success') : t('archive.review_reject_success'))
       setReviewModal(null)
       reviewForm.resetFields()
       void fetchItems()

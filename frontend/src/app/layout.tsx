@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { AntdRegistry } from '@ant-design/nextjs-registry'
-import { ConfigProvider } from 'antd'
-import { antdTheme } from '@/lib/theme'
 import I18nProvider from '@/components/I18nProvider'
+import AntdLocaleProvider from '@/components/AntdLocaleProvider'
 
 export const metadata: Metadata = {
   title: 'EKM · Enterprise Knowledge Management',
@@ -16,9 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <I18nProvider>
           <AntdRegistry>
-            <ConfigProvider theme={antdTheme}>
+            <AntdLocaleProvider>
               {children}
-            </ConfigProvider>
+            </AntdLocaleProvider>
           </AntdRegistry>
         </I18nProvider>
       </body>
