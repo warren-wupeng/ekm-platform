@@ -1,0 +1,28 @@
+name: Deploy EKM Collab
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/collab/**'
+      - '.github/workflows/deploy-collab.yml'
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy ekm-collab
+        working-directory: backend/collab
+        run: flyctl deploy -c fly.collab.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
