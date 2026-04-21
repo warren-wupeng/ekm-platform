@@ -4,7 +4,7 @@
  * Switches between enUS and zhCN as the user changes language.
  */
 import { ReactNode } from 'react'
-import { ConfigProvider } from 'antd'
+import { App, ConfigProvider } from 'antd'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import { useTranslation } from 'react-i18next'
@@ -16,7 +16,7 @@ export default function AntdLocaleProvider({ children }: { children: ReactNode }
 
   return (
     <ConfigProvider theme={antdTheme} locale={locale}>
-      {children}
+      <App>{children}</App>
     </ConfigProvider>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button, Input, Select, Tag, message, Progress, Tooltip } from 'antd'
+import { App, Button, Input, Select, Tag, Progress, Tooltip } from 'antd'
 import {
   BoldOutlined, ItalicOutlined, CodeOutlined, OrderedListOutlined,
   UnorderedListOutlined, LinkOutlined, PaperClipOutlined, EyeOutlined,
@@ -55,6 +55,7 @@ const DRAFT_KEY = 'ekm_post_draft'
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NewPostPage() {
+  const { message } = App.useApp()
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 

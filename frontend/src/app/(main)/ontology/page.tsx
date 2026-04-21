@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import {
-  Table, Tag, Button, Modal, Form, Input, Select, Space,
-  Tabs, Tooltip, Popconfirm, Tree, message, Badge,
+  App, Table, Tag, Button, Modal, Form, Input, Select, Space,
+  Tabs, Tooltip, Popconfirm, Tree, Badge,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { DataNode } from 'antd/es/tree'
@@ -89,6 +89,7 @@ function buildTree(entities: EntityType[]): DataNode[] {
 }
 
 export default function OntologyPage() {
+  const { message } = App.useApp()
   const [entities, setEntities]   = useState<EntityType[]>(MOCK_ENTITIES)
   const [relations, setRelations] = useState<RelationType[]>(MOCK_RELATIONS)
   const [activeTab, setActiveTab] = useState('entity')
