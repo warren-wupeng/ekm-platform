@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -33,7 +33,8 @@ interface CollabEditorProps {
   roomName: string
   userName: string
   collabUrl: string
-  token?: string
+  /** JWT token for Hocuspocus onAuthenticate — REQUIRED for room access */
+  token: string
   onUsersChange?: (users: CollabUser[]) => void
   onConnectionChange?: (status: ConnectionStatus) => void
   placeholder?: string
@@ -50,19 +51,20 @@ export default function CollabEditor({
 }: CollabEditorProps) {
   const cursorColor = useMemo(() => hashColor(userName), [userName])
 
-  // Refs to hold the current ydoc/provider so the editor can reference them
   const ydocRef = useRef<Y.Doc | null>(null)
   const providerRef = useRef<HocuspocusProvider | null>(null)
   const [ready, setReady] = useState(false)
 
-  // P1-1 fix: useEffect lifecycle — destroy + recreate on roomName/collabUrl/token change
+  // P1-1 fix: useEffect lifecycle — destroy + recreate on roomName/token change.
+  // useMemo would leak WebSocket connections when switching documents.
   useEffect(() => {
     const ydoc = new Y.Doc()
     const provider = new HocuspocusProvider({
       url: collabUrl,
       name: roomName,
       document: ydoc,
-      token: token ?? '',
+      // P1-2 fix: pass JWT token so Hocuspocus onAuthenticate can verify
+      token,
       onStatus: ({ status }: { status: string }) => {
         onConnectionChange?.(status as ConnectionStatus)
       },
@@ -102,7 +104,6 @@ export default function CollabEditor({
       providerRef.current = null
       setReady(false)
     }
-    // onUsersChange/onConnectionChange excluded — stable callbacks expected
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomName, collabUrl, token])
 

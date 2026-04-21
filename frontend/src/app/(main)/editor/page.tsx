@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons'
 import { useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { useAuth } from '@/hooks/useAuth'
 import OnlineUsers from '@/components/editor/OnlineUsers'
 import type { CollabUser, ConnectionStatus } from '@/components/editor/CollabEditor'
 
@@ -45,11 +46,6 @@ const MOCK_REFS: KnowledgeRef[] = [
 
 const COLLAB_URL = process.env.NEXT_PUBLIC_COLLAB_URL ?? 'ws://localhost:1234'
 
-// TODO: replace with real auth context hook
-function useCurrentUser() {
-  return { username: 'demo-user' }
-}
-
 function simulateAI(action: AIAction, _context: string): Promise<string> {
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -76,7 +72,10 @@ export default function EditorPage() {
   const { message } = App.useApp()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { username } = useCurrentUser()
+
+  // P2-2 fix: get user + token from auth store (not hardcoded)
+  const { user, token } = useAuth()
+  const userName = user?.username ?? 'anonymous'
 
   const docId = searchParams.get('id') ?? 'draft'
   const roomName = `doc:${docId}`
@@ -99,15 +98,13 @@ export default function EditorPage() {
   const [connStatus, setConnStatus] = useState<ConnectionStatus>('connecting')
 
   // P1-3: Content persistence is handled server-side by Hocuspocus onStoreDocument.
-  // The manual Save button triggers a one-shot snapshot to the REST API as a fallback.
+  // Manual Save button kept as a fallback snapshot to REST API.
   const [saving, setSaving] = useState(false)
-  const latestHtml = useRef('')
 
   const handleSave = useCallback(async () => {
-    if (!latestHtml.current) return
     setSaving(true)
     try {
-      // TODO: PUT /api/v1/items/{docId} — fallback save, primary persistence is server-side
+      // TODO: PUT /api/v1/items/{docId} — fallback save
       await new Promise((r) => setTimeout(r, 500)) // mock
       message.success(t('editor.save_success'))
     } catch {
@@ -177,7 +174,7 @@ export default function EditorPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Connection status — P2-4: bound to provider.status */}
+          {/* P2-4 fix: connection status bound to provider.status */}
           <Tooltip title={isConnected ? t('editor.collab_connected') : t('editor.collab_disconnected')}>
             <span className="flex items-center gap-1">
               <Badge status={isConnected ? 'success' : 'error'} />
@@ -203,8 +200,9 @@ export default function EditorPage() {
         {/* Editor area — Tiptap with Yjs collaboration */}
         <CollabEditor
           roomName={roomName}
-          userName={username}
+          userName={userName}
           collabUrl={COLLAB_URL}
+          token={token ?? ''}
           onUsersChange={setOnlineUsers}
           onConnectionChange={setConnStatus}
           placeholder={t('editor.placeholder')}
