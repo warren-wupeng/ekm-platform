@@ -30,6 +30,7 @@ export type ChatEvent =
   | { type: 'sources'; sources: ChatSource[] }
   | { type: 'delta'; delta: string }
   | { type: 'done' }
+  | { type: 'error'; message: string }
 
 export interface StreamChatParams {
   query: string
@@ -69,6 +70,8 @@ function parseFrame(block: string): ChatEvent | null {
     }
     case 'done':
       return { type: 'done' }
+    case 'error':
+      return { type: 'error', message: data }
     default:
       return null
   }

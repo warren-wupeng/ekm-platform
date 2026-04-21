@@ -81,6 +81,14 @@ export default function AssistantPage() {
           setMessages((prev) => prev.map((m) =>
             m.id === assistantId ? { ...m, content: m.content + evt.delta } : m,
           ))
+        } else if (evt.type === 'error') {
+          antdMessage.error(evt.message || '回答生成失败')
+          setMessages((prev) => prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, streaming: false, error: evt.message, content: m.content || '抱歉，回答生成失败。' }
+              : m,
+          ))
+          break
         } else if (evt.type === 'done') {
           setMessages((prev) => prev.map((m) =>
             m.id === assistantId ? { ...m, streaming: false } : m,

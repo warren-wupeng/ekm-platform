@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     TIKA_URL: str = "http://localhost:9998"
 
     # LLM (LiteLLM)
-    LLM_MODEL: str = "claude-sonnet-4-6"
+    LLM_MODEL: str = "openai/anthropic/claude-sonnet-4-6"
     LLM_BASE_URL: str = "https://ai-gateway.happycapy.ai/api/v1"
     LLM_API_KEY: str = ""
     LLM_MAX_TOKENS: int = 2048
