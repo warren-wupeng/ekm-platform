@@ -15,7 +15,11 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator
 
+from sqlalchemy import select
+
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.models.knowledge import KnowledgeItem
 from app.services.embeddings import embedder
 from app.services.llm_client import llm
 from app.services.qdrant_client import search as qdrant_search
@@ -56,6 +60,18 @@ async def stream_answer(
     """
     k = top_k or settings.RAG_TOP_K
     hits = await asyncio.to_thread(_retrieve, query, k)
+
+    # Enrich hits with document filenames for the frontend sources panel.
+    if hits:
+        doc_ids = list({h["document_id"] for h in hits})
+        async with AsyncSessionLocal() as db:
+            rows = (await db.execute(
+                select(KnowledgeItem.id, KnowledgeItem.name)
+                .where(KnowledgeItem.id.in_(doc_ids))
+            )).all()
+        name_map = {row.id: row.name for row in rows}
+        for h in hits:
+            h["filename"] = name_map.get(h["document_id"])
 
     yield {"event": "sources", "data": hits}
 
