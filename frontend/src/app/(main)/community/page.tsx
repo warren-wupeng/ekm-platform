@@ -36,6 +36,7 @@ type SortKey = 'latest' | 'hot' | 'comments'
 
 function getInitials(name: string) { return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) }
 const DEPT_COLOR: Record<string, string> = { 技术: 'blue', 产品: 'purple', 项目: 'cyan', 市场: 'orange', '': 'default' }
+const DEPT_I18N_KEY: Record<string, string> = { 技术: 'community.dept_tech', 产品: 'community.dept_product', 项目: 'community.dept_project', 市场: 'community.dept_marketing' }
 
 const ALL_TAGS = Array.from(new Set(MOCK_POSTS.flatMap((p) => p.tags)))
 
@@ -180,7 +181,7 @@ export default function CommunityPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-700 leading-tight">{post.author}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <Tag color={DEPT_COLOR[post.department]} className="text-[10px] m-0 px-1">{post.department}</Tag>
+                    <Tag color={DEPT_COLOR[post.department]} className="text-[10px] m-0 px-1">{DEPT_I18N_KEY[post.department] ? t(DEPT_I18N_KEY[post.department]) : post.department}</Tag>
                     <span className="text-[10px] text-slate-400">
                       <ClockCircleOutlined className="mr-0.5" />{post.publishedAt}
                     </span>

@@ -345,7 +345,11 @@
       "title_required": "Please enter a title",
       "content_required": "Please enter content",
       "published": "Post published"
-    }
+    },
+    "dept_tech": "Tech",
+    "dept_product": "Product",
+    "dept_project": "Project",
+    "dept_marketing": "Marketing"
   },
   "profile": {
     "messages": "Messages",
