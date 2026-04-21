@@ -20,9 +20,8 @@ export default function LanguageSwitcher() {
   }))
 
   function handleChange({ key }: { key: string }) {
-    // i18next-browser-languagedetector (caches: ['localStorage']) writes
-    // ekm_language automatically after changeLanguage — no manual setItem needed.
     i18n.changeLanguage(key)
+    localStorage.setItem('ekm_language', key)
   }
 
   return (

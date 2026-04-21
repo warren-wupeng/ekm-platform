@@ -1,26 +1,26 @@
 'use client'
 /**
- * Initialises i18next on the client side.
+ * Initialises i18next on the client side and restores the saved language.
  *
- * Uses a mounted-gate to prevent SSR/hydration mismatches:
- * - Server renders children with the default 'en' language (no localStorage)
- * - Client renders children only after mount, allowing LanguageDetector to
- *   read localStorage and switch language without triggering a React mismatch.
+ * Hydration-safe flow:
+ *   1. i18n/index.ts inits with lng='en' (no detector, no localStorage read)
+ *   2. SSR and first client render both produce EN markup — no mismatch
+ *   3. useEffect runs after hydration, reads localStorage, calls changeLanguage
+ *   4. React re-renders with the saved language
  */
-import '@/i18n'
-import { ReactNode, useEffect, useState } from 'react'
+import i18n from '@/i18n'
+import { ReactNode, useEffect } from 'react'
+
+const STORAGE_KEY = 'ekm_language'
+const SUPPORTED = ['en', 'zh']
 
 export default function I18nProvider({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-
   useEffect(() => {
-    setMounted(true)
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved && SUPPORTED.includes(saved) && saved !== i18n.language) {
+      void i18n.changeLanguage(saved)
+    }
   }, [])
-
-  // On first server render and before client hydration completes,
-  // render children with default language ('en') — no translation applied.
-  // Once mounted, i18next reads localStorage and switches language if needed.
-  if (!mounted) return <>{children}</>
 
   return <>{children}</>
 }
