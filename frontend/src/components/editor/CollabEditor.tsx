@@ -102,9 +102,7 @@ export default function CollabEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        history: false, // Yjs handles undo/redo
-      }),
+      StarterKit.configure({}),
       Collaboration.configure({
         document: ydoc,
       }),
