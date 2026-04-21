@@ -100,7 +100,10 @@
     "type_archive": "压缩包",
     "type_audio": "音频",
     "type_video": "视频",
-    "type_other": "其他"
+    "type_other": "其他",
+    "archive_confirm": "确认归档此文件？",
+    "archive_button": "归档",
+    "archived": "已归档"
   },
   "archive": {
     "page_title": "归档管理",
@@ -148,7 +151,8 @@
     "empty_tip": "输入问题开始对话",
     "thinking": "思考中...",
     "error_message": "出现错误，请重试",
-    "stop_button": "停止"
+    "stop_button": "停止",
+    "cancelled": "（已取消）"
   },
   "dashboard": {
     "greeting_morning": "早上好",
