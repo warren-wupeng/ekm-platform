@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Select, Table, Tag, Tabs, Statistic, Card,
   Space, Tooltip, Popconfirm, Badge, Switch,
@@ -74,6 +75,7 @@ function statusColor(code: number) { return STATUS_COLOR[code] ?? 'default' }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DeveloperPage() {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const [apiKeys, setApiKeys]   = useState<ApiKey[]>(MOCK_KEYS)
   const [logs, setLogs]         = useState<RequestLog[]>(MOCK_LOGS)
@@ -102,11 +104,11 @@ export default function DeveloperPage() {
 
   function copyKey(key: string) {
     navigator.clipboard.writeText(key)
-    message.success('API Key 已复制')
+    message.success(t('developer.key_copied'))
   }
 
   function createKey() {
-    if (!newKeyName.trim()) { message.warning('请输入 Key 名称'); return }
+    if (!newKeyName.trim()) { message.warning(t('developer.key_name_required')); return }
     const newKey: ApiKey = {
       id: nanoid(6), name: newKeyName.trim(),
       key: `ekm_${nanoid(18)}`, created: dayjs().format('YYYY-MM-DD'),
@@ -114,17 +116,17 @@ export default function DeveloperPage() {
     }
     setApiKeys((prev) => [newKey, ...prev])
     setNewKeyName('')
-    message.success('API Key 已创建')
+    message.success(t('developer.key_created'))
   }
 
   function revokeKey(id: string) {
     setApiKeys((prev) => prev.map((k) => k.id === id ? { ...k, active: false } : k))
-    message.success('已停用')
+    message.success(t('developer.key_revoked'))
   }
 
   async function sendRequest() {
     const key = apiKeys.find((k) => k.id === selectedKeyId)
-    if (!key?.active) { message.error('请选择有效的 API Key'); return }
+    if (!key?.active) { message.error(t('developer.key_invalid')); return }
     setSending(true)
     setResponse('')
     setResponseStatus(null)
@@ -170,25 +172,25 @@ export default function DeveloperPage() {
 
   const keyColumns: ColumnsType<ApiKey> = [
     {
-      title: '名称', dataIndex: 'name', key: 'name',
+      title: t('developer.col_name'), dataIndex: 'name', key: 'name',
       render: (v: string, r) => (
         <span className="flex items-center gap-2">
           <span className="text-sm font-medium text-slate-700">{v}</span>
-          {!r.active && <Tag color="default" className="text-xs">已停用</Tag>}
+          {!r.active && <Tag color="default" className="text-xs">{t('developer.revoked')}</Tag>}
         </span>
       ),
     },
     {
-      title: 'API Key', key: 'key',
+      title: t('developer.col_key'), key: 'key',
       render: (_, r) => (
         <span className="flex items-center gap-2 font-mono text-xs text-slate-500">
           {revealedKeys.has(r.id) ? r.key : r.key.replace(/(?<=.{12}).+(?=.{4})/, '••••••••')}
-          <Tooltip title={revealedKeys.has(r.id) ? '隐藏' : '显示'}>
+          <Tooltip title={revealedKeys.has(r.id) ? t('developer.hide_key') : t('developer.show_key')}>
             <button className="text-slate-400 hover:text-slate-600" onClick={() => toggleReveal(r.id)}>
               {revealedKeys.has(r.id) ? <EyeInvisibleOutlined /> : <EyeOutlined />}
             </button>
           </Tooltip>
-          <Tooltip title="复制">
+          <Tooltip title={t('common.copy')}>
             <button className="text-slate-400 hover:text-primary" onClick={() => copyKey(r.key)}>
               <CopyOutlined />
             </button>
@@ -196,17 +198,17 @@ export default function DeveloperPage() {
         </span>
       ),
     },
-    { title: '创建时间', dataIndex: 'created', key: 'created', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
-    { title: '最近使用', dataIndex: 'lastUsed', key: 'lastUsed', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
-    { title: '调用次数', dataIndex: 'callCount', key: 'callCount', width: 90, align: 'center', render: (v: number) => <span className="text-xs text-slate-600 font-medium">{v.toLocaleString()}</span>, sorter: (a, b) => a.callCount - b.callCount },
+    { title: t('developer.col_created'), dataIndex: 'created', key: 'created', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
+    { title: t('developer.col_last_used'), dataIndex: 'lastUsed', key: 'lastUsed', width: 110, render: (v: string) => <span className="text-xs text-slate-400">{v}</span> },
+    { title: t('developer.col_calls'), dataIndex: 'callCount', key: 'callCount', width: 90, align: 'center', render: (v: number) => <span className="text-xs text-slate-600 font-medium">{v.toLocaleString()}</span>, sorter: (a, b) => a.callCount - b.callCount },
     {
-      title: '操作', key: 'actions', width: 100, align: 'center',
+      title: t('developer.col_actions'), key: 'actions', width: 100, align: 'center',
       render: (_, r) => (
         <Space size={4}>
           {r.active && (
-            <Popconfirm title="停用此 API Key？" description="停用后无法恢复，使用此 Key 的请求将返回 401"
-              onConfirm={() => revokeKey(r.id)} okText="停用" cancelText="取消" okButtonProps={{ danger: true }}>
-              <Button size="small" danger ghost icon={<DeleteOutlined />} className="text-xs">停用</Button>
+            <Popconfirm title={t('developer.confirm_revoke_title')} description={t('developer.confirm_revoke_desc')}
+              onConfirm={() => revokeKey(r.id)} okText={t('common.revoke')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}>
+              <Button size="small" danger ghost icon={<DeleteOutlined />} className="text-xs">{t('common.revoke')}</Button>
             </Popconfirm>
           )}
         </Space>
@@ -215,11 +217,11 @@ export default function DeveloperPage() {
   ]
 
   const logColumns: ColumnsType<RequestLog> = [
-    { title: '时间', dataIndex: 'timestamp', key: 'timestamp', width: 155, render: (v: string) => <span className="text-xs text-slate-400 font-mono">{v}</span> },
-    { title: '方法', dataIndex: 'method', key: 'method', width: 60, render: (v: string) => <Tag color={v === 'GET' ? 'blue' : 'green'} className="text-xs m-0">{v}</Tag> },
-    { title: '端点', dataIndex: 'endpoint', key: 'endpoint', render: (v: string) => <span className="text-xs font-mono text-slate-600">{v}</span> },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 65, render: (v: number) => <Badge status={statusColor(v) as 'success'} text={<span className="text-xs font-mono">{v}</span>} /> },
-    { title: '延迟', dataIndex: 'latencyMs', key: 'latencyMs', width: 80, render: (v: number) => <span className={`text-xs font-mono ${v > 1000 ? 'text-orange-500' : 'text-slate-500'}`}>{v}ms</span>, sorter: (a, b) => a.latencyMs - b.latencyMs },
+    { title: t('developer.col_time'), dataIndex: 'timestamp', key: 'timestamp', width: 155, render: (v: string) => <span className="text-xs text-slate-400 font-mono">{v}</span> },
+    { title: t('developer.col_method'), dataIndex: 'method', key: 'method', width: 60, render: (v: string) => <Tag color={v === 'GET' ? 'blue' : 'green'} className="text-xs m-0">{v}</Tag> },
+    { title: t('developer.col_endpoint'), dataIndex: 'endpoint', key: 'endpoint', render: (v: string) => <span className="text-xs font-mono text-slate-600">{v}</span> },
+    { title: t('developer.col_status'), dataIndex: 'status', key: 'status', width: 65, render: (v: number) => <Badge status={statusColor(v) as 'success'} text={<span className="text-xs font-mono">{v}</span>} /> },
+    { title: t('developer.col_latency'), dataIndex: 'latencyMs', key: 'latencyMs', width: 80, render: (v: number) => <span className={`text-xs font-mono ${v > 1000 ? 'text-orange-500' : 'text-slate-500'}`}>{v}ms</span>, sorter: (a, b) => a.latencyMs - b.latencyMs },
   ]
 
   return (
@@ -229,9 +231,9 @@ export default function DeveloperPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-2 mb-1">
             <CodeOutlined className="text-slate-500 text-lg" />
-            <h1 className="text-lg font-semibold text-slate-800">Developer Console</h1>
+            <h1 className="text-lg font-semibold text-slate-800">{t('developer.page_title')}</h1>
           </div>
-          <p className="text-xs text-slate-400">API Key 管理 · 在线调试 · 调用日志</p>
+          <p className="text-xs text-slate-400">{t('developer.page_subtitle')}</p>
         </div>
       </div>
 
@@ -243,12 +245,12 @@ export default function DeveloperPage() {
             // ── Console ──────────────────────────────────────────────────────
             {
               key: 'console',
-              label: <span><SendOutlined className="mr-1" />API 调试</span>,
+              label: <span><SendOutlined className="mr-1" />{t('developer.tab_console')}</span>,
               children: (
                 <div className="grid grid-cols-2 gap-5">
                   {/* Left: request builder */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
-                    <p className="text-sm font-semibold text-slate-700">构建请求</p>
+                    <p className="text-sm font-semibold text-slate-700">{t('developer.build_request')}</p>
 
                     {/* API Key selector */}
                     <div>
@@ -263,7 +265,7 @@ export default function DeveloperPage() {
 
                     {/* Endpoint selector */}
                     <div>
-                      <label className="text-xs text-slate-500 mb-1 block">端点</label>
+                      <label className="text-xs text-slate-500 mb-1 block">{t('developer.endpoint')}</label>
                       <Select
                         value={selectedEp.path}
                         onChange={(val) => {
@@ -303,14 +305,14 @@ export default function DeveloperPage() {
                       loading={sending} onClick={sendRequest}
                       className="w-full h-10 text-sm font-medium"
                     >
-                      发送请求
+                      {t('developer.send_request')}
                     </Button>
                   </div>
 
                   {/* Right: response */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-700">响应</p>
+                      <p className="text-sm font-semibold text-slate-700">{t('developer.response')}</p>
                       {responseStatus !== null && (
                         <div className="flex items-center gap-3">
                           <Badge
@@ -331,7 +333,7 @@ export default function DeveloperPage() {
                       </pre>
                     ) : (
                       <div className="h-72 flex items-center justify-center bg-slate-50 rounded-xl">
-                        <p className="text-slate-400 text-sm">发送请求后查看响应</p>
+                        <p className="text-slate-400 text-sm">{t('developer.response_empty')}</p>
                       </div>
                     )}
                   </div>
@@ -342,22 +344,22 @@ export default function DeveloperPage() {
             // ── API Keys ─────────────────────────────────────────────────────
             {
               key: 'keys',
-              label: <span><KeyOutlined className="mr-1" />API Keys</span>,
+              label: <span><KeyOutlined className="mr-1" />{t('developer.tab_keys')}</span>,
               children: (
                 <div className="space-y-4">
                   {/* Create new key */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
-                    <p className="text-sm font-semibold text-slate-700 mb-3">创建新 API Key</p>
+                    <p className="text-sm font-semibold text-slate-700 mb-3">{t('developer.create_key_title')}</p>
                     <div className="flex gap-2">
                       <Input
-                        placeholder="Key 名称，如「开发测试」"
+                        placeholder={t('developer.key_name_placeholder')}
                         value={newKeyName}
                         onChange={(e) => setNewKeyName(e.target.value)}
                         style={{ maxWidth: 300 }}
                         onPressEnter={createKey}
                       />
                       <Button type="primary" icon={<PlusOutlined />} onClick={createKey}>
-                        创建
+                        {t('common.save')}
                       </Button>
                     </div>
                   </div>
@@ -373,15 +375,15 @@ export default function DeveloperPage() {
               key: 'logs',
               label: (
                 <span>
-                  <ClockCircleOutlined className="mr-1" />请求日志
+                  <ClockCircleOutlined className="mr-1" />{t('developer.tab_logs')}
                   <Tag className="ml-1 text-xs">{logs.length}</Tag>
                 </span>
               ),
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-slate-700">最近 {logs.length} 条请求</p>
-                    <Button size="small" icon={<ReloadOutlined />} onClick={() => setLogs(MOCK_LOGS)}>重置</Button>
+                    <p className="text-sm font-semibold text-slate-700">{t('developer.recent_requests', { count: logs.length })}</p>
+                    <Button size="small" icon={<ReloadOutlined />} onClick={() => setLogs(MOCK_LOGS)}>{t('common.reset')}</Button>
                   </div>
                   <Table
                     dataSource={logs}
@@ -393,7 +395,7 @@ export default function DeveloperPage() {
                         <div className="grid grid-cols-2 gap-4 py-2">
                           <div>
                             <p className="text-xs text-slate-500 mb-1 font-medium">Request</p>
-                            <pre className="text-xs font-mono bg-slate-50 p-3 rounded-lg overflow-auto max-h-32">{record.requestBody || '(无 body)'}</pre>
+                            <pre className="text-xs font-mono bg-slate-50 p-3 rounded-lg overflow-auto max-h-32">{record.requestBody || t('developer.no_body')}</pre>
                           </div>
                           <div>
                             <p className="text-xs text-slate-500 mb-1 font-medium">Response</p>
@@ -402,7 +404,7 @@ export default function DeveloperPage() {
                         </div>
                       ),
                     }}
-                    pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                    pagination={{ pageSize: 20, showTotal: (total) => t('developer.pagination_total', { total }) }}
                   />
                 </div>
               ),
@@ -411,15 +413,15 @@ export default function DeveloperPage() {
             // ── Stats ────────────────────────────────────────────────────────
             {
               key: 'stats',
-              label: <span><BarChartOutlined className="mr-1" />调用统计</span>,
+              label: <span><BarChartOutlined className="mr-1" />{t('developer.tab_stats')}</span>,
               children: (
                 <div className="space-y-5">
                   <div className="grid grid-cols-4 gap-4">
                     {[
-                      { title: '总调用次数', value: totalCalls, suffix: '次', color: '#7c3aed' },
-                      { title: '成功率',     value: successRate, suffix: '%', color: '#16a34a' },
-                      { title: '平均延迟',   value: avgLatency,  suffix: 'ms', color: '#2563eb' },
-                      { title: '错误次数',   value: errorCount,  suffix: '次', color: '#dc2626' },
+                      { title: t('developer.stat_total_calls'), value: totalCalls, suffix: t('dashboard.unit_times'), color: '#7c3aed' },
+                      { title: t('developer.stat_success_rate'), value: successRate, suffix: '%', color: '#16a34a' },
+                      { title: t('developer.stat_avg_latency'), value: avgLatency,  suffix: 'ms', color: '#2563eb' },
+                      { title: t('developer.stat_errors'), value: errorCount,  suffix: t('dashboard.unit_times'), color: '#dc2626' },
                     ].map((s) => (
                       <Card key={s.title} className="rounded-2xl border-slate-100">
                         <Statistic
@@ -434,7 +436,7 @@ export default function DeveloperPage() {
 
                   {/* Endpoint breakdown */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
-                    <p className="text-sm font-semibold text-slate-700 mb-4">端点调用分布</p>
+                    <p className="text-sm font-semibold text-slate-700 mb-4">{t('developer.endpoint_distribution')}</p>
                     <div className="space-y-2">
                       {ENDPOINTS.slice(0, 5).map((ep) => {
                         const count = logs.filter((l) => l.endpoint === ep.path).length
@@ -446,7 +448,7 @@ export default function DeveloperPage() {
                             <div className="flex-1 bg-slate-100 rounded-full h-1.5">
                               <div className="h-1.5 rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
                             </div>
-                            <span className="text-xs text-slate-400 w-16 text-right">{count} 次 ({pct}%)</span>
+                            <span className="text-xs text-slate-400 w-16 text-right">{t('developer.calls_count', { count, pct })}</span>
                           </div>
                         )
                       })}

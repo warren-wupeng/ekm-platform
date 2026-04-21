@@ -6,13 +6,7 @@ import {
 } from '@ant-design/icons'
 import type { SearchResult, ResultType } from '@/types/search'
 import { TYPE_COLORS } from '@/lib/theme'
-
-const TYPE_META: Record<ResultType, { icon: React.ReactNode; label: string }> = {
-  document: { icon: <FileTextOutlined />, label: '文档' },
-  post:     { icon: <MessageOutlined />,  label: '帖子' },
-  file:     { icon: <PaperClipOutlined />, label: '文件' },
-  wiki:     { icon: <BookOutlined />,     label: 'Wiki' },
-}
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   result: SearchResult
@@ -20,6 +14,13 @@ interface Props {
 }
 
 export default function ResultCard({ result }: Props) {
+  const { t } = useTranslation()
+  const TYPE_META: Record<ResultType, { icon: React.ReactNode; label: string }> = {
+    document: { icon: <FileTextOutlined />, label: t('search.type_document') },
+    post:     { icon: <MessageOutlined />,  label: t('search.type_post') },
+    file:     { icon: <PaperClipOutlined />, label: t('search.type_file') },
+    wiki:     { icon: <BookOutlined />,     label: 'Wiki' },
+  }
   const meta  = TYPE_META[result.type]
   const color = TYPE_COLORS[result.type]
 

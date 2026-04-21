@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { App, Button, Input, Select, Tag, Progress, Tooltip } from 'antd'
+import { useTranslation } from 'react-i18next'
 import {
   BoldOutlined, ItalicOutlined, CodeOutlined, OrderedListOutlined,
   UnorderedListOutlined, LinkOutlined, PaperClipOutlined, EyeOutlined,
@@ -55,6 +56,7 @@ const DRAFT_KEY = 'ekm_post_draft'
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NewPostPage() {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -118,13 +120,13 @@ export default function NewPostPage() {
   }, [])
 
   const TOOLBAR = [
-    { icon: <BoldOutlined />,           tip: '加粗 (Ctrl+B)',        action: () => wrap('**') },
-    { icon: <ItalicOutlined />,         tip: '斜体 (Ctrl+I)',        action: () => wrap('*') },
-    { icon: <CodeOutlined />,           tip: '行内代码',              action: () => wrap('`') },
-    { icon: <OrderedListOutlined />,    tip: '有序列表',              action: () => insertLine('1. ') },
-    { icon: <UnorderedListOutlined />,  tip: '无序列表',              action: () => insertLine('- ') },
-    { icon: <LinkOutlined />,           tip: '链接',                  action: () => wrap('[', '](url)') },
-    { icon: <PictureOutlined />,        tip: '图片',                  action: () => wrap('![alt](', ')') },
+    { icon: <BoldOutlined />,           tip: t('community.new.toolbar_bold'),    action: () => wrap('**') },
+    { icon: <ItalicOutlined />,         tip: t('community.new.toolbar_italic'),  action: () => wrap('*') },
+    { icon: <CodeOutlined />,           tip: t('community.new.toolbar_code'),    action: () => wrap('`') },
+    { icon: <OrderedListOutlined />,    tip: t('community.new.toolbar_ol'),      action: () => insertLine('1. ') },
+    { icon: <UnorderedListOutlined />,  tip: t('community.new.toolbar_ul'),      action: () => insertLine('- ') },
+    { icon: <LinkOutlined />,           tip: t('community.new.toolbar_link'),    action: () => wrap('[', '](url)') },
+    { icon: <PictureOutlined />,        tip: t('community.new.toolbar_image'),   action: () => wrap('![alt](', ')') },
   ]
 
   // ── Attachment upload (mock) ──────────────────────────────────────────────
@@ -157,12 +159,12 @@ export default function NewPostPage() {
   // ── Publish ───────────────────────────────────────────────────────────────
 
   async function handlePublish() {
-    if (!title.trim()) { message.warning('请填写标题'); return }
-    if (!content.trim()) { message.warning('请填写内容'); return }
+    if (!title.trim()) { message.warning(t('community.new.title_required')); return }
+    if (!content.trim()) { message.warning(t('community.new.content_required')); return }
     setPublishing(true)
     await new Promise((r) => setTimeout(r, 800))  // mock API
     localStorage.removeItem(DRAFT_KEY)
-    message.success('帖子已发布')
+    message.success(t('community.new.published'))
     router.push('/community')
   }
 
@@ -179,20 +181,20 @@ export default function NewPostPage() {
             onClick={() => router.push('/community')}
             className="text-slate-500"
           >
-            返回
+            {t('community.new.back')}
           </Button>
-          <span className="text-sm font-semibold text-slate-800">发布帖子</span>
-          {draftSaved && <span className="text-xs text-green-500">草稿已保存</span>}
+          <span className="text-sm font-semibold text-slate-800">{t('community.new.page_title')}</span>
+          {draftSaved && <span className="text-xs text-green-500">{t('community.new.draft_saved')}</span>}
         </div>
         <div className="flex items-center gap-2">
           <Button
             size="small" icon={<SaveOutlined />}
             onClick={() => {
               localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content, tags }))
-              message.success('草稿已保存')
+              message.success(t('community.new.draft_saved'))
             }}
           >
-            存草稿
+            {t('community.new.save_draft')}
           </Button>
           <Button
             type="primary" size="small" icon={<SendOutlined />}
@@ -200,7 +202,7 @@ export default function NewPostPage() {
             loading={publishing}
             onClick={handlePublish}
           >
-            发布
+            {t('community.new.publish')}
           </Button>
         </div>
       </div>
@@ -208,7 +210,7 @@ export default function NewPostPage() {
       <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-5 space-y-4">
         {/* Title */}
         <Input
-          placeholder="标题（一句话概括你想分享的内容）"
+          placeholder={t('community.new.title_placeholder')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={80}
@@ -220,7 +222,7 @@ export default function NewPostPage() {
         {/* Tags */}
         <Select
           mode="tags"
-          placeholder="添加标签（输入后按 Enter）"
+          placeholder={t('community.new.tags_placeholder')}
           value={tags}
           onChange={setTags}
           tokenSeparators={[',']}
@@ -243,14 +245,14 @@ export default function NewPostPage() {
               </Tooltip>
             ))}
             <div className="ml-auto flex items-center gap-1">
-              <span className="text-[10px] text-slate-400">{wordCount} 字</span>
-              <Tooltip title={preview ? '编辑模式' : '预览模式'}>
+              <span className="text-[10px] text-slate-400">{t('community.new.word_count', { count: wordCount })}</span>
+              <Tooltip title={preview ? t('community.new.edit_btn') : t('community.new.preview_btn')}>
                 <button
                   className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ml-2 ${preview ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                   onClick={() => setPreview((v) => !v)}
                 >
                   {preview ? <EditOutlined /> : <EyeOutlined />}
-                  {preview ? '编辑' : '预览'}
+                  {preview ? t('community.new.edit_btn') : t('community.new.preview_btn')}
                 </button>
               </Tooltip>
             </div>
@@ -260,14 +262,14 @@ export default function NewPostPage() {
           {preview ? (
             <div
               className="min-h-64 px-5 py-4 prose prose-sm max-w-none text-sm text-slate-700 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: `<p class="text-sm text-slate-700 leading-relaxed mb-2">${renderMarkdown(content || '_（无内容）_')}</p>` }}
+              dangerouslySetInnerHTML={{ __html: `<p class="text-sm text-slate-700 leading-relaxed mb-2">${renderMarkdown(content || t('community.new.no_content'))}</p>` }}
             />
           ) : (
             <textarea
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder={`支持 Markdown 语法\n\n**加粗** *斜体* \`代码\`\n\n## 标题\n\n- 列表项\n\n\`\`\`python\nprint("hello world")\n\`\`\``}
+              placeholder={t('community.new.md_placeholder')}
               className="w-full min-h-64 px-5 py-4 text-sm text-slate-700 font-mono leading-relaxed resize-none outline-none placeholder:text-slate-300 placeholder:font-sans"
               maxLength={10000}
               onKeyDown={(e) => {
@@ -281,12 +283,12 @@ export default function NewPostPage() {
         {/* Attachments */}
         <div className="bg-white rounded-2xl border border-slate-100 p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-slate-700">附件</span>
+            <span className="text-sm font-medium text-slate-700">{t('community.new.attachments')}</span>
             <Button
               size="small" icon={<PaperClipOutlined />}
               onClick={() => fileInputRef.current?.click()}
             >
-              添加附件
+              {t('community.new.add_attachment')}
             </Button>
             <input
               ref={fileInputRef} type="file" multiple hidden
@@ -296,7 +298,7 @@ export default function NewPostPage() {
 
           {attachments.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">
-              拖拽文件到此处，或点击「添加附件」
+              {t('community.new.drop_hint')}
             </p>
           ) : (
             <div className="space-y-2">
@@ -313,7 +315,7 @@ export default function NewPostPage() {
                     {!att.done && (
                       <Progress percent={Math.floor(att.progress)} size="small" showInfo={false} className="mt-1" />
                     )}
-                    {att.done && <p className="text-[10px] text-green-500 mt-0.5">上传完成</p>}
+                    {att.done && <p className="text-[10px] text-green-500 mt-0.5">{t('community.new.upload_complete')}</p>}
                   </div>
                   <button
                     onClick={() => removeAttachment(att.id)}

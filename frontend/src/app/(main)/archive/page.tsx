@@ -94,7 +94,7 @@ export default function ArchivePage() {
       setItemsTotal(data.total)
       setItemsPage(data.page)
     } catch {
-      message.error('加载归档列表失败')
+      message.error(t('archive.load_archive_failed'))
     } finally {
       setItemsLoading(false)
     }
@@ -106,7 +106,7 @@ export default function ArchivePage() {
       const { data } = await api.get('/api/v1/archive/restore-requests')
       setRequests(data)
     } catch {
-      message.error('加载恢复申请失败')
+      message.error(t('archive.load_requests_failed'))
     } finally {
       setRequestsLoading(false)
     }
@@ -124,13 +124,13 @@ export default function ArchivePage() {
         knowledge_item_id: restoreModal.id,
         reason: values.reason,
       })
-      message.success('恢复申请已提交，等待 KM Ops 审批')
+      message.success(t('archive.restore_success'))
       setRestoreModal(null)
       form.resetFields()
       void fetchItems()
       void fetchRequests()
     } catch {
-      message.error('提交恢复申请失败')
+      message.error(t('archive.restore_failed'))
     }
   }
 
@@ -146,7 +146,7 @@ export default function ArchivePage() {
       void fetchItems()
       void fetchRequests()
     } catch {
-      message.error('操作失败')
+      message.error(t('common.operation_failed'))
     }
   }
 
@@ -204,9 +204,9 @@ export default function ArchivePage() {
       render: (_, record) => {
         const req = findRequest(record.id)
         if (req && req.status === 'pending') {
-          return <Tag color="orange" className="text-xs">待恢复审批</Tag>
+          return <Tag color="orange" className="text-xs">{t('archive.status_pending_restore')}</Tag>
         }
-        return <Tag color="default" className="text-xs">已归档</Tag>
+        return <Tag color="default" className="text-xs">{t('archive.status_archived')}</Tag>
       },
     },
     {
@@ -219,7 +219,7 @@ export default function ArchivePage() {
         const hasPending = req && req.status === 'pending'
         return (
           <Space size={4}>
-            <Tooltip title="查看详情">
+            <Tooltip title={t('archive.view_details')}>
               <Button
                 type="text" size="small"
                 icon={<ClockCircleOutlined />}
@@ -228,7 +228,7 @@ export default function ArchivePage() {
               />
             </Tooltip>
             {hasPending ? (
-              <Tag color="orange" className="text-xs">审批中</Tag>
+              <Tag color="orange" className="text-xs">{t('archive.status_in_review')}</Tag>
             ) : (
               <Tooltip title={t('archive.restore_button')}>
                 <Button
@@ -313,7 +313,7 @@ export default function ArchivePage() {
                 icon={<CheckOutlined />}
                 className="text-xs"
               >
-                批准
+                {t('archive.review_approve')}
               </Button>
             </Popconfirm>
             <Button
@@ -322,7 +322,7 @@ export default function ArchivePage() {
               className="text-xs"
               onClick={() => setReviewModal(record)}
             >
-              拒绝
+              {t('archive.review_reject')}
             </Button>
           </Space>
         ) : (
@@ -345,7 +345,7 @@ export default function ArchivePage() {
             <InboxOutlined className="text-slate-500 text-lg" />
             <h1 className="text-lg font-semibold text-slate-800">{t('archive.page_title')}</h1>
           </div>
-          <p className="text-xs text-slate-400">管理已归档内容，处理恢复申请</p>
+          <p className="text-xs text-slate-400">{t('archive.page_subtitle')}</p>
         </div>
       </div>
 
@@ -358,7 +358,7 @@ export default function ArchivePage() {
               key: 'archive',
               label: (
                 <span>
-                  <InboxOutlined className="mr-1" />归档列表
+                  <InboxOutlined className="mr-1" />{t('archive.tab_archived')}
                 </span>
               ),
               children: (
@@ -373,7 +373,7 @@ export default function ArchivePage() {
                       current: itemsPage,
                       total: itemsTotal,
                       pageSize: 20,
-                      showTotal: (t) => `共 ${t} 条`,
+                      showTotal: (total) => t('common.total_count', { count: total }),
                       onChange: (p) => void fetchItems(p),
                     }}
                   />
@@ -385,7 +385,7 @@ export default function ArchivePage() {
               label: (
                 <span>
                   <ExclamationCircleOutlined className="mr-1" />
-                  恢复审批
+                  {t('archive.tab_requests')}
                   {pendingCount > 0 && (
                     <Badge count={pendingCount} size="small" className="ml-2" />
                   )}
@@ -399,7 +399,7 @@ export default function ArchivePage() {
                     rowKey="id"
                     size="small"
                     loading={requestsLoading}
-                    pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                    pagination={{ pageSize: 20, showTotal: (total) => t('common.total_count', { count: total }) }}
                   />
                 </div>
               ),
@@ -425,28 +425,28 @@ export default function ArchivePage() {
             <div className="mb-4 p-3 bg-slate-50 rounded-lg">
               <p className="text-sm font-medium text-slate-700">{restoreModal.name}</p>
               <p className="text-xs text-slate-400 mt-1">
-                归档于 {restoreModal.archived_at ? dayjs(restoreModal.archived_at).format('YYYY-MM-DD') : '-'}
+                {t('archive.archived_at')} {restoreModal.archived_at ? dayjs(restoreModal.archived_at).format('YYYY-MM-DD') : '-'}
               </p>
             </div>
             <Form form={form} layout="vertical" onFinish={handleRestoreRequest}>
               <Form.Item
                 name="reason"
                 label={t('archive.restore_reason_label')}
-                rules={[{ required: true, message: '请填写恢复原因' }]}
+                rules={[{ required: true, message: t('archive.restore_reason_required') }]}
               >
                 <Input.TextArea
                   rows={3}
-                  placeholder="请说明为什么需要恢复此文件..."
+                  placeholder={t('archive.restore_reason_placeholder')}
                   maxLength={200}
                   showCount
                 />
               </Form.Item>
               <div className="flex justify-end gap-2">
                 <Button onClick={() => { setRestoreModal(null); form.resetFields() }}>
-                  取消
+                  {t('common.cancel')}
                 </Button>
                 <Button type="primary" htmlType="submit">
-                  提交申请
+                  {t('archive.restore_submit')}
                 </Button>
               </div>
             </Form>
@@ -470,20 +470,20 @@ export default function ArchivePage() {
             <div className="mb-4 p-3 bg-slate-50 rounded-lg">
               <p className="text-sm font-medium text-slate-700">{reviewModal.knowledge_item_name}</p>
               <p className="text-xs text-slate-400 mt-1">
-                {reviewModal.submitted_by_name} 申请于{' '}
+                {reviewModal.submitted_by_name} · {t('archive.request_at')}{' '}
                 {reviewModal.submitted_at ? dayjs(reviewModal.submitted_at).format('YYYY-MM-DD') : '-'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">原因：{reviewModal.reason}</p>
+              <p className="text-xs text-slate-500 mt-1">{t('archive.reason_label')} {reviewModal.reason}</p>
             </div>
-            <Form.Item name="comment" label="拒绝说明（可选）">
-              <Input.TextArea rows={2} placeholder="说明拒绝原因..." maxLength={100} showCount />
+            <Form.Item name="comment" label={t('archive.reject_note_label')}>
+              <Input.TextArea rows={2} placeholder={t('archive.review_note_placeholder')} maxLength={100} showCount />
             </Form.Item>
             <div className="flex justify-end gap-2">
               <Button onClick={() => { setReviewModal(null); reviewForm.resetFields() }}>
-                取消
+                {t('common.cancel')}
               </Button>
               <Button danger htmlType="submit">
-                确认拒绝
+                {t('archive.confirm_reject')}
               </Button>
             </div>
           </Form>
@@ -492,7 +492,7 @@ export default function ArchivePage() {
 
       {/* Detail modal */}
       <Modal
-        title="归档详情"
+        title={t('archive.detail_title')}
         open={!!detailItem}
         onCancel={() => setDetailItem(null)}
         footer={<Button onClick={() => setDetailItem(null)}>{t('common.close')}</Button>}
@@ -502,7 +502,7 @@ export default function ArchivePage() {
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="text-sm font-semibold text-slate-800">{detailItem.name}</p>
               <p className="text-xs text-slate-400 mt-1">
-                类型：{FILE_TYPE_LABEL[detailItem.file_type] ?? detailItem.file_type}
+                {t('archive.detail_type')} {FILE_TYPE_LABEL[detailItem.file_type] ?? detailItem.file_type}
               </p>
             </div>
             <Timeline
@@ -511,7 +511,7 @@ export default function ArchivePage() {
                   dot: <StarOutlined className="text-primary" />,
                   children: (
                     <div>
-                      <p className="text-sm font-medium text-slate-700">文件归档</p>
+                      <p className="text-sm font-medium text-slate-700">{t('archive.timeline_archived')}</p>
                       <p className="text-xs text-slate-400">
                         {detailItem.archived_at ? dayjs(detailItem.archived_at).format('YYYY-MM-DD') : '-'}{' '}
                         · {detailItem.uploader_name ?? '-'}
@@ -525,12 +525,12 @@ export default function ArchivePage() {
                     const req = findRequest(detailItem.id)!
                     return (
                       <div>
-                        <p className="text-sm font-medium text-slate-700">恢复申请</p>
+                        <p className="text-sm font-medium text-slate-700">{t('archive.timeline_restore')}</p>
                         <p className="text-xs text-slate-400">
                           {req.submitted_at ? dayjs(req.submitted_at).format('YYYY-MM-DD') : '-'}{' '}
                           · {req.submitted_by_name ?? '-'}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">原因：{req.reason}</p>
+                        <p className="text-xs text-slate-500 mt-1">{t('archive.reason_label')} {req.reason}</p>
                         <Tag
                           color={APPROVAL_CONFIG[req.status]?.color ?? 'default'}
                           className="text-xs mt-1"

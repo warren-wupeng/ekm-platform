@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { App, Button, Tag, Tooltip, Popconfirm, Badge } from 'antd'
 import {
   ClockCircleOutlined, RollbackOutlined, StarOutlined,
@@ -157,6 +158,7 @@ const LINE_TEXT_STYLE: Record<string, string> = {
 }
 
 export default function VersionHistoryPage() {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const router = useRouter()
   const [versions, setVersions] = useState<VersionRecord[]>(MOCK_VERSIONS)
@@ -174,7 +176,7 @@ export default function VersionHistoryPage() {
   }
 
   function handleRollback(ver: VersionRecord) {
-    message.success(`已回滚到 ${ver.version}，当前版本已保存为新历史记录`)
+    message.success(t('history.rollback_success', { version: ver.version }))
   }
 
   return (
@@ -188,7 +190,7 @@ export default function VersionHistoryPage() {
           className="text-slate-500"
         />
         <div>
-          <h1 className="text-base font-semibold text-slate-800">版本历史</h1>
+          <h1 className="text-base font-semibold text-slate-800">{t('history.page_title')}</h1>
           <p className="text-xs text-slate-400">技术架构设计.docx</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -199,7 +201,7 @@ export default function VersionHistoryPage() {
             ghost={compareMode}
             onClick={() => setCompareMode((v) => !v)}
           >
-            对比视图
+            {t('history.compare_view')}
           </Button>
         </div>
       </div>
@@ -210,7 +212,7 @@ export default function VersionHistoryPage() {
           className="flex-shrink-0 bg-white border-r border-slate-100 overflow-y-auto py-3"
           style={{ width: 260 }}
         >
-          <p className="text-xs text-slate-400 px-4 mb-2 font-medium uppercase tracking-wide">版本时间线</p>
+          <p className="text-xs text-slate-400 px-4 mb-2 font-medium uppercase tracking-wide">{t('history.timeline_title')}</p>
           {versions.map((ver) => {
             const isLeft  = selectedLeft.id  === ver.id
             const isRight = selectedRight.id === ver.id
@@ -237,7 +239,7 @@ export default function VersionHistoryPage() {
                     {ver.starred && <StarFilled className="text-yellow-400 text-xs" />}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Tooltip title={ver.starred ? '取消星标' : '标记重要版本'}>
+                    <Tooltip title={ver.starred ? t('history.unstar') : t('history.star')}>
                       <button
                         className="text-slate-300 hover:text-yellow-400 transition-colors"
                         onClick={(e) => { e.stopPropagation(); toggleStar(ver.id) }}
@@ -246,14 +248,14 @@ export default function VersionHistoryPage() {
                       </button>
                     </Tooltip>
                     {ver.id !== versions[0].id && (
-                      <Tooltip title="设为对比基准">
+                      <Tooltip title={t('history.set_baseline')}>
                         <button
                           className={`text-xs px-1 rounded transition-colors ${
                             isLeft ? 'text-slate-600 bg-slate-200' : 'text-slate-300 hover:text-slate-500'
                           }`}
                           onClick={(e) => { e.stopPropagation(); setSelectedLeft(ver) }}
                         >
-                          基
+                          {t('history.baseline_badge')}
                         </button>
                       </Tooltip>
                     )}
@@ -267,11 +269,11 @@ export default function VersionHistoryPage() {
                 {ver.id !== versions[0].id && (
                   <div className="mt-1.5">
                     <Popconfirm
-                      title="确认回滚"
-                      description={`回滚到 ${ver.version}？当前内容将保存为新历史版本。`}
+                      title={t('history.confirm_rollback')}
+                      description={t('history.rollback_desc', { version: ver.version })}
                       onConfirm={() => handleRollback(ver)}
-                      okText="回滚"
-                      cancelText="取消"
+                      okText={t('history.rollback')}
+                      cancelText={t('common.cancel')}
                       okButtonProps={{ danger: true }}
                     >
                       <Button
@@ -280,7 +282,7 @@ export default function VersionHistoryPage() {
                         className="text-slate-400 hover:text-primary text-xs h-6 px-1"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        回滚
+                        {t('history.rollback')}
                       </Button>
                     </Popconfirm>
                   </div>
@@ -297,13 +299,13 @@ export default function VersionHistoryPage() {
               {/* Diff stats bar */}
               <div className="sticky top-0 bg-white border-b border-slate-100 px-4 py-2 flex items-center gap-4 z-10">
                 <span className="text-xs text-slate-500">
-                  对比：
+                  {t('history.compare_label')}
                   <Tag className="mx-1 text-xs">{selectedLeft.version}</Tag>
                   →
                   <Tag color="purple" className="mx-1 text-xs">{selectedRight.version}</Tag>
                 </span>
-                <span className="text-xs text-green-600 font-medium">+{addedCount} 行</span>
-                <span className="text-xs text-red-500 font-medium">-{removedCount} 行</span>
+                <span className="text-xs text-green-600 font-medium">{t('history.added_lines', { count: addedCount })}</span>
+                <span className="text-xs text-red-500 font-medium">{t('history.removed_lines', { count: removedCount })}</span>
               </div>
 
               {/* Side-by-side diff */}

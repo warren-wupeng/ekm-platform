@@ -2,25 +2,28 @@
 import dynamic from 'next/dynamic'
 import { ApartmentOutlined } from '@ant-design/icons'
 import { Spin } from 'antd'
+import { useTranslation } from 'react-i18next'
+import i18next from 'i18next'
 
 // Lazy-load the ReactFlow canvas — @xyflow/react is ~400 KB and only needed on this route
 const KGCanvas = dynamic(() => import('./KGCanvas'), {
   ssr: false,
   loading: () => (
     <div className="flex-1 flex items-center justify-center" style={{ height: 'calc(100vh - 57px)' }}>
-      <Spin size="large" tip="加载知识图谱…" />
+      <Spin size="large" tip={i18next.t('kg.loading')} />
     </div>
   ),
 })
 
 export default function KnowledgeGraphPage() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col" style={{ height: '100vh' }}>
       <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center gap-3">
         <ApartmentOutlined className="text-slate-500 text-lg" />
         <div>
-          <h1 className="text-base font-semibold text-slate-800">知识图谱</h1>
-          <p className="text-xs text-slate-400">点击节点查看详情 · 拖拽连线新建关系 · Delete 删除选中</p>
+          <h1 className="text-base font-semibold text-slate-800">{t('kg.page_title')}</h1>
+          <p className="text-xs text-slate-400">{t('kg.usage_hint')}</p>
         </div>
       </div>
       <KGCanvas />

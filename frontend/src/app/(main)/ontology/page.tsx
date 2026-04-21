@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   App, Table, Tag, Button, Modal, Form, Input, Select, Space,
   Tabs, Tooltip, Popconfirm, Tree, Badge,
@@ -90,6 +91,7 @@ function buildTree(entities: EntityType[]): DataNode[] {
 
 export default function OntologyPage() {
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const [entities, setEntities]   = useState<EntityType[]>(MOCK_ENTITIES)
   const [relations, setRelations] = useState<RelationType[]>(MOCK_RELATIONS)
   const [activeTab, setActiveTab] = useState('entity')
@@ -112,12 +114,12 @@ export default function OntologyPage() {
         color: ENTITY_COLORS[entities.length % ENTITY_COLORS.length],
       }
       setEntities((prev) => [...prev, newEntity])
-      message.success('实体类型已创建')
+      message.success(t('ontology.entity_created'))
     } else if (entityModal) {
       setEntities((prev) =>
         prev.map((e) => e.id === entityModal.id ? { ...e, ...values } : e)
       )
-      message.success('实体类型已更新')
+      message.success(t('ontology.entity_updated'))
     }
     setEntityModal(null)
     entityForm.resetFields()
@@ -136,12 +138,12 @@ export default function OntologyPage() {
         usageCount: 0,
       }
       setRelations((prev) => [...prev, newRel])
-      message.success('关系类型已创建')
+      message.success(t('ontology.relation_created'))
     } else if (relationModal) {
       setRelations((prev) =>
         prev.map((r) => r.id === (relationModal as RelationType).id ? { ...r, ...values } : r)
       )
-      message.success('关系类型已更新')
+      message.success(t('ontology.relation_updated'))
     }
     setRelationModal(null)
     relationForm.resetFields()
@@ -159,7 +161,7 @@ export default function OntologyPage() {
 
   const entityColumns: ColumnsType<EntityType> = [
     {
-      title: '实体类型',
+      title: t('ontology.col_entity_type'),
       key: 'name',
       render: (_, r) => (
         <div className="flex items-center gap-2">
@@ -172,25 +174,25 @@ export default function OntologyPage() {
       ),
     },
     {
-      title: '父类',
+      title: t('ontology.col_parent'),
       dataIndex: 'parent',
       key: 'parent',
       width: 110,
       render: (v?: string) => v ? <Tag className="text-xs">{v}</Tag> : <span className="text-slate-300 text-xs">—</span>,
     },
     {
-      title: '来源',
+      title: t('ontology.col_source'),
       dataIndex: 'source',
       key: 'source',
       width: 90,
       render: (s: string) => (
         <Tag color={s === 'custom' ? 'purple' : 'blue'} className="text-xs">
-          {s === 'custom' ? '自定义' : 'schema.org'}
+          {s === 'custom' ? t('ontology.source_custom') : 'schema.org'}
         </Tag>
       ),
     },
     {
-      title: '属性数',
+      title: t('ontology.col_properties'),
       dataIndex: 'propertyCount',
       key: 'propertyCount',
       width: 70,
@@ -198,7 +200,7 @@ export default function OntologyPage() {
       render: (v: number) => <span className="text-slate-500 text-xs">{v}</span>,
     },
     {
-      title: '使用次数',
+      title: t('ontology.col_usage'),
       dataIndex: 'usageCount',
       key: 'usageCount',
       width: 80,
@@ -207,19 +209,19 @@ export default function OntologyPage() {
       sorter: (a, b) => a.usageCount - b.usageCount,
     },
     {
-      title: '描述',
+      title: t('ontology.col_description'),
       dataIndex: 'description',
       key: 'description',
       render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
     },
     {
-      title: '操作',
+      title: t('ontology.col_actions'),
       key: 'actions',
       width: 90,
       align: 'center',
       render: (_, record) => (
         <Space size={4}>
-          <Tooltip title="编辑">
+          <Tooltip title={t('common.edit')}>
             <Button
               type="text" size="small"
               icon={<EditOutlined />}
@@ -229,13 +231,13 @@ export default function OntologyPage() {
             />
           </Tooltip>
           <Popconfirm
-            title="确认删除"
-            description="删除此实体类型不会影响已有数据"
-            onConfirm={() => { setEntities((prev) => prev.filter((e) => e.id !== record.id)); message.success('已删除') }}
-            okText="删除" cancelText="取消" okButtonProps={{ danger: true }}
+            title={t('ontology.confirm_delete')}
+            description={t('ontology.delete_entity_desc')}
+            onConfirm={() => { setEntities((prev) => prev.filter((e) => e.id !== record.id)); message.success(t('ontology.deleted')) }}
+            okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
             disabled={record.source === 'schema.org'}
           >
-            <Tooltip title={record.source === 'schema.org' ? '系统类型不可删除' : '删除'}>
+            <Tooltip title={record.source === 'schema.org' ? t('ontology.system_no_delete') : t('common.delete')}>
               <Button
                 type="text" size="small"
                 icon={<DeleteOutlined />}
@@ -251,7 +253,7 @@ export default function OntologyPage() {
 
   const relationColumns: ColumnsType<RelationType> = [
     {
-      title: '关系名',
+      title: t('ontology.col_relation_name'),
       key: 'name',
       render: (_, r) => (
         <div>
@@ -261,7 +263,7 @@ export default function OntologyPage() {
       ),
     },
     {
-      title: '域 → 值域',
+      title: t('ontology.col_domain_range'),
       key: 'domain',
       width: 180,
       render: (_, r) => (
@@ -273,18 +275,18 @@ export default function OntologyPage() {
       ),
     },
     {
-      title: '来源',
+      title: t('ontology.col_source'),
       dataIndex: 'source',
       key: 'source',
       width: 90,
       render: (s: string) => (
         <Tag color={s === 'custom' ? 'purple' : 'blue'} className="text-xs">
-          {s === 'custom' ? '自定义' : 'schema.org'}
+          {s === 'custom' ? t('ontology.source_custom') : 'schema.org'}
         </Tag>
       ),
     },
     {
-      title: '使用次数',
+      title: t('ontology.col_usage'),
       dataIndex: 'usageCount',
       key: 'usageCount',
       width: 80,
@@ -293,19 +295,19 @@ export default function OntologyPage() {
       sorter: (a, b) => a.usageCount - b.usageCount,
     },
     {
-      title: '描述',
+      title: t('ontology.col_description'),
       dataIndex: 'description',
       key: 'description',
       render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
     },
     {
-      title: '操作',
+      title: t('ontology.col_actions'),
       key: 'actions',
       width: 90,
       align: 'center',
       render: (_, record) => (
         <Space size={4}>
-          <Tooltip title="编辑">
+          <Tooltip title={t('common.edit')}>
             <Button
               type="text" size="small"
               icon={<EditOutlined />}
@@ -315,13 +317,13 @@ export default function OntologyPage() {
             />
           </Tooltip>
           <Popconfirm
-            title="确认删除"
-            description="删除关系类型不影响已有 KG 数据"
-            onConfirm={() => { setRelations((prev) => prev.filter((r) => r.id !== record.id)); message.success('已删除') }}
-            okText="删除" cancelText="取消" okButtonProps={{ danger: true }}
+            title={t('ontology.confirm_delete')}
+            description={t('ontology.delete_relation_desc')}
+            onConfirm={() => { setRelations((prev) => prev.filter((r) => r.id !== record.id)); message.success(t('ontology.deleted')) }}
+            okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
             disabled={record.source === 'schema.org'}
           >
-            <Tooltip title={record.source === 'schema.org' ? '系统类型不可删除' : '删除'}>
+            <Tooltip title={record.source === 'schema.org' ? t('ontology.system_no_delete') : t('common.delete')}>
               <Button
                 type="text" size="small"
                 icon={<DeleteOutlined />}
@@ -345,16 +347,16 @@ export default function OntologyPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <ApartmentOutlined className="text-slate-500 text-lg" />
-              <h1 className="text-lg font-semibold text-slate-800">Ontology 管理</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{t('ontology.page_title')}</h1>
             </div>
-            <p className="text-xs text-slate-400">基于 schema.org，支持自定义类型扩展</p>
+            <p className="text-xs text-slate-400">{t('ontology.page_subtitle')}</p>
           </div>
           <Space>
             <Button size="small" icon={<UploadOutlined />} className="text-slate-600">
-              导入 Ontology
+              {t('ontology.import')}
             </Button>
             <Button size="small" icon={<DownloadOutlined />} className="text-slate-600">
-              导出 JSON-LD
+              {t('ontology.export')}
             </Button>
           </Space>
         </div>
@@ -367,7 +369,7 @@ export default function OntologyPage() {
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ApartmentOutlined className="text-slate-400 text-sm" />
-                <span className="text-sm font-medium text-slate-700">类型层级</span>
+                <span className="text-sm font-medium text-slate-700">{t('ontology.type_hierarchy')}</span>
               </div>
               <Tree
                 treeData={treeData}
@@ -389,21 +391,21 @@ export default function OntologyPage() {
                     size="small" type="primary" icon={<PlusOutlined />}
                     onClick={() => { entityForm.resetFields(); setEntityModal('new') }}
                   >
-                    新增实体类型
+                    {t('ontology.add_entity')}
                   </Button>
                 ) : (
                   <Button
                     size="small" type="primary" icon={<PlusOutlined />}
                     onClick={() => { relationForm.resetFields(); setRelationModal('new') }}
                   >
-                    新增关系类型
+                    {t('ontology.add_relation')}
                   </Button>
                 )
               }
               items={[
                 {
                   key: 'entity',
-                  label: <span><TagOutlined className="mr-1" />实体类型 ({entities.length})</span>,
+                  label: <span><TagOutlined className="mr-1" />{t('ontology.tab_entities', { count: entities.length })}</span>,
                   children: (
                     <div className="bg-white rounded-2xl border border-slate-100 p-4">
                       <Table
@@ -418,7 +420,7 @@ export default function OntologyPage() {
                 },
                 {
                   key: 'relation',
-                  label: <span><LinkOutlined className="mr-1" />关系类型 ({relations.length})</span>,
+                  label: <span><LinkOutlined className="mr-1" />{t('ontology.tab_relations', { count: relations.length })}</span>,
                   children: (
                     <div className="bg-white rounded-2xl border border-slate-100 p-4">
                       <Table
@@ -439,73 +441,73 @@ export default function OntologyPage() {
 
       {/* Entity type modal */}
       <Modal
-        title={entityModal === 'new' ? '新增实体类型' : '编辑实体类型'}
+        title={entityModal === 'new' ? t('ontology.new_entity') : t('ontology.edit_entity')}
         open={!!entityModal}
         onCancel={() => { setEntityModal(null); entityForm.resetFields() }}
         footer={null}
       >
         <Form form={entityForm} layout="vertical" onFinish={handleSaveEntity} className="mt-4">
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="name" label="英文标识符" rules={[{ required: true }]}>
+            <Form.Item name="name" label={t('ontology.identifier')} rules={[{ required: true }]}>
               <Input placeholder="e.g. Department" />
             </Form.Item>
-            <Form.Item name="displayName" label="中文名称" rules={[{ required: true }]}>
-              <Input placeholder="e.g. 部门" />
+            <Form.Item name="displayName" label={t('ontology.display_name')} rules={[{ required: true }]}>
+              <Input placeholder={t('ontology.display_name_placeholder_entity')} />
             </Form.Item>
           </div>
-          <Form.Item name="parent" label="父类（可选）">
+          <Form.Item name="parent" label={t('ontology.parent_optional')}>
             <Select
               allowClear
-              placeholder="选择父类"
+              placeholder={t('ontology.select_parent')}
               options={entities.map((e) => ({ label: `${e.displayName} (${e.name})`, value: e.name }))}
             />
           </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="描述此实体类型的含义和用途" />
+          <Form.Item name="description" label={t('ontology.col_description')}>
+            <Input.TextArea rows={2} placeholder={t('ontology.desc_placeholder_entity')} />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => { setEntityModal(null); entityForm.resetFields() }}>取消</Button>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button onClick={() => { setEntityModal(null); entityForm.resetFields() }}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>
 
       {/* Relation type modal */}
       <Modal
-        title={relationModal === 'new' ? '新增关系类型' : '编辑关系类型'}
+        title={relationModal === 'new' ? t('ontology.new_relation') : t('ontology.edit_relation')}
         open={!!relationModal}
         onCancel={() => { setRelationModal(null); relationForm.resetFields() }}
         footer={null}
       >
         <Form form={relationForm} layout="vertical" onFinish={handleSaveRelation} className="mt-4">
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="name" label="英文标识符" rules={[{ required: true }]}>
+            <Form.Item name="name" label={t('ontology.identifier')} rules={[{ required: true }]}>
               <Input placeholder="e.g. belongsTo" />
             </Form.Item>
-            <Form.Item name="displayName" label="中文名称" rules={[{ required: true }]}>
-              <Input placeholder="e.g. 归属于" />
+            <Form.Item name="displayName" label={t('ontology.display_name')} rules={[{ required: true }]}>
+              <Input placeholder={t('ontology.display_name_placeholder_relation')} />
             </Form.Item>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="domain" label="域（起点实体）" rules={[{ required: true }]}>
+            <Form.Item name="domain" label={t('ontology.domain_label')} rules={[{ required: true }]}>
               <Select
-                placeholder="选择起点实体类型"
+                placeholder={t('ontology.domain_placeholder')}
                 options={entities.map((e) => ({ label: `${e.displayName} (${e.name})`, value: e.name }))}
               />
             </Form.Item>
-            <Form.Item name="range" label="值域（终点实体）" rules={[{ required: true }]}>
+            <Form.Item name="range" label={t('ontology.range_label')} rules={[{ required: true }]}>
               <Select
-                placeholder="选择终点实体类型"
+                placeholder={t('ontology.range_placeholder')}
                 options={entities.map((e) => ({ label: `${e.displayName} (${e.name})`, value: e.name }))}
               />
             </Form.Item>
           </div>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="描述此关系的含义" />
+          <Form.Item name="description" label={t('ontology.col_description')}>
+            <Input.TextArea rows={2} placeholder={t('ontology.desc_placeholder_relation')} />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => { setRelationModal(null); relationForm.resetFields() }}>取消</Button>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button onClick={() => { setRelationModal(null); relationForm.resetFields() }}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>

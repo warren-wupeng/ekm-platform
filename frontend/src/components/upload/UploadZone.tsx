@@ -14,6 +14,7 @@ import { getFileType, formatFileSize } from '@/lib/mockUpload'
 import { uploadFile } from '@/lib/uploadApi'
 import { triggerParse } from '@/lib/documentsApi'
 import { useParseProgress } from '@/hooks/useParseProgress'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onUploaded?: (files: UploadFile[]) => void
@@ -42,6 +43,7 @@ const TYPE_COLOR: Record<FileType, string> = {
 }
 
 export default function UploadZone({ onUploaded, onParseSettled }: Props) {
+  const { t } = useTranslation()
   const [files, setFiles]   = useState<UploadFile[]>([])
   const [dragOver, setDrag] = useState(false)
   const inputRef            = useRef<HTMLInputElement>(null)
@@ -73,7 +75,7 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
       taskToUidRef.current.delete(taskId)
       const patch: Partial<UploadFile> = { parseState }
       if (parseState === 'parse_failed') {
-        patch.parseError = detail.error ?? '解析失败'
+        patch.parseError = detail.error ?? t('upload.parse_failed')
       }
       updateFile(uid, patch)
       const final = { ...filesByUidRef.current.get(uid)!, ...patch }
@@ -90,11 +92,11 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
         updateFile(uid, { parseTaskId: task_id, parseState: 'pending' })
         parseProgress.start(task_id)
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '触发解析失败'
+        const msg = err instanceof Error ? err.message : t('upload.trigger_parse_failed')
         updateFile(uid, { parseState: 'parse_failed', parseError: msg })
       }
     },
-    [parseProgress],
+    [parseProgress, t],
   )
 
   const startUpload = useCallback(async (file: File) => {
@@ -131,12 +133,12 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
       // tracked via useParseProgress.
       void beginParse(uid, uploaded.id)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '上传失败'
+      const msg = err instanceof Error ? err.message : t('upload.upload_failed')
       updateFile(uid, { status: 'error', error: msg })
     } finally {
       abortsRef.current.delete(uid)
     }
-  }, [onUploaded, beginParse])
+  }, [onUploaded, beginParse, t])
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return
@@ -204,10 +206,10 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
           )}
         />
         <p className="text-slate-600 font-medium text-sm">
-          拖拽文件到此处，或<span className="text-primary">点击上传</span>
+          {t('upload.drop_hint')}
         </p>
         <p className="text-slate-400 text-xs mt-1">
-          支持 PDF、Word、Excel、图片、压缩包等，单文件最大 100MB
+          {t('upload.file_types_hint')}
         </p>
         <input
           ref={inputRef}
@@ -224,19 +226,19 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="font-medium text-slate-700">{files.length} 个文件</span>
+              <span className="font-medium text-slate-700">{t('upload.file_count', { count: files.length })}</span>
               {doneCount > 0 && (
-                <Tag color="success" className="m-0 text-xs">{doneCount} 成功</Tag>
+                <Tag color="success" className="m-0 text-xs">{t('upload.success_count', { count: doneCount })}</Tag>
               )}
               {uploadingCount > 0 && (
-                <Tag color="processing" className="m-0 text-xs">{uploadingCount} 上传中</Tag>
+                <Tag color="processing" className="m-0 text-xs">{t('upload.uploading_count', { count: uploadingCount })}</Tag>
               )}
               {errorCount > 0 && (
-                <Tag color="error" className="m-0 text-xs">{errorCount} 失败</Tag>
+                <Tag color="error" className="m-0 text-xs">{t('upload.error_count', { count: errorCount })}</Tag>
               )}
             </div>
             <Button size="small" type="text" onClick={clearAll} className="text-slate-400 text-xs">
-              清空列表
+              {t('upload.clear_list')}
             </Button>
           </div>
 
@@ -278,7 +280,7 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
                     {/* Parse stage — only render when upload succeeded so
                        we don't confuse upload vs parse states visually. */}
                     {f.status === 'success' && f.parseState === 'pending' && (
-                      <span className="text-xs text-slate-400">已上传 · 等待解析…</span>
+                      <span className="text-xs text-slate-400">{t('upload.status_uploaded_pending')}</span>
                     )}
                     {f.status === 'success' && f.parseState === 'parsing' && (
                       <Progress
@@ -292,11 +294,13 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
                       />
                     )}
                     {f.status === 'success' && f.parseState === 'parsed' && (
-                      <span className="text-xs text-green-600">已解析 · 已索引</span>
+                      <span className="text-xs text-green-600">{t('upload.status_parsed')}</span>
                     )}
                     {f.status === 'success' && f.parseState === 'parse_failed' && (
                       <span className="text-xs text-red-500">
-                        解析失败：{f.parseError ?? '未知错误'}
+                        {f.parseError
+                          ? t('upload.parse_failed_detail', { error: f.parseError })
+                          : t('upload.parse_failed')}
                       </span>
                     )}
                   </div>
@@ -322,7 +326,7 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
                   {f.status === 'success' && f.parseState === 'parse_failed' && (
                     <>
                       <ExclamationCircleFilled className="text-red-400 text-base" />
-                      <Tooltip title="重新解析">
+                      <Tooltip title={t('upload.reparse')}>
                         <button
                           onClick={() => retryFile(f.uid)}
                           className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-primary"
@@ -335,7 +339,7 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
                   {f.status === 'error' && (
                     <>
                       <ExclamationCircleFilled className="text-red-400 text-base" />
-                      <Tooltip title="重试">
+                      <Tooltip title={t('upload.reparse')}>
                         <button
                           onClick={() => retryFile(f.uid)}
                           className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-primary"
@@ -345,7 +349,7 @@ export default function UploadZone({ onUploaded, onParseSettled }: Props) {
                       </Tooltip>
                     </>
                   )}
-                  <Tooltip title={f.status === 'uploading' ? '取消' : '移除'}>
+                  <Tooltip title={f.status === 'uploading' ? t('upload.cancel') : t('upload.remove')}>
                     <button
                       onClick={() => removeFile(f.uid)}
                       className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"

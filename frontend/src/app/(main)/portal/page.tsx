@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Breadcrumb, Tag, Tabs, Input, Empty, Tooltip } from 'antd'
 import {
   FireOutlined, SearchOutlined, BookOutlined,
@@ -91,6 +92,7 @@ const MEDAL: Record<number, string> = { 0: 'text-yellow-500', 1: 'text-slate-400
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PortalPage() {
+  const { t } = useTranslation()
   const [search, setSearch]                   = useState('')
   const [sortBy, setSortBy]                   = useState<'views' | 'downloads' | 'likes'>('views')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -122,10 +124,10 @@ export default function PortalPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <BookOutlined className="text-slate-500 text-lg" />
-            <h1 className="text-lg font-semibold text-slate-800">知识门户</h1>
+            <h1 className="text-lg font-semibold text-slate-800">{t('portal.page_title')}</h1>
           </div>
           <Input
-            size="small" placeholder="搜索知识…"
+            size="small" placeholder={t('portal.search_placeholder')}
             prefix={<SearchOutlined className="text-slate-300 text-xs" />}
             value={search}
             onChange={(e) => setSearch(e.target.value.toLowerCase())}
@@ -139,7 +141,7 @@ export default function PortalPage() {
         {/* Left: Category tree */}
         <aside className="hidden md:block w-52 flex-shrink-0">
           <div className="bg-white rounded-2xl border border-slate-100 p-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-2 mb-2">分类目录</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-2 mb-2">{t('portal.category_tree')}</p>
             {CATEGORY_TREE.map((cat) => (
               <div key={cat.key}>
                 <button
@@ -177,24 +179,24 @@ export default function PortalPage() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <Breadcrumb
               items={[
-                { title: '全部', onClick: () => { setSelectedCategory(null); setBreadcrumb([]) } },
+                { title: t('portal.breadcrumb_all'), onClick: () => { setSelectedCategory(null); setBreadcrumb([]) } },
                 ...breadcrumb.map((b) => ({ title: b.label })),
               ]}
               className="text-xs"
             />
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">排序：</span>
+              <span className="text-xs text-slate-400">{t('search.sort_label')}：</span>
               {(['views', 'downloads', 'likes'] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSortBy(s)}
                   className={`text-xs px-2 py-1 rounded-lg transition-colors ${sortBy === s ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 >
-                  {s === 'views' ? '浏览量' : s === 'downloads' ? '下载量' : '点赞数'}
+                  {s === 'views' ? t('portal.sort_views') : s === 'downloads' ? t('portal.sort_downloads') : t('portal.sort_likes')}
                 </button>
               ))}
               <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-                <Tooltip title="列表视图">
+                <Tooltip title={t('common.list_view')}>
                   <button
                     onClick={() => setViewMode('list')}
                     className={`p-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-600'}`}
@@ -202,7 +204,7 @@ export default function PortalPage() {
                     <UnorderedListOutlined />
                   </button>
                 </Tooltip>
-                <Tooltip title="卡片视图">
+                <Tooltip title={t('common.grid_view')}>
                   <button
                     onClick={() => setViewMode('grid')}
                     className={`p-1.5 text-xs transition-colors ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-slate-400 hover:text-slate-600'}`}
@@ -220,11 +222,11 @@ export default function PortalPage() {
             items={[
               {
                 key: 'hot',
-                label: <span><FireOutlined className="mr-1 text-orange-500" />热榜 Top 10</span>,
+                label: <span><FireOutlined className="mr-1 text-orange-500" />{t('portal.hot_top10')}</span>,
                 children: (
                   <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-2'}>
                     {filteredDocs.length === 0 ? (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的文档" className="py-10" />
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('portal.no_matching_docs')} className="py-10" />
                     ) : filteredDocs.map((doc, idx) => (
                       viewMode === 'list' ? (
                         <div key={doc.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 hover:border-primary/30 transition-colors cursor-pointer">

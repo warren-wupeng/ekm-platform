@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Tag, Select, Popconfirm,
   Modal, Form, ColorPicker, Tabs, Checkbox, Tooltip,
@@ -76,6 +77,7 @@ function CategoryTree({
   onEdit,
   onDelete,
   onAdd,
+  t,
 }: {
   categories: Category[]
   parentId: string | null
@@ -83,6 +85,7 @@ function CategoryTree({
   onEdit: (c: Category) => void
   onDelete: (id: string) => void
   onAdd: (parentId: string | null) => void
+  t: (key: string) => string
 }) {
   const nodes = categories.filter((c) => c.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['c1', 'c2']))
@@ -113,7 +116,7 @@ function CategoryTree({
               <span className="flex-1 text-sm text-slate-700">{cat.name}</span>
               <span className="text-[10px] text-slate-400 hidden group-hover:inline">{cat.slug}</span>
               <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
-                <Tooltip title="添加子分类">
+                <Tooltip title={t('tags.add_subcategory')}>
                   <button
                     className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-100 transition-colors"
                     onClick={() => onAdd(cat.id)}
@@ -121,7 +124,7 @@ function CategoryTree({
                     <PlusOutlined className="text-[10px]" />
                   </button>
                 </Tooltip>
-                <Tooltip title="编辑">
+                <Tooltip title={t('common.edit')}>
                   <button
                     className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-100 transition-colors"
                     onClick={() => onEdit(cat)}
@@ -130,13 +133,13 @@ function CategoryTree({
                   </button>
                 </Tooltip>
                 <Popconfirm
-                  title="确认删除该分类？"
-                  description="子分类将变为顶级分类"
-                  okText="删除" cancelText="取消"
+                  title={t('tags.confirm_delete_cat')}
+                  description={t('tags.confirm_delete_cat_desc')}
+                  okText={t('common.delete')} cancelText={t('common.cancel')}
                   okButtonProps={{ danger: true }}
                   onConfirm={() => onDelete(cat.id)}
                 >
-                  <Tooltip title="删除">
+                  <Tooltip title={t('common.delete')}>
                     <button className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-red-50 transition-colors">
                       <DeleteOutlined className="text-[10px]" />
                     </button>
@@ -152,6 +155,7 @@ function CategoryTree({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onAdd={onAdd}
+                t={t}
               />
             )}
           </div>
@@ -162,7 +166,7 @@ function CategoryTree({
           className="mt-1 ml-2 flex items-center gap-1 text-xs text-primary hover:opacity-70 py-1"
           onClick={() => onAdd(null)}
         >
-          <PlusOutlined className="text-xs" />添加顶级分类
+          <PlusOutlined className="text-xs" />{t('tags.add_top_category')}
         </button>
       )}
     </div>
@@ -173,6 +177,7 @@ function CategoryTree({
 
 export default function TagsPage() {
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const [categories, setCategories]       = useState<Category[]>(INIT_CATEGORIES)
   const [tags, setTags]                   = useState<TagItem[]>(INIT_TAGS)
   const [tagSearch, setTagSearch]         = useState('')
@@ -199,7 +204,7 @@ export default function TagsPage() {
   function saveCat(values: { name: string; slug: string; description: string }) {
     if (catModal.item) {
       setCategories((prev) => prev.map((c) => c.id === catModal.item!.id ? { ...c, ...values } : c))
-      message.success('分类已更新')
+      message.success(t('tags.cat_updated'))
     } else {
       const newCat: Category = {
         id: uid(), name: values.name, slug: values.slug,
@@ -208,7 +213,7 @@ export default function TagsPage() {
         sortOrder: categories.filter((c) => c.parentId === catModal.parentId).length,
       }
       setCategories((prev) => [...prev, newCat])
-      message.success('分类已创建')
+      message.success(t('tags.cat_created'))
     }
     setCatModal({ open: false })
   }
@@ -217,7 +222,7 @@ export default function TagsPage() {
     // Promote children to grandparent
     const target = categories.find((c) => c.id === id)
     setCategories((prev) => prev.filter((c) => c.id !== id).map((c) => c.parentId === id ? { ...c, parentId: target?.parentId ?? null } : c))
-    message.success('分类已删除')
+    message.success(t('tags.cat_deleted'))
   }
 
   // ── Tag CRUD ──────────────────────────────────────────────────────────────
@@ -232,10 +237,10 @@ export default function TagsPage() {
     const colorStr = typeof values.color === 'object' ? (values.color as any).toHexString?.() ?? '#6366f1' : values.color
     if (tagModal.item) {
       setTags((prev) => prev.map((t) => t.id === tagModal.item!.id ? { ...t, name: values.name, color: colorStr } : t))
-      message.success('标签已更新')
+      message.success(t('tags.tag_updated'))
     } else {
       setTags((prev) => [...prev, { id: uid(), name: values.name, color: colorStr, usageCount: 0 }])
-      message.success('标签已创建')
+      message.success(t('tags.tag_created'))
     }
     setTagModal({ open: false })
   }
@@ -247,14 +252,14 @@ export default function TagsPage() {
       Object.keys(next).forEach((k) => { next[k] = next[k].filter((tid) => tid !== id) })
       return next
     })
-    message.success('标签已删除')
+    message.success(t('tags.tag_deleted'))
   }
 
   // ── Batch tagging ─────────────────────────────────────────────────────────
 
   function applyBatchTags() {
-    if (!selectedDocs.size) { message.warning('请先选择文档'); return }
-    if (!batchTagIds.length) { message.warning('请选择要打的标签'); return }
+    if (!selectedDocs.size) { message.warning(t('tags.select_docs_first')); return }
+    if (!batchTagIds.length) { message.warning(t('tags.select_tags_first')); return }
     setDocTags((prev) => {
       const next = { ...prev }
       selectedDocs.forEach((id) => {
@@ -264,7 +269,7 @@ export default function TagsPage() {
       })
       return next
     })
-    message.success(`已为 ${selectedDocs.size} 个文档添加 ${batchTagIds.length} 个标签`)
+    message.success(t('tags.batch_applied', { tagCount: batchTagIds.length, docCount: selectedDocs.size }))
     setSelectedDocs(new Set())
     setBatchTagIds([])
   }
@@ -282,7 +287,7 @@ export default function TagsPage() {
       <div className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
         <div className="flex items-center gap-2">
           <TagsOutlined className="text-slate-500 text-lg" />
-          <h1 className="text-lg font-semibold text-slate-800">分类与标签管理</h1>
+          <h1 className="text-lg font-semibold text-slate-800">{t('tags.page_title')}</h1>
         </div>
       </div>
 
@@ -292,13 +297,13 @@ export default function TagsPage() {
             // ── Tab 1: Categories ────────────────────────────────────────────
             {
               key: 'categories',
-              label: <span><ApartmentOutlined className="mr-1" />分类管理</span>,
+              label: <span><ApartmentOutlined className="mr-1" />{t('tags.tab_categories')}</span>,
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm text-slate-500">知识库内容分类体系，支持多级嵌套</p>
+                    <p className="text-sm text-slate-500">{t('tags.category_desc')}</p>
                     <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => openCatModal()}>
-                      新增分类
+                      {t('tags.add_category')}
                     </Button>
                   </div>
                   <CategoryTree
@@ -307,6 +312,7 @@ export default function TagsPage() {
                     onEdit={(c) => openCatModal(c)}
                     onDelete={deleteCategory}
                     onAdd={(pid) => openCatModal(undefined, pid)}
+                    t={t}
                   />
                 </div>
               ),
@@ -315,16 +321,16 @@ export default function TagsPage() {
             // ── Tab 2: Tags ──────────────────────────────────────────────────
             {
               key: 'tags',
-              label: <span><TagOutlined className="mr-1" />标签管理</span>,
+              label: <span><TagOutlined className="mr-1" />{t('tags.tab_tags')}</span>,
               children: (
                 <div className="space-y-4">
                   {/* Tag cloud */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <p className="text-sm font-medium text-slate-700">标签云</p>
+                        <p className="text-sm font-medium text-slate-700">{t('tags.tag_cloud')}</p>
                         <Input
-                          size="small" placeholder="搜索标签…"
+                          size="small" placeholder={t('tags.search_tags')}
                           prefix={<SearchOutlined className="text-slate-300 text-xs" />}
                           value={tagSearch}
                           onChange={(e) => setTagSearch(e.target.value)}
@@ -333,34 +339,34 @@ export default function TagsPage() {
                         />
                       </div>
                       <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => openTagModal()}>
-                        新增标签
+                        {t('tags.add_tag')}
                       </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {filteredTags.map((t) => {
-                        const sizeRem = 0.75 + (t.usageCount / maxUsage) * 0.5
+                      {filteredTags.map((tag) => {
+                        const sizeRem = 0.75 + (tag.usageCount / maxUsage) * 0.5
                         return (
-                          <div key={t.id} className="group flex items-center gap-1">
+                          <div key={tag.id} className="group flex items-center gap-1">
                             <Tag
-                              color={t.color}
+                              color={tag.color}
                               style={{ fontSize: `${sizeRem}rem`, cursor: 'default', userSelect: 'none' }}
                               className="m-0"
                             >
-                              {t.name}
-                              <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: 3 }}>{t.usageCount}</span>
+                              {tag.name}
+                              <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: 3 }}>{tag.usageCount}</span>
                             </Tag>
                             <div className="hidden group-hover:flex gap-0.5">
                               <button
                                 className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-primary transition-colors"
-                                onClick={() => openTagModal(t)}
+                                onClick={() => openTagModal(tag)}
                               >
                                 <EditOutlined className="text-[10px]" />
                               </button>
                               <Popconfirm
-                                title="确认删除该标签？"
-                                okText="删除" cancelText="取消" okButtonProps={{ danger: true }}
-                                onConfirm={() => deleteTag(t.id)}
+                                title={t('tags.confirm_delete_tag')}
+                                okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
+                                onConfirm={() => deleteTag(tag.id)}
                               >
                                 <button className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors">
                                   <DeleteOutlined className="text-[10px]" />
@@ -371,7 +377,7 @@ export default function TagsPage() {
                         )
                       })}
                       {filteredTags.length === 0 && (
-                        <p className="text-sm text-slate-400 py-2">没有匹配的标签</p>
+                        <p className="text-sm text-slate-400 py-2">{t('tags.no_matching_tags')}</p>
                       )}
                     </div>
                   </div>
@@ -382,23 +388,23 @@ export default function TagsPage() {
             // ── Tab 3: Batch tagging ─────────────────────────────────────────
             {
               key: 'batch',
-              label: <span><CheckOutlined className="mr-1" />批量打标签</span>,
+              label: <span><CheckOutlined className="mr-1" />{t('tags.tab_batch')}</span>,
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 space-y-4">
                   {/* Batch controls */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-slate-50 rounded-xl">
                     <div className="flex-1">
-                      <p className="text-xs text-slate-500 mb-1">选择要添加的标签</p>
+                      <p className="text-xs text-slate-500 mb-1">{t('tags.select_tags_hint')}</p>
                       <Select
                         mode="multiple"
-                        placeholder="选择标签…"
+                        placeholder={t('tags.select_tags_placeholder')}
                         value={batchTagIds}
                         onChange={setBatchTagIds}
                         style={{ width: '100%' }}
                         size="small"
-                        options={tags.map((t) => ({
-                          value: t.id,
-                          label: <span><Tag color={t.color} className="text-xs m-0">{t.name}</Tag></span>,
+                        options={tags.map((tag) => ({
+                          value: tag.id,
+                          label: <span><Tag color={tag.color} className="text-xs m-0">{tag.name}</Tag></span>,
                         }))}
                       />
                     </div>
@@ -408,7 +414,7 @@ export default function TagsPage() {
                       onClick={applyBatchTags}
                       className="flex-shrink-0"
                     >
-                      应用到 {selectedDocs.size || 0} 个文档
+                      {t('tags.apply_to_docs', { count: selectedDocs.size || 0 })}
                     </Button>
                   </div>
 
@@ -420,7 +426,7 @@ export default function TagsPage() {
                         checked={selectedDocs.size === MOCK_DOCS.length}
                         onChange={(e) => setSelectedDocs(e.target.checked ? new Set(MOCK_DOCS.map((d) => d.id)) : new Set())}
                       >
-                        <span className="text-xs text-slate-500">全选（{MOCK_DOCS.length} 个文档）</span>
+                        <span className="text-xs text-slate-500">{t('tags.select_all', { count: MOCK_DOCS.length })}</span>
                       </Checkbox>
                     </div>
                     <div className="space-y-2">
@@ -442,8 +448,8 @@ export default function TagsPage() {
                           <span className="flex-1 text-sm text-slate-700 truncate">{doc.name}</span>
                           <div className="flex flex-wrap gap-1">
                             {(docTags[doc.id] ?? []).map((tid) => {
-                              const t = tags.find((x) => x.id === tid)
-                              return t ? <Tag key={tid} color={t.color} className="text-[10px] m-0">{t.name}</Tag> : null
+                              const tagItem = tags.find((x) => x.id === tid)
+                              return tagItem ? <Tag key={tid} color={tagItem.color} className="text-[10px] m-0">{tagItem.name}</Tag> : null
                             })}
                           </div>
                         </div>
@@ -459,7 +465,7 @@ export default function TagsPage() {
 
       {/* Category modal */}
       <Modal
-        title={catModal.item ? '编辑分类' : '新增分类'}
+        title={catModal.item ? t('tags.edit_cat') : t('tags.new_cat')}
         open={catModal.open}
         onCancel={() => setCatModal({ open: false })}
         footer={null}
@@ -468,43 +474,43 @@ export default function TagsPage() {
         <Form form={catForm} layout="vertical" onFinish={saveCat} className="mt-3">
           {!catModal.item && catModal.parentId && (
             <p className="text-xs text-slate-500 mb-3 p-2 bg-slate-50 rounded-lg">
-              父分类：{categories.find((c) => c.id === catModal.parentId)?.name}
+              {t('tags.parent_cat')}{categories.find((c) => c.id === catModal.parentId)?.name}
             </p>
           )}
-          <Form.Item name="name" label="分类名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="如：技术文档" />
+          <Form.Item name="name" label={t('tags.cat_name')} rules={[{ required: true, message: t('tags.cat_name_required') }]}>
+            <Input placeholder={t('tags.cat_name_placeholder')} />
           </Form.Item>
-          <Form.Item name="slug" label="标识符（英文）" rules={[{ required: true, message: '请输入标识符' }, { pattern: /^[a-z0-9-]+$/, message: '只允许小写字母、数字、短横线' }]}>
-            <Input placeholder="如：tech-docs" />
+          <Form.Item name="slug" label={t('tags.cat_slug')} rules={[{ required: true, message: t('tags.cat_slug_required') }, { pattern: /^[a-z0-9-]+$/, message: t('tags.cat_slug_pattern') }]}>
+            <Input placeholder={t('tags.cat_slug_placeholder')} />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item name="description" label={t('common.description')}>
             <Input.TextArea rows={2} />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setCatModal({ open: false })}>取消</Button>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button onClick={() => setCatModal({ open: false })}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>
 
       {/* Tag modal */}
       <Modal
-        title={tagModal.item ? '编辑标签' : '新增标签'}
+        title={tagModal.item ? t('tags.edit_tag') : t('tags.new_tag')}
         open={tagModal.open}
         onCancel={() => setTagModal({ open: false })}
         footer={null}
         width={360}
       >
         <Form form={tagForm} layout="vertical" onFinish={saveTag} className="mt-3">
-          <Form.Item name="name" label="标签名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="如：LLM" />
+          <Form.Item name="name" label={t('tags.tag_name')} rules={[{ required: true, message: t('tags.tag_name_required') }]}>
+            <Input placeholder={t('tags.tag_name_placeholder')} />
           </Form.Item>
-          <Form.Item name="color" label="颜色" initialValue="#6366f1">
+          <Form.Item name="color" label={t('tags.tag_color')} initialValue="#6366f1">
             <ColorPicker showText />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setTagModal({ open: false })}>取消</Button>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button onClick={() => setTagModal({ open: false })}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>
