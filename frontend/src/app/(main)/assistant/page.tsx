@@ -9,6 +9,7 @@ import {
 import clsx from 'clsx'
 import { nanoid } from 'nanoid'
 import { streamChat, type ChatSource } from '@/lib/chatApi'
+import { useTranslation } from 'react-i18next'
 
 interface Message {
   id: string
@@ -23,6 +24,7 @@ interface Message {
 const SOURCE_PANEL_W = 320
 
 export default function AssistantPage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
@@ -133,20 +135,20 @@ export default function AssistantPage() {
               <RobotOutlined />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-slate-800">AI 助手</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{t('assistant.page_title')}</h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                基于你的知识库，用自然语言提问
+                {t('assistant.empty_tip')}
               </p>
             </div>
           </div>
-          <Tooltip title="清空对话">
+          <Tooltip title={t('assistant.clear_button')}>
             <Button
               icon={<ClearOutlined />}
               onClick={handleClear}
               disabled={messages.length === 0}
               size="small"
             >
-              清空
+              {t('assistant.clear_button')}
             </Button>
           </Tooltip>
         </div>
@@ -169,7 +171,7 @@ export default function AssistantPage() {
             <Input.TextArea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="向 AI 助手提问…（Shift+Enter 换行）"
+              placeholder={t('assistant.input_placeholder')}
               autoSize={{ minRows: 1, maxRows: 6 }}
               // #90: onPressEnter fires before IME composition end in
               // some browsers, swallowing the candidate-select Enter of
@@ -194,7 +196,7 @@ export default function AssistantPage() {
               onClick={() => void handleSend()}
               disabled={!input.trim()}
             >
-              发送
+              {t('assistant.send_button')}
             </Button>
           </div>
         </div>
@@ -208,7 +210,7 @@ export default function AssistantPage() {
         <div className="px-4 py-4 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <LinkOutlined className="text-slate-400" />
-            引用来源
+            {t('assistant.sources_title')}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             {latestSources.length > 0
