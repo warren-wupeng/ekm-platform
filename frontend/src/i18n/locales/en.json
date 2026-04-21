@@ -100,7 +100,10 @@
     "type_archive": "Archive",
     "type_audio": "Audio",
     "type_video": "Video",
-    "type_other": "Other"
+    "type_other": "Other",
+    "archive_confirm": "Archive this file?",
+    "archive_button": "Archive",
+    "archived": "Archived"
   },
   "archive": {
     "page_title": "Archive Management",
@@ -148,7 +151,8 @@
     "empty_tip": "Ask a question to get started",
     "thinking": "Thinking...",
     "error_message": "Something went wrong, please try again",
-    "stop_button": "Stop"
+    "stop_button": "Stop",
+    "cancelled": "(Cancelled)"
   },
   "dashboard": {
     "greeting_morning": "Good morning",

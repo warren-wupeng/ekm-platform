@@ -82,10 +82,10 @@ export default function AssistantPage() {
             m.id === assistantId ? { ...m, content: m.content + evt.delta } : m,
           ))
         } else if (evt.type === 'error') {
-          antdMessage.error(evt.message || '回答生成失败')
+          antdMessage.error(evt.message || t('assistant.error_message'))
           setMessages((prev) => prev.map((m) =>
             m.id === assistantId
-              ? { ...m, streaming: false, error: evt.message, content: m.content || '抱歉，回答生成失败。' }
+              ? { ...m, streaming: false, error: evt.message, content: m.content || t('assistant.error_message') }
               : m,
           ))
           break
@@ -100,15 +100,15 @@ export default function AssistantPage() {
         // User cancelled — mark the bubble as stopped without shouting.
         setMessages((prev) => prev.map((m) =>
           m.id === assistantId
-            ? { ...m, streaming: false, content: m.content || '（已取消）' }
+            ? { ...m, streaming: false, content: m.content || t('assistant.cancelled') }
             : m,
         ))
       } else {
-        const msg = err instanceof Error ? err.message : '请求失败'
+        const msg = err instanceof Error ? err.message : t('assistant.error_message')
         antdMessage.error(msg)
         setMessages((prev) => prev.map((m) =>
           m.id === assistantId
-            ? { ...m, streaming: false, error: msg, content: m.content || '抱歉，回答生成失败。' }
+            ? { ...m, streaming: false, error: msg, content: m.content || t('assistant.error_message') }
             : m,
         ))
       }
