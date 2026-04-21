@@ -58,7 +58,7 @@ const MOCK_RELATIONS: RelationType[] = [
   { id: 'r6', name: 'partOf',       displayName: '属于',      domain: 'Project',  range: 'Organization', source: 'custom',     description: '项目属于组织', usageCount: 78  },
 ]
 
-function buildTree(entities: EntityType[]): DataNode[] {
+function buildTree(entities: EntityType[], t: (key: string) => string): DataNode[] {
   const map = new Map<string, DataNode & { children: DataNode[] }>()
   const roots: DataNode[] = []
 
@@ -70,7 +70,7 @@ function buildTree(entities: EntityType[]): DataNode[] {
           <span className="w-2 h-2 rounded-full inline-block" style={{ background: e.color }} />
           <span className="text-sm text-slate-700">{e.displayName}</span>
           <span className="text-xs text-slate-400">({e.name})</span>
-          {e.source === 'custom' && <Tag color="purple" className="text-[10px] m-0 px-1">自定义</Tag>}
+          {e.source === 'custom' && <Tag color="purple" className="text-[10px] m-0 px-1">{t('ontology.source_custom')}</Tag>}
         </span>
       ),
       children: [],
@@ -337,7 +337,7 @@ export default function OntologyPage() {
     },
   ]
 
-  const treeData = buildTree(entities)
+  const treeData = buildTree(entities, t)
 
   return (
     <div className="min-h-screen bg-slate-50">

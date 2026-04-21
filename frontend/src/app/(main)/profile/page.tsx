@@ -91,7 +91,7 @@ export default function ProfilePage() {
               <h1 className="text-xl font-bold text-slate-800">{displayName}</h1>
               <p className="text-sm text-slate-500 mt-0.5">{email}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Tag color="blue" className="text-xs">技术</Tag>
+                <Tag color="blue" className="text-xs">{t('profile.dept_label')}</Tag>
                 <Tag color="purple" className="text-xs">CTO</Tag>
                 <span className="text-xs text-slate-400">{t('profile.joined_at')} 2026-01-10</span>
               </div>
@@ -109,7 +109,7 @@ export default function ProfilePage() {
               <Button
                 size="small" icon={<EditOutlined />}
                 onClick={() => {
-                  form.setFieldsValue({ displayName, department: '技术', bio: '分布式系统 & AI infra 工程师，前 Databricks。' })
+                  form.setFieldsValue({ displayName, department: t('profile.dept_label'), bio: t('profile.default_bio') })
                   setEditing(true)
                 }}
               >

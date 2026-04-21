@@ -214,7 +214,7 @@ export default function SearchPage() {
             </div>
             <p className="text-slate-400 text-sm">{t('search.empty_hint')}</p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {['知识管理', '产品规划', '数据治理', '开发规范'].map((kw) => (
+              {[t('search.hot_keyword_1'), t('search.hot_keyword_2'), t('search.hot_keyword_3'), t('search.hot_keyword_4')].map((kw) => (
                 <Tag
                   key={kw}
                   icon={<FireOutlined />}

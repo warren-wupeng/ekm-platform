@@ -185,7 +185,7 @@ export default function PortalPage() {
               className="text-xs"
             />
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">{t('search.sort_label')}：</span>
+              <span className="text-xs text-slate-400">{t('search.sort_label')}:</span>
               {(['views', 'downloads', 'likes'] as const).map((s) => (
                 <button
                   key={s}

@@ -98,7 +98,7 @@ export default function EditorPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: '你好！我是 EKM AI 助手。选中文档中的内容，或使用下方快捷操作，我可以帮你生成摘要、续写内容、改写表达，以及从知识库中推荐相关资料。',
+      content: t('editor.welcome_message'),
     },
   ])
   const [inputVal, setInputVal] = useState('')
@@ -123,8 +123,8 @@ export default function EditorPage() {
       setShowRefs(true)
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 'u', role: 'user', content: '推荐相关知识库内容' },
-        { id: Date.now() + 'a', role: 'assistant', content: '已找到 3 篇相关内容，展示在参考资料面板中。', action },
+        { id: Date.now() + 'u', role: 'user', content: t('editor.recommend_user_msg') },
+        { id: Date.now() + 'a', role: 'assistant', content: t('editor.recommend_assistant_msg'), action },
       ])
       return
     }
@@ -152,7 +152,7 @@ export default function EditorPage() {
       {
         id: Date.now() + 'a',
         role: 'assistant',
-        content: `关于「${q}」：根据知识库内容，建议参考 *RAG 架构最佳实践* 和 *LLM Serving 选型对比* 两篇文档。如需我直接生成内容，请描述具体需求。`,
+        content: t('editor.chat_reply_template', { q }),
       },
     ])
   }
@@ -181,7 +181,7 @@ export default function EditorPage() {
         <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => router.back()} className="text-slate-500" />
         <div>
           <h1 className="text-base font-semibold text-slate-800">{t('editor.page_title')}</h1>
-          <p className="text-xs text-slate-400">AI 技术选型调研报告.md</p>
+          <p className="text-xs text-slate-400">{t('editor.doc_filename')}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button size="small" type="primary" icon={<CheckOutlined />}>

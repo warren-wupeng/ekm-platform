@@ -185,7 +185,7 @@ export default function DeveloperPage() {
       render: (_, r) => (
         <span className="flex items-center gap-2 font-mono text-xs text-slate-500">
           {revealedKeys.has(r.id) ? r.key : r.key.replace(/(?<=.{12}).+(?=.{4})/, '••••••••')}
-          <Tooltip title={revealedKeys.has(r.id) ? t('developer.hide_key') : t('developer.show_key')}>
+          <Tooltip title={revealedKeys.has(r.id) ? t('developer.key_hide') : t('developer.key_show')}>
             <button className="text-slate-400 hover:text-slate-600" onClick={() => toggleReveal(r.id)}>
               {revealedKeys.has(r.id) ? <EyeInvisibleOutlined /> : <EyeOutlined />}
             </button>
@@ -206,7 +206,7 @@ export default function DeveloperPage() {
       render: (_, r) => (
         <Space size={4}>
           {r.active && (
-            <Popconfirm title={t('developer.confirm_revoke_title')} description={t('developer.confirm_revoke_desc')}
+            <Popconfirm title={t('developer.revoke_confirm')} description={t('developer.revoke_desc')}
               onConfirm={() => revokeKey(r.id)} okText={t('common.revoke')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}>
               <Button size="small" danger ghost icon={<DeleteOutlined />} className="text-xs">{t('common.revoke')}</Button>
             </Popconfirm>

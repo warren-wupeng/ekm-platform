@@ -286,7 +286,11 @@
     "no_results_hint": "Try different keywords, or",
     "clear_filters": "clear filters",
     "search_failed": "Search failed",
-    "search_failed_detail": "Search failed: {{detail}}"
+    "search_failed_detail": "Search failed: {{detail}}",
+    "hot_keyword_1": "Knowledge Management",
+    "hot_keyword_2": "Product Planning",
+    "hot_keyword_3": "Data Governance",
+    "hot_keyword_4": "Dev Standards"
   },
   "portal": {
     "page_title": "Knowledge Portal",
@@ -367,7 +371,9 @@
     "dept_product": "Product",
     "dept_marketing": "Marketing",
     "dept_pm": "Project",
-    "joined_at": "Joined"
+    "joined_at": "Joined",
+    "dept_label": "Tech",
+    "default_bio": "Distributed systems & AI infra engineer, ex-Databricks."
   },
   "tags": {
     "page_title": "Category & Tag Management",
@@ -478,7 +484,9 @@
     "stat_avg_latency": "Avg Latency",
     "stat_errors": "Errors",
     "endpoint_distribution": "Endpoint Call Distribution",
-    "calls_count": "{{count}} ({{pct}}%)"
+    "calls_count": "{{count}} ({{pct}}%)",
+    "key_show": "Show Key",
+    "key_hide": "Hide Key"
   },
   "history": {
     "page_title": "Version History",
@@ -565,6 +573,11 @@
     "prompt_summarize": "Generate summary",
     "prompt_continue": "AI continue writing",
     "prompt_rewrite": "AI rewrite selected content",
-    "prompt_recommend": "Related content recommendation"
+    "prompt_recommend": "Related content recommendation",
+    "welcome_message": "Hello! I'm the EKM AI Assistant. Select content in the document, or use the quick actions below — I can summarize, continue writing, rewrite, and recommend related knowledge.",
+    "recommend_user_msg": "Recommend related knowledge",
+    "recommend_assistant_msg": "Found 3 related items, shown in the references panel.",
+    "chat_reply_template": "Regarding \"{{q}}\": based on knowledge base content, we recommend referring to *RAG Architecture Best Practices* and *LLM Serving Comparison*. If you'd like me to generate content directly, please describe your specific needs.",
+    "doc_filename": "AI Technology Selection Report.md"
   }
 }
