@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Avatar, Badge, Button, Card, Tag, Tooltip } from 'antd'
+import { Avatar, Badge, Button, Spin, Tooltip } from 'antd'
 import {
   SearchOutlined, UploadOutlined, EditOutlined,
   FileTextOutlined, TeamOutlined, ClockCircleOutlined,
@@ -10,55 +10,27 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
+import { useKnowledgeList } from '@/lib/useKnowledgeList'
+import { useNotifications } from '@/lib/useNotifications'
 
-// -- Mock data (content stays as-is; labels come from i18n) -------------------
-
-const RECENT_DOCS = [
-  { id: 'd1', name: '技术架构设计 v5.docx',       type: 'document', date: '2026-04-17', views: 42 },
-  { id: 'd2', name: 'EKM 系统调研报告.pdf',         type: 'document', date: '2026-04-16', views: 18 },
-  { id: 'd3', name: 'API 设计规范 v2.md',           type: 'document', date: '2026-04-15', views: 31 },
-  { id: 'd4', name: 'Q1 产品路线图.pptx',           type: 'document', date: '2026-04-14', views: 27 },
-  { id: 'd5', name: 'RAG Pipeline 优化实验记录.md', type: 'document', date: '2026-04-13', views: 15 },
-]
-
-const RECOMMENDED = [
-  { id: 'r1', name: '知识图谱快速入门',       department: '技术', likes: 24, hot: true },
-  { id: 'r2', name: '新员工入职必读文档',     department: 'HR',   likes: 18, hot: false },
-  { id: 'r3', name: 'EKM 使用指南 2026 版',  department: '产品', likes: 31, hot: true },
-  { id: 'r4', name: '前端组件库设计规范',     department: '技术', likes: 12, hot: false },
-]
-
-const NOTIFICATIONS = [
-  { id: 'n1', text: 'Warren Wu 分享了「产品路线图」给你',  time: '10 分钟前', unread: true },
-  { id: 'n2', text: 'Luca Rossi 点赞了你的帖子',          time: '1 小时前',  unread: true },
-  { id: 'n3', text: '知识库月度报告已生成',                time: '昨天',      unread: false },
-]
-
-const AI_TIPS = [
-  '本周「RAG 召回率优化」获得了 31 个赞，建议发布到社区精华',
-  '你上传的「技术架构设计.docx」本月被下载 18 次，热度上升 40%',
-  '知识图谱中有 3 个孤立节点待连接，点击查看',
-]
-
-const DEPT_COLOR: Record<string, string> = { 技术: 'blue', 产品: 'purple', HR: 'cyan', 市场: 'orange' }
-
-// -- Component ----------------------------------------------------------------
+const DEPT_COLOR: Record<string, string> = { 技术: 'text-blue-600', 产品: 'text-purple-600', HR: 'text-cyan-600', 市场: 'text-orange-600' }
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { t } = useTranslation()
   const [notifOpen, setNotifOpen] = useState(false)
-  const [tipIdx]   = useState(0)
 
-  const displayName = user?.displayName ?? 'Kira Chen'
+  const { items, isLoading: docsLoading } = useKnowledgeList()
+  const { items: notifications, unreadCount, markAllRead } = useNotifications()
+
+  const displayName = user?.displayName ?? user?.username ?? ''
   const hour = new Date().getHours()
   const greeting = hour < 12
     ? t('dashboard.greeting_morning')
     : hour < 18
       ? t('dashboard.greeting_afternoon')
       : t('dashboard.greeting_evening')
-  const unreadCount = NOTIFICATIONS.filter((n) => n.unread).length
 
   const QUICK_ACTIONS = [
     { label: t('dashboard.quick_search'),    icon: <SearchOutlined />,        href: '/search',          color: 'text-blue-500',   bg: 'bg-blue-50' },
@@ -69,11 +41,24 @@ export default function DashboardPage() {
     { label: t('dashboard.quick_graph'),     icon: <ThunderboltOutlined />,    href: '/knowledge-graph', color: 'text-pink-500',   bg: 'bg-pink-50' },
   ]
 
+  // Recent: sort by upload date desc, take 5
+  const recentDocs = [...items]
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+    .slice(0, 5)
+
+  // Recommended: sort by downloads desc, take 4
+  const recommendedDocs = [...items]
+    .sort((a, b) => (b.downloads ?? 0) - (a.downloads ?? 0))
+    .slice(0, 4)
+
+  const myDocs  = items.filter((d) => d.uploadedBy === user?.username)
+  const totalDownloads = items.reduce((s, d) => s + (d.downloads ?? 0), 0)
+
   const STATS = [
-    { label: t('dashboard.stat_uploads'),       value: '12',  unit: t('dashboard.unit_docs'),  color: 'text-blue-600',   icon: <UploadOutlined /> },
-    { label: t('dashboard.stat_total'),         value: '247', unit: t('dashboard.unit_items'), color: 'text-green-600',  icon: <BookOutlined /> },
-    { label: t('dashboard.stat_interactions'),  value: '55',  unit: t('dashboard.unit_times'), color: 'text-orange-600', icon: <TeamOutlined /> },
-    { label: t('dashboard.stat_likes'),         value: '128', unit: '',                         color: 'text-pink-600',   icon: <FireOutlined /> },
+    { label: t('dashboard.stat_uploads'),       value: myDocs.length,     unit: t('dashboard.unit_docs'),  color: 'text-blue-600',   icon: <UploadOutlined /> },
+    { label: t('dashboard.stat_total'),         value: items.length,      unit: t('dashboard.unit_items'), color: 'text-green-600',  icon: <BookOutlined /> },
+    { label: t('dashboard.stat_interactions'),  value: totalDownloads,    unit: t('dashboard.unit_times'), color: 'text-orange-600', icon: <TeamOutlined /> },
+    { label: t('dashboard.stat_likes'),         value: unreadCount,       unit: '',                         color: 'text-pink-600',   icon: <FireOutlined /> },
   ]
 
   return (
@@ -113,21 +98,26 @@ export default function DashboardPage() {
               <div className="absolute right-0 top-11 w-80 bg-white rounded-2xl border border-slate-100 shadow-xl z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between">
                   <span className="text-sm font-semibold text-slate-700">{t('dashboard.notifications')}</span>
-                  <button className="text-xs text-primary">{t('dashboard.mark_all_read')}</button>
+                  {unreadCount > 0 && (
+                    <button className="text-xs text-primary" onClick={markAllRead}>{t('dashboard.mark_all_read')}</button>
+                  )}
                 </div>
                 <div>
-                  {NOTIFICATIONS.map((n) => (
+                  {notifications.slice(0, 5).map((n) => (
                     <div
                       key={n.id}
-                      className={`px-4 py-3 flex items-start gap-3 border-b border-slate-50 last:border-0 ${n.unread ? 'bg-blue-50/40' : ''}`}
+                      className={`px-4 py-3 flex items-start gap-3 border-b border-slate-50 last:border-0 ${!n.read ? 'bg-blue-50/40' : ''}`}
                     >
-                      {n.unread && <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
+                      {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />}
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-slate-700 leading-snug">{n.text}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{n.time}</p>
+                        <p className="text-xs text-slate-700 leading-snug">{n.title ?? n.type}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{n.created_at?.slice(0, 10)}</p>
                       </div>
                     </div>
                   ))}
+                  {notifications.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-4">{t('common.no_new_messages')}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -152,12 +142,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* AI tip banner */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl px-4 py-3 flex items-start gap-3">
-          <ThunderboltOutlined className="text-blue-500 text-base mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-blue-700 leading-relaxed">{AI_TIPS[tipIdx]}</p>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Recent docs */}
           <div className="bg-white rounded-2xl border border-slate-100">
@@ -174,12 +158,18 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="divide-y divide-slate-50">
-              {RECENT_DOCS.map((d) => (
-                <div key={d.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 cursor-pointer transition-colors">
+              {docsLoading ? (
+                <div className="py-6 flex justify-center"><Spin size="small" /></div>
+              ) : recentDocs.map((d) => (
+                <div
+                  key={d.id}
+                  className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/knowledge?doc=${d.id}`)}
+                >
                   <FileTextOutlined className="text-primary text-sm flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-700 truncate">{d.name}</p>
-                    <p className="text-[10px] text-slate-400">{d.date} · {d.views} {t('dashboard.views')}</p>
+                    <p className="text-[10px] text-slate-400">{d.uploadedAt?.slice(0, 10)} · {d.downloads ?? 0} {t('dashboard.views')}</p>
                   </div>
                 </div>
               ))}
@@ -201,18 +191,24 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="divide-y divide-slate-50">
-              {RECOMMENDED.map((r) => (
-                <div key={r.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 cursor-pointer transition-colors">
+              {docsLoading ? (
+                <div className="py-6 flex justify-center"><Spin size="small" /></div>
+              ) : recommendedDocs.map((r) => (
+                <div
+                  key={r.id}
+                  className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/knowledge?doc=${r.id}`)}
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-slate-700 truncate">{r.name}</p>
-                      {r.hot && <FireOutlined className="text-orange-400 text-xs flex-shrink-0" />}
+                      {(r.downloads ?? 0) > 10 && <FireOutlined className="text-orange-400 text-xs flex-shrink-0" />}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <Tag color={DEPT_COLOR[r.department] ?? 'default'} className="text-[10px] m-0 px-1">
-                        {r.department}
-                      </Tag>
-                      <span className="text-[10px] text-slate-400">{r.likes} {t('dashboard.likes')}</span>
+                      {r.uploadedBy && (
+                        <span className={`text-[10px] font-medium ${DEPT_COLOR[r.uploadedBy] ?? 'text-slate-400'}`}>{r.uploadedBy}</span>
+                      )}
+                      <span className="text-[10px] text-slate-400">{r.downloads ?? 0} {t('dashboard.likes')}</span>
                     </div>
                   </div>
                 </div>

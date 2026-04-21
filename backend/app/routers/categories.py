@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 import logging
@@ -30,6 +30,17 @@ from app.services.es_client import es
 
 
 _log = logging.getLogger(__name__)
+
+
+async def _get_item_counts(db: Any) -> dict[int, int]:
+    """Return {category_id: count} for all categories with items."""
+    from app.models.knowledge import KnowledgeItem
+    rows = (await db.execute(
+        select(KnowledgeItem.category_id, func.count().label("cnt"))
+        .where(KnowledgeItem.category_id.is_not(None))
+        .group_by(KnowledgeItem.category_id)
+    )).all()
+    return {row[0]: row[1] for row in rows}
 
 
 async def _es_index_category(c: Category) -> None:
@@ -91,7 +102,7 @@ class CategoryOut(BaseModel):
 CategoryOut.model_rebuild()
 
 
-def _to_dict(c: Category) -> dict[str, Any]:
+def _to_dict(c: Category, counts: dict[int, int] | None = None) -> dict[str, Any]:
     return {
         "id": c.id,
         "name": c.name,
@@ -99,13 +110,14 @@ def _to_dict(c: Category) -> dict[str, Any]:
         "parent_id": c.parent_id,
         "description": c.description,
         "sort_order": c.sort_order,
+        "item_count": counts.get(c.id, 0) if counts else 0,
         "children": [],
     }
 
 
-def _build_tree(cats: list[Category]) -> list[dict[str, Any]]:
+def _build_tree(cats: list[Category], counts: dict[int, int] | None = None) -> list[dict[str, Any]]:
     """Assemble a nested tree from a flat list in O(n)."""
-    nodes: dict[int, dict[str, Any]] = {c.id: _to_dict(c) for c in cats}
+    nodes: dict[int, dict[str, Any]] = {c.id: _to_dict(c, counts) for c in cats}
     roots: list[dict[str, Any]] = []
     for c in cats:
         node = nodes[c.id]
@@ -113,11 +125,20 @@ def _build_tree(cats: list[Category]) -> list[dict[str, Any]]:
             nodes[c.parent_id]["children"].append(node)
         else:
             roots.append(node)
+    # Roll up child counts to parent so the parent shows total descendants.
+    def _rollup(nodes_list: list[dict[str, Any]]) -> int:
+        total = 0
+        for n in nodes_list:
+            child_total = _rollup(n["children"])
+            n["item_count"] += child_total
+            total += n["item_count"]
+        return total
     # Stable sort by sort_order then id within each level.
     def _sort(ns: list[dict[str, Any]]) -> None:
         ns.sort(key=lambda n: (n["sort_order"], n["id"]))
         for n in ns:
             _sort(n["children"])
+    _rollup(roots)
     _sort(roots)
     return roots
 
@@ -132,10 +153,11 @@ async def list_categories(
     rows = (await db.execute(
         select(Category).order_by(Category.sort_order, Category.id)
     )).scalars().all()
+    counts = await _get_item_counts(db)
 
     if flat:
-        return {"categories": [_to_dict(c) for c in rows]}
-    return {"categories": _build_tree(list(rows))}
+        return {"categories": [_to_dict(c, counts) for c in rows]}
+    return {"categories": _build_tree(list(rows), counts)}
 
 
 @router.get("/{cat_id}")

@@ -301,7 +301,8 @@
     "sort_downloads": "Downloads",
     "sort_likes": "Likes",
     "hot_top10": "Hot Top 10",
-    "no_matching_docs": "No matching documents"
+    "no_matching_docs": "No matching documents",
+    "no_categories": "No categories"
   },
   "community": {
     "page_title": "Community",
@@ -491,7 +492,8 @@
     "calls_count": "{{count}} ({{pct}}%)",
     "key_show": "Show Key",
     "key_hide": "Hide Key",
-    "pagination_total": "Total {{total}} items"
+    "pagination_total": "Total {{total}} items",
+    "key_created_once": "API Key created — copy it now, it won't be shown again"
   },
   "history": {
     "page_title": "Version History",
@@ -507,7 +509,11 @@
     "rollback_success": "Rolled back to {{version}}, current version saved as new history",
     "compare_label": "Compare:",
     "added_lines": "+{{count}} lines",
-    "removed_lines": "-{{count}} lines"
+    "removed_lines": "-{{count}} lines",
+    "no_versions": "No versions yet",
+    "no_content": "No content",
+    "select_version": "Select a version to view its content",
+    "current_label": "v{{v}} (Current)"
   },
   "ontology": {
     "page_title": "Ontology Management",

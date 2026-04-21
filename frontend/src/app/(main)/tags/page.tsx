@@ -3,72 +3,50 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Tag, Select, Popconfirm,
-  Modal, Form, ColorPicker, Tabs, Checkbox, Tooltip,
+  Modal, Form, ColorPicker, Tabs, Checkbox, Tooltip, Spin, Empty,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, TagOutlined,
   ApartmentOutlined, SearchOutlined, CheckOutlined,
   TagsOutlined, FolderOutlined, FolderOpenOutlined,
 } from '@ant-design/icons'
+import useSWR from 'swr'
+import api from '@/lib/api'
+import { useKnowledgeList } from '@/lib/useKnowledgeList'
+import { useCategories } from '@/lib/useCategories'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Category {
-  id: string
+  id: number
   name: string
   slug: string
-  parentId: string | null
-  description: string
-  sortOrder: number
+  parent_id: number | null
+  description: string | null
+  sort_order: number
+  item_count: number
+  children: Category[]
 }
 
 interface TagItem {
-  id: string
+  id: number
   name: string
-  color: string
-  usageCount: number
+  color: string | null
+  usage_count: number
 }
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
+// ── Tags hook ─────────────────────────────────────────────────────────────────
 
-const INIT_CATEGORIES: Category[] = [
-  { id: 'c1', name: '技术文档', slug: 'tech',        parentId: null, description: '工程和研发相关文档', sortOrder: 0 },
-  { id: 'c2', name: '产品资料', slug: 'product',     parentId: null, description: '产品需求和规划',   sortOrder: 1 },
-  { id: 'c3', name: '市场运营', slug: 'marketing',   parentId: null, description: '市场和运营资料',   sortOrder: 2 },
-  { id: 'c4', name: '架构设计', slug: 'arch',        parentId: 'c1', description: '系统架构和设计方案', sortOrder: 0 },
-  { id: 'c5', name: 'API 文档', slug: 'api',         parentId: 'c1', description: 'API 接口文档',    sortOrder: 1 },
-  { id: 'c6', name: 'PRD',      slug: 'prd',         parentId: 'c2', description: '产品需求文档',     sortOrder: 0 },
-  { id: 'c7', name: '竞品分析', slug: 'competitive', parentId: 'c2', description: '竞品分析报告',     sortOrder: 1 },
-]
+function useTags(search = '') {
+  const { data, isLoading, mutate } = useSWR<{ tags: TagItem[] }>(
+    `tags/list/${search}`,
+    () => api.get('/api/v1/tags', { params: search ? { q: search, page_size: 100 } : { page_size: 100 } }).then((r) => r.data),
+    { dedupingInterval: 30_000, revalidateOnFocus: false },
+  )
+  return { tags: data?.tags ?? [], isLoading, mutate }
+}
 
-const INIT_TAGS: TagItem[] = [
-  { id: 't1', name: 'LLM',       color: '#6366f1', usageCount: 18 },
-  { id: 't2', name: 'RAG',       color: '#8b5cf6', usageCount: 12 },
-  { id: 't3', name: '架构',      color: '#3b82f6', usageCount: 21 },
-  { id: 't4', name: '数据库',    color: '#06b6d4', usageCount: 9  },
-  { id: 't5', name: '前端',      color: '#10b981', usageCount: 15 },
-  { id: 't6', name: '后端',      color: '#f59e0b', usageCount: 11 },
-  { id: 't7', name: 'API',       color: '#ef4444', usageCount: 24 },
-  { id: 't8', name: '产品',      color: '#ec4899', usageCount: 8  },
-  { id: 't9', name: '规范',      color: '#64748b', usageCount: 6  },
-  { id: 't10',name: '周报',      color: '#84cc16', usageCount: 14 },
-  { id: 't11',name: '安全',      color: '#f97316', usageCount: 5  },
-  { id: 't12',name: 'DevOps',    color: '#0ea5e9', usageCount: 7  },
-]
-
-// Mock documents for batch tagging
-const MOCK_DOCS = [
-  { id: 'doc1', name: '技术架构设计.docx',   tags: ['t3', 't1'] },
-  { id: 'doc2', name: 'EKM 调研报告.pdf',   tags: ['t2', 't1'] },
-  { id: 'doc3', name: 'API 设计规范.md',    tags: ['t7', 't9'] },
-  { id: 'doc4', name: '前端组件规范.md',    tags: ['t5', 't9'] },
-  { id: 'doc5', name: '数据库设计文档.pdf', tags: ['t4', 't3'] },
-  { id: 'doc6', name: 'CI/CD 流程说明.md', tags: ['t12']       },
-]
-
-function uid() { return `_${Math.random().toString(36).slice(2)}` }
-
-// ── Category tree ─────────────────────────────────────────────────────────────
+// ── Category tree UI ──────────────────────────────────────────────────────────
 
 function CategoryTree({
   categories,
@@ -80,22 +58,22 @@ function CategoryTree({
   t,
 }: {
   categories: Category[]
-  parentId: string | null
+  parentId: number | null
   level?: number
   onEdit: (c: Category) => void
-  onDelete: (id: string) => void
-  onAdd: (parentId: string | null) => void
+  onDelete: (id: number) => void
+  onAdd: (parentId: number | null) => void
   t: (key: string) => string
 }) {
-  const nodes = categories.filter((c) => c.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['c1', 'c2']))
+  const nodes = categories.filter((c) => c.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
   if (nodes.length === 0 && level > 0) return null
 
   return (
     <div className={level > 0 ? 'ml-5 border-l border-slate-100 pl-3' : ''}>
       {nodes.map((cat) => {
-        const hasChildren = categories.some((c) => c.parentId === cat.id)
+        const hasChildren = categories.some((c) => c.parent_id === cat.id)
         const isOpen = expanded.has(cat.id)
         return (
           <div key={cat.id}>
@@ -115,6 +93,9 @@ function CategoryTree({
               </button>
               <span className="flex-1 text-sm text-slate-700">{cat.name}</span>
               <span className="text-[10px] text-slate-400 hidden group-hover:inline">{cat.slug}</span>
+              {cat.item_count > 0 && (
+                <span className="text-[10px] text-slate-400">{cat.item_count}</span>
+              )}
               <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
                 <Tooltip title={t('tags.add_subcategory')}>
                   <button
@@ -178,108 +159,140 @@ function CategoryTree({
 export default function TagsPage() {
   const { message } = App.useApp()
   const { t } = useTranslation()
-  const [categories, setCategories]       = useState<Category[]>(INIT_CATEGORIES)
-  const [tags, setTags]                   = useState<TagItem[]>(INIT_TAGS)
-  const [tagSearch, setTagSearch]         = useState('')
-  const [catModal, setCatModal]           = useState<{ open: boolean; item?: Category; parentId?: string | null }>({ open: false })
-  const [tagModal, setTagModal]           = useState<{ open: boolean; item?: TagItem }>({ open: false })
+
+  const { categories, isLoading: catsLoading, mutate: mutateCats } = useCategories(false)
+  const [tagSearch, setTagSearch] = useState('')
+  const { tags, isLoading: tagsLoading, mutate: mutateTags } = useTags(tagSearch)
+  const { items: knowledgeDocs } = useKnowledgeList()
+
+  const [catModal, setCatModal] = useState<{ open: boolean; item?: Category; parentId?: number | null }>({ open: false })
+  const [tagModal, setTagModal] = useState<{ open: boolean; item?: TagItem }>({ open: false })
   const [catForm] = Form.useForm()
   const [tagForm] = Form.useForm()
+  const [saving, setSaving] = useState(false)
 
   // Batch tagging state
-  const [selectedDocs, setSelectedDocs]   = useState<Set<string>>(new Set())
-  const [batchTagIds, setBatchTagIds]     = useState<string[]>([])
-  const [docTags, setDocTags]             = useState<Record<string, string[]>>(
-    Object.fromEntries(MOCK_DOCS.map((d) => [d.id, d.tags]))
-  )
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())
+  const [batchTagNames, setBatchTagNames] = useState<string[]>([])
+
+  // Flatten the tree for the CategoryTree component
+  function flattenTree(cats: Category[]): Category[] {
+    const result: Category[] = []
+    function walk(nodes: Category[]) {
+      for (const n of nodes) {
+        result.push(n)
+        if (n.children.length > 0) walk(n.children)
+      }
+    }
+    walk(cats)
+    return result
+  }
+  const flatCats = useMemo(() => flattenTree(categories), [categories])
 
   // ── Category CRUD ─────────────────────────────────────────────────────────
 
-  function openCatModal(item?: Category, parentId?: string | null) {
-    if (item) catForm.setFieldsValue({ name: item.name, slug: item.slug, description: item.description })
+  function openCatModal(item?: Category, parentId?: number | null) {
+    if (item) catForm.setFieldsValue({ name: item.name, slug: item.slug, description: item.description ?? '' })
     else catForm.resetFields()
     setCatModal({ open: true, item, parentId: parentId ?? null })
   }
 
-  function saveCat(values: { name: string; slug: string; description: string }) {
-    if (catModal.item) {
-      setCategories((prev) => prev.map((c) => c.id === catModal.item!.id ? { ...c, ...values } : c))
-      message.success(t('tags.cat_updated'))
-    } else {
-      const newCat: Category = {
-        id: uid(), name: values.name, slug: values.slug,
-        parentId: catModal.parentId ?? null,
-        description: values.description ?? '',
-        sortOrder: categories.filter((c) => c.parentId === catModal.parentId).length,
+  async function saveCat(values: { name: string; slug: string; description: string }) {
+    setSaving(true)
+    try {
+      if (catModal.item) {
+        await api.patch(`/api/v1/categories/${catModal.item.id}`, {
+          name: values.name, slug: values.slug, description: values.description,
+        })
+        message.success(t('tags.cat_updated'))
+      } else {
+        await api.post('/api/v1/categories', {
+          name: values.name, slug: values.slug,
+          description: values.description ?? '',
+          parent_id: catModal.parentId ?? null,
+          sort_order: 0,
+        })
+        message.success(t('tags.cat_created'))
       }
-      setCategories((prev) => [...prev, newCat])
-      message.success(t('tags.cat_created'))
+      await mutateCats()
+      setCatModal({ open: false })
+    } catch {
+      message.error(t('common.error_generic'))
+    } finally {
+      setSaving(false)
     }
-    setCatModal({ open: false })
   }
 
-  function deleteCategory(id: string) {
-    // Promote children to grandparent
-    const target = categories.find((c) => c.id === id)
-    setCategories((prev) => prev.filter((c) => c.id !== id).map((c) => c.parentId === id ? { ...c, parentId: target?.parentId ?? null } : c))
-    message.success(t('tags.cat_deleted'))
+  async function deleteCategory(id: number) {
+    try {
+      await api.delete(`/api/v1/categories/${id}`)
+      await mutateCats()
+      message.success(t('tags.cat_deleted'))
+    } catch {
+      message.error(t('common.error_generic'))
+    }
   }
 
   // ── Tag CRUD ──────────────────────────────────────────────────────────────
 
   function openTagModal(item?: TagItem) {
-    if (item) tagForm.setFieldsValue({ name: item.name, color: item.color })
+    if (item) tagForm.setFieldsValue({ name: item.name, color: item.color ?? '#6366f1' })
     else tagForm.resetFields()
     setTagModal({ open: true, item })
   }
 
-  function saveTag(values: { name: string; color: string }) {
+  async function saveTag(values: { name: string; color: string }) {
     const colorStr = typeof values.color === 'object' ? (values.color as any).toHexString?.() ?? '#6366f1' : values.color
-    if (tagModal.item) {
-      setTags((prev) => prev.map((t) => t.id === tagModal.item!.id ? { ...t, name: values.name, color: colorStr } : t))
-      message.success(t('tags.tag_updated'))
-    } else {
-      setTags((prev) => [...prev, { id: uid(), name: values.name, color: colorStr, usageCount: 0 }])
-      message.success(t('tags.tag_created'))
+    setSaving(true)
+    try {
+      if (tagModal.item) {
+        await api.patch(`/api/v1/tags/${tagModal.item.id}`, { name: values.name, color: colorStr })
+        message.success(t('tags.tag_updated'))
+      } else {
+        await api.post('/api/v1/tags', { name: values.name, color: colorStr })
+        message.success(t('tags.tag_created'))
+      }
+      await mutateTags()
+      setTagModal({ open: false })
+    } catch {
+      message.error(t('common.error_generic'))
+    } finally {
+      setSaving(false)
     }
-    setTagModal({ open: false })
   }
 
-  function deleteTag(id: string) {
-    setTags((prev) => prev.filter((t) => t.id !== id))
-    setDocTags((prev) => {
-      const next = { ...prev }
-      Object.keys(next).forEach((k) => { next[k] = next[k].filter((tid) => tid !== id) })
-      return next
-    })
-    message.success(t('tags.tag_deleted'))
+  async function deleteTag(id: number) {
+    try {
+      await api.delete(`/api/v1/tags/${id}`)
+      await mutateTags()
+      message.success(t('tags.tag_deleted'))
+    } catch {
+      message.error(t('common.error_generic'))
+    }
   }
 
   // ── Batch tagging ─────────────────────────────────────────────────────────
 
-  function applyBatchTags() {
+  async function applyBatchTags() {
     if (!selectedDocs.size) { message.warning(t('tags.select_docs_first')); return }
-    if (!batchTagIds.length) { message.warning(t('tags.select_tags_first')); return }
-    setDocTags((prev) => {
-      const next = { ...prev }
-      selectedDocs.forEach((id) => {
-        const existing = new Set(next[id] ?? [])
-        batchTagIds.forEach((tid) => existing.add(tid))
-        next[id] = Array.from(existing)
+    if (!batchTagNames.length) { message.warning(t('tags.select_tags_first')); return }
+    setSaving(true)
+    try {
+      await api.post('/api/v1/tags/bulk-bind', {
+        tag_names: batchTagNames,
+        knowledge_item_ids: Array.from(selectedDocs).map(Number),
       })
-      return next
-    })
-    message.success(t('tags.batch_applied', { tagCount: batchTagIds.length, docCount: selectedDocs.size }))
-    setSelectedDocs(new Set())
-    setBatchTagIds([])
+      message.success(t('tags.batch_applied', { tagCount: batchTagNames.length, docCount: selectedDocs.size }))
+      setSelectedDocs(new Set())
+      setBatchTagNames([])
+    } catch {
+      message.error(t('common.error_generic'))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const filteredTags = useMemo(
-    () => tags.filter((t) => !tagSearch || t.name.toLowerCase().includes(tagSearch.toLowerCase())),
-    [tags, tagSearch]
-  )
-
-  const maxUsage = Math.max(...tags.map((t) => t.usageCount), 1)
+  const maxUsage = Math.max(...tags.map((t) => t.usage_count), 1)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -306,14 +319,18 @@ export default function TagsPage() {
                       {t('tags.add_category')}
                     </Button>
                   </div>
-                  <CategoryTree
-                    categories={categories}
-                    parentId={null}
-                    onEdit={(c) => openCatModal(c)}
-                    onDelete={deleteCategory}
-                    onAdd={(pid) => openCatModal(undefined, pid)}
-                    t={t}
-                  />
+                  {catsLoading ? (
+                    <div className="py-10 flex justify-center"><Spin /></div>
+                  ) : (
+                    <CategoryTree
+                      categories={flatCats}
+                      parentId={null}
+                      onEdit={(c) => openCatModal(c)}
+                      onDelete={deleteCategory}
+                      onAdd={(pid) => openCatModal(undefined, pid)}
+                      t={t}
+                    />
+                  )}
                 </div>
               ),
             },
@@ -324,7 +341,6 @@ export default function TagsPage() {
               label: <span><TagOutlined className="mr-1" />{t('tags.tab_tags')}</span>,
               children: (
                 <div className="space-y-4">
-                  {/* Tag cloud */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -343,43 +359,46 @@ export default function TagsPage() {
                       </Button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {filteredTags.map((tag) => {
-                        const sizeRem = 0.75 + (tag.usageCount / maxUsage) * 0.5
-                        return (
-                          <div key={tag.id} className="group flex items-center gap-1">
-                            <Tag
-                              color={tag.color}
-                              style={{ fontSize: `${sizeRem}rem`, cursor: 'default', userSelect: 'none' }}
-                              className="m-0"
-                            >
-                              {tag.name}
-                              <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: 3 }}>{tag.usageCount}</span>
-                            </Tag>
-                            <div className="hidden group-hover:flex gap-0.5">
-                              <button
-                                className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-primary transition-colors"
-                                onClick={() => openTagModal(tag)}
+                    {tagsLoading ? (
+                      <div className="py-10 flex justify-center"><Spin /></div>
+                    ) : tags.length === 0 ? (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} className="py-4" description={t('tags.no_matching_tags')} />
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map((tag) => {
+                          const sizeRem = 0.75 + (tag.usage_count / maxUsage) * 0.5
+                          return (
+                            <div key={tag.id} className="group flex items-center gap-1">
+                              <Tag
+                                color={tag.color ?? undefined}
+                                style={{ fontSize: `${sizeRem}rem`, cursor: 'default', userSelect: 'none' }}
+                                className="m-0"
                               >
-                                <EditOutlined className="text-[10px]" />
-                              </button>
-                              <Popconfirm
-                                title={t('tags.confirm_delete_tag')}
-                                okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
-                                onConfirm={() => deleteTag(tag.id)}
-                              >
-                                <button className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors">
-                                  <DeleteOutlined className="text-[10px]" />
+                                {tag.name}
+                                <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: 3 }}>{tag.usage_count}</span>
+                              </Tag>
+                              <div className="hidden group-hover:flex gap-0.5">
+                                <button
+                                  className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-primary transition-colors"
+                                  onClick={() => openTagModal(tag)}
+                                >
+                                  <EditOutlined className="text-[10px]" />
                                 </button>
-                              </Popconfirm>
+                                <Popconfirm
+                                  title={t('tags.confirm_delete_tag')}
+                                  okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
+                                  onConfirm={() => deleteTag(tag.id)}
+                                >
+                                  <button className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors">
+                                    <DeleteOutlined className="text-[10px]" />
+                                  </button>
+                                </Popconfirm>
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                      {filteredTags.length === 0 && (
-                        <p className="text-sm text-slate-400 py-2">{t('tags.no_matching_tags')}</p>
-                      )}
-                    </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ),
@@ -396,21 +415,22 @@ export default function TagsPage() {
                     <div className="flex-1">
                       <p className="text-xs text-slate-500 mb-1">{t('tags.select_tags_hint')}</p>
                       <Select
-                        mode="multiple"
+                        mode="tags"
                         placeholder={t('tags.select_tags_placeholder')}
-                        value={batchTagIds}
-                        onChange={setBatchTagIds}
+                        value={batchTagNames}
+                        onChange={setBatchTagNames}
                         style={{ width: '100%' }}
                         size="small"
                         options={tags.map((tag) => ({
-                          value: tag.id,
-                          label: <span><Tag color={tag.color} className="text-xs m-0">{tag.name}</Tag></span>,
+                          value: tag.name,
+                          label: <span><Tag color={tag.color ?? undefined} className="text-xs m-0">{tag.name}</Tag></span>,
                         }))}
                       />
                     </div>
                     <Button
                       type="primary" size="small"
-                      disabled={!selectedDocs.size || !batchTagIds.length}
+                      disabled={!selectedDocs.size || !batchTagNames.length}
+                      loading={saving}
                       onClick={applyBatchTags}
                       className="flex-shrink-0"
                     >
@@ -422,15 +442,15 @@ export default function TagsPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Checkbox
-                        indeterminate={selectedDocs.size > 0 && selectedDocs.size < MOCK_DOCS.length}
-                        checked={selectedDocs.size === MOCK_DOCS.length}
-                        onChange={(e) => setSelectedDocs(e.target.checked ? new Set(MOCK_DOCS.map((d) => d.id)) : new Set())}
+                        indeterminate={selectedDocs.size > 0 && selectedDocs.size < knowledgeDocs.length}
+                        checked={knowledgeDocs.length > 0 && selectedDocs.size === knowledgeDocs.length}
+                        onChange={(e) => setSelectedDocs(e.target.checked ? new Set(knowledgeDocs.map((d) => d.id)) : new Set())}
                       >
-                        <span className="text-xs text-slate-500">{t('tags.select_all', { count: MOCK_DOCS.length })}</span>
+                        <span className="text-xs text-slate-500">{t('tags.select_all', { count: knowledgeDocs.length })}</span>
                       </Checkbox>
                     </div>
                     <div className="space-y-2">
-                      {MOCK_DOCS.map((doc) => (
+                      {knowledgeDocs.map((doc) => (
                         <div
                           key={doc.id}
                           className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
@@ -447,13 +467,15 @@ export default function TagsPage() {
                           <Checkbox checked={selectedDocs.has(doc.id)} onClick={(e) => e.stopPropagation()} />
                           <span className="flex-1 text-sm text-slate-700 truncate">{doc.name}</span>
                           <div className="flex flex-wrap gap-1">
-                            {(docTags[doc.id] ?? []).map((tid) => {
-                              const tagItem = tags.find((x) => x.id === tid)
-                              return tagItem ? <Tag key={tid} color={tagItem.color} className="text-[10px] m-0">{tagItem.name}</Tag> : null
-                            })}
+                            {(doc.tags ?? []).slice(0, 3).map((tagName) => (
+                              <Tag key={tagName} className="text-[10px] m-0">{tagName}</Tag>
+                            ))}
                           </div>
                         </div>
                       ))}
+                      {knowledgeDocs.length === 0 && (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} className="py-4" />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -472,9 +494,9 @@ export default function TagsPage() {
         width={420}
       >
         <Form form={catForm} layout="vertical" onFinish={saveCat} className="mt-3">
-          {!catModal.item && catModal.parentId && (
+          {!catModal.item && catModal.parentId != null && (
             <p className="text-xs text-slate-500 mb-3 p-2 bg-slate-50 rounded-lg">
-              {t('tags.parent_cat')}{categories.find((c) => c.id === catModal.parentId)?.name}
+              {t('tags.parent_cat')}{flatCats.find((c) => c.id === catModal.parentId)?.name}
             </p>
           )}
           <Form.Item name="name" label={t('tags.cat_name')} rules={[{ required: true, message: t('tags.cat_name_required') }]}>
@@ -488,7 +510,7 @@ export default function TagsPage() {
           </Form.Item>
           <div className="flex justify-end gap-2">
             <Button onClick={() => setCatModal({ open: false })}>{t('common.cancel')}</Button>
-            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+            <Button type="primary" htmlType="submit" loading={saving}>{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>
@@ -510,7 +532,7 @@ export default function TagsPage() {
           </Form.Item>
           <div className="flex justify-end gap-2">
             <Button onClick={() => setTagModal({ open: false })}>{t('common.cancel')}</Button>
-            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+            <Button type="primary" htmlType="submit" loading={saving}>{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>
