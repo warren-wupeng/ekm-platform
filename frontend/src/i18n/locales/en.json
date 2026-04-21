@@ -583,6 +583,10 @@
     "recommend_user_msg": "Recommend related knowledge",
     "recommend_assistant_msg": "Found 3 related items, shown in the references panel.",
     "chat_reply_template": "Regarding \"{{q}}\": based on knowledge base content, we recommend referring to *RAG Architecture Best Practices* and *LLM Serving Comparison*. If you'd like me to generate content directly, please describe your specific needs.",
-    "doc_filename": "AI Technology Selection Report.md"
+    "doc_filename": "AI Technology Selection Report.md",
+    "saved": "Saved",
+    "save_success": "Document saved",
+    "save_failed": "Failed to save document",
+    "collab_connected": "Collaboration connected"
   }
 }

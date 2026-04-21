@@ -583,6 +583,10 @@
     "recommend_user_msg": "推荐相关知识库内容",
     "recommend_assistant_msg": "已找到 3 篇相关内容，展示在参考资料面板中。",
     "chat_reply_template": "关于「{{q}}」：根据知识库内容，建议参考 *RAG 架构最佳实践* 和 *LLM Serving 选型对比* 两篇文档。如需我直接生成内容，请描述具体需求。",
-    "doc_filename": "AI 技术选型调研报告.md"
+    "doc_filename": "AI 技术选型调研报告.md",
+    "saved": "已保存",
+    "save_success": "文档已保存",
+    "save_failed": "保存失败",
+    "collab_connected": "协作已连接"
   }
 }
