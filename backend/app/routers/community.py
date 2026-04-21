@@ -224,7 +224,13 @@ async def like_post(post_id: int, db: DB, user: CurrentUser):
         return {"post_id": post_id, "liked": True, "like_count": p.like_count}
     db.add(PostLike(post_id=post_id, user_id=user.id))
     p.like_count = (p.like_count or 0) + 1
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Raced with a concurrent PUT — unique constraint caught it.
+        await db.rollback()
+        p = await _load_post(db, post_id)
+        return {"post_id": post_id, "liked": True, "like_count": p.like_count}
     return {"post_id": post_id, "liked": True, "like_count": p.like_count}
 
 
