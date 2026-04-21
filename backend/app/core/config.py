@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     # KG quality — edges below this confidence are flagged needs_review=True.
     KG_LOW_CONFIDENCE_THRESHOLD: float = 0.5
 
+    # Service-to-service auth key for internal APIs (ekm-collab → ekm-backend).
+    # Set via Fly secret: INTERNAL_SERVICE_KEY=<random-hex>
+    INTERNAL_SERVICE_KEY: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

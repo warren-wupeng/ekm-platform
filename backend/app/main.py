@@ -34,6 +34,7 @@ from app.routers import chunk_history as chunk_history_router
 from app.routers import kg_review as kg_review_router
 from app.routers import admin_reparse as admin_reparse_router
 from app.routers import knowledge as knowledge_router
+from app.routers import internal as internal_router
 
 
 @asynccontextmanager
@@ -122,6 +123,7 @@ app.include_router(chunk_history_router.router)
 app.include_router(kg_review_router.router)
 app.include_router(admin_reparse_router.router)
 app.include_router(knowledge_router.router)
+app.include_router(internal_router.router)
 
 
 @app.exception_handler(Exception)
