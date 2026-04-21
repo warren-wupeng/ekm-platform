@@ -80,9 +80,12 @@ class KnowledgeItem(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    # Rich-text content from the collaborative Tiptap editor (HTML).
-    # NULL for items that have only been uploaded (not yet edited).
+    # Rich-text content from the collaborative Tiptap editor (HTML snapshot).
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Binary Yjs document state, base64-encoded.  Hocuspocus onStoreDocument
+    # writes this so the next connection can bootstrap from the authoritative
+    # state instead of an empty Y.Doc.
+    yjs_state: Mapped[str | None] = mapped_column(Text, nullable=True)
     # values_callable is load-bearing: the `filetype` Postgres enum type was
     # created with lowercase values ("document", "image", …) in 0001, but
     # SQLAlchemy's default is to serialize Python enum *names* (uppercase

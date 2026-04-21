@@ -87,7 +87,6 @@ class Settings(BaseSettings):
     KG_LOW_CONFIDENCE_THRESHOLD: float = 0.5
 
     # Service-to-service auth key for internal APIs (ekm-collab → ekm-backend).
-    # Set via Fly secret: INTERNAL_SERVICE_KEY=<random-hex>
     INTERNAL_SERVICE_KEY: str = ""
 
 
