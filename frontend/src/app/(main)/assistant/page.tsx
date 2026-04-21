@@ -223,15 +223,15 @@ export default function AssistantPage() {
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
             {latestSources.length > 0
-              ? `${latestSources.length} 条相关片段`
-              : 'AI 回答所参考的知识片段将显示在这里'}
+              ? t('assistant.sources_count', { count: latestSources.length })
+              : t('assistant.sources_empty_hint')}
           </p>
         </div>
 
         <div className="p-3 space-y-2">
           {latestSources.length === 0 ? (
             <div className="text-center text-slate-300 text-xs py-10">
-              暂无引用
+              {t('assistant.no_sources')}
             </div>
           ) : (
             latestSources.map((src, i) => (
@@ -244,7 +244,7 @@ export default function AssistantPage() {
                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
                     <FileTextOutlined className="text-slate-400" />
                     <span className="font-medium text-slate-700 truncate max-w-[180px]">
-                      {src.filename ?? `文档 #${src.document_id}`}
+                      {src.filename ?? t('assistant.doc_fallback', { id: src.document_id })}
                     </span>
                   </div>
                   <Tag color="blue" className="m-0 text-[10px]">
@@ -255,7 +255,7 @@ export default function AssistantPage() {
                   {src.content}
                 </p>
                 <div className="mt-1.5 text-[10px] text-slate-300">
-                  相关度 {(src.score * 100).toFixed(0)}%
+                  {t('assistant.relevance', { score: (src.score * 100).toFixed(0) })}
                 </div>
               </button>
             ))
@@ -269,6 +269,7 @@ export default function AssistantPage() {
 /* -------------------------------------------------------------------------- */
 
 function MessageBubble({ message }: { message: Message }) {
+  const { t } = useTranslation()
   const isUser = message.role === 'user'
   return (
     <div className={clsx('flex gap-3', isUser && 'flex-row-reverse')}>
@@ -297,7 +298,7 @@ function MessageBubble({ message }: { message: Message }) {
         </div>
         {!isUser && message.sources && message.sources.length > 0 && (
           <div className="mt-1.5 text-xs text-slate-400">
-            已引用 {message.sources.length} 条知识片段
+            {t('assistant.cited_count', { count: message.sources.length })}
           </div>
         )}
       </div>
@@ -316,10 +317,11 @@ function TypingDots() {
 }
 
 function EmptyHint({ onPick }: { onPick: (q: string) => void }) {
+  const { t } = useTranslation()
   const EXAMPLES = [
-    '帮我总结一下最近上传的产品文档',
-    '我们公司的报销流程是怎样的？',
-    '上周的销售数据同比有什么变化？',
+    t('assistant.example_1'),
+    t('assistant.example_2'),
+    t('assistant.example_3'),
   ]
   return (
     <div className="max-w-2xl mx-auto text-center pt-16">
@@ -329,9 +331,9 @@ function EmptyHint({ onPick }: { onPick: (q: string) => void }) {
       >
         <RobotOutlined />
       </div>
-      <h2 className="text-lg font-semibold text-slate-700">你好，我是 EKM AI 助手</h2>
+      <h2 className="text-lg font-semibold text-slate-700">{t('assistant.greeting')}</h2>
       <p className="text-sm text-slate-400 mt-1 mb-6">
-        我会基于你的企业知识库回答问题，并列出引用来源
+        {t('assistant.greeting_subtitle')}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {EXAMPLES.map((q) => (

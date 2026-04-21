@@ -26,6 +26,7 @@ import {
   SearchOutlined, PlusOutlined, DeleteOutlined,
   ReloadOutlined, ApartmentOutlined, EditOutlined,
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 
 interface EntityData {
   label: string
@@ -108,6 +109,7 @@ const INIT_EDGES: Edge[] = [
 
 function KGCanvasInner() {
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const { fitView } = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<EntityData>>(INIT_NODES as Node<EntityData>[])
   const [edges, setEdges, onEdgesChange] = useEdgesState(INIT_EDGES)
@@ -121,8 +123,8 @@ function KGCanvasInner() {
 
   const onConnect = useCallback(
     (params: Connection) =>
-      setEdges((eds) => addEdge({ ...params, label: '关联', ...edgeDefaults }, eds)),
-    [setEdges]
+      setEdges((eds) => addEdge({ ...params, label: t('kg.default_edge_label'), ...edgeDefaults }, eds)),
+    [setEdges, t]
   )
 
   function onNodeClick(_: React.MouseEvent, node: Node<EntityData>) {
@@ -136,7 +138,7 @@ function KGCanvasInner() {
     setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id))
     setSelectedNode(null)
     setDrawerOpen(false)
-    message.success('节点已删除')
+    message.success(t('kg.node_deleted'))
   }
 
   function handleAddNode(values: { label: string; type: string }) {
@@ -151,7 +153,7 @@ function KGCanvasInner() {
     ])
     setAddModal(false)
     addForm.resetFields()
-    message.success('节点已添加')
+    message.success(t('kg.node_added'))
   }
 
   function handleEditNode(values: { label: string; type: string }) {
@@ -166,7 +168,7 @@ function KGCanvasInner() {
     )
     setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, ...values, color } } : null)
     setEditModal(false)
-    message.success('节点已更新')
+    message.success(t('kg.node_updated'))
   }
 
   function handleSearch(val: string) {
@@ -212,16 +214,16 @@ function KGCanvasInner() {
         <Panel position="top-left">
           <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2">
             <Input
-              size="small" placeholder="搜索节点…"
+              size="small" placeholder={t('kg.search_placeholder')}
               prefix={<SearchOutlined className="text-slate-400 text-xs" />}
               style={{ width: 180 }}
               onChange={(e) => handleSearch(e.target.value)}
               allowClear
             />
             <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setAddModal(true)}>
-              添加节点
+              {t('kg.add_node')}
             </Button>
-            <Tooltip title="重置视图">
+            <Tooltip title={t('kg.reset_view')}>
               <Button size="small" icon={<ReloadOutlined />} onClick={() => fitView({ duration: 400 })} />
             </Tooltip>
           </div>
@@ -240,13 +242,13 @@ function KGCanvasInner() {
 
       {/* Node detail drawer */}
       <Drawer
-        title={<span className="flex items-center gap-2"><ApartmentOutlined className="text-primary" />节点详情</span>}
+        title={<span className="flex items-center gap-2"><ApartmentOutlined className="text-primary" />{t('kg.node_detail')}</span>}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={300}
         extra={
           <Space>
-            <Tooltip title="编辑">
+            <Tooltip title={t('common.edit')}>
               <Button
                 size="small" icon={<EditOutlined />}
                 onClick={() => {
@@ -258,10 +260,10 @@ function KGCanvasInner() {
               />
             </Tooltip>
             <Popconfirm
-              title="确认删除节点" description="同时删除此节点的所有关联关系"
-              onConfirm={handleDeleteNode} okText="删除" cancelText="取消" okButtonProps={{ danger: true }}
+              title={t('kg.confirm_delete_node')} description={t('kg.confirm_delete_node_desc')}
+              onConfirm={handleDeleteNode} okText={t('common.delete')} cancelText={t('common.cancel')} okButtonProps={{ danger: true }}
             >
-              <Tooltip title="删除节点">
+              <Tooltip title={t('kg.delete_node')}>
                 <Button size="small" danger icon={<DeleteOutlined />} />
               </Tooltip>
             </Popconfirm>
@@ -282,7 +284,7 @@ function KGCanvasInner() {
 
             {Object.keys(selectedNode.data.properties).length > 0 && (
               <div>
-                <p className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">属性</p>
+                <p className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">{t('kg.properties')}</p>
                 <Descriptions size="small" column={1} bordered>
                   {Object.entries(selectedNode.data.properties).map(([k, v]) => (
                     <Descriptions.Item key={k} label={<span className="text-xs text-slate-500">{k}</span>}>
@@ -294,7 +296,7 @@ function KGCanvasInner() {
             )}
 
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">关联关系</p>
+              <p className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">{t('kg.relations')}</p>
               <div className="space-y-1">
                 {edges
                   .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
@@ -318,31 +320,31 @@ function KGCanvasInner() {
       </Drawer>
 
       {/* Add node */}
-      <Modal title="添加节点" open={addModal} onCancel={() => { setAddModal(false); addForm.resetFields() }} footer={null}>
+      <Modal title={t('kg.add_node_title')} open={addModal} onCancel={() => { setAddModal(false); addForm.resetFields() }} footer={null}>
         <Form form={addForm} layout="vertical" onFinish={handleAddNode} className="mt-4">
-          <Form.Item name="label" label="节点名称" rules={[{ required: true }]}>
+          <Form.Item name="label" label={t('kg.node_name')} rules={[{ required: true }]}>
             <Input placeholder="e.g. Anthropic" />
           </Form.Item>
-          <Form.Item name="type" label="实体类型" rules={[{ required: true }]}>
-            <Select placeholder="选择类型" options={entityTypes.map((t) => ({ label: t, value: t }))} />
+          <Form.Item name="type" label={t('kg.entity_type')} rules={[{ required: true }]}>
+            <Select placeholder={t('kg.select_type')} options={entityTypes.map((t) => ({ label: t, value: t }))} />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => { setAddModal(false); addForm.resetFields() }}>取消</Button>
-            <Button type="primary" htmlType="submit">添加</Button>
+            <Button onClick={() => { setAddModal(false); addForm.resetFields() }}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('kg.add_node')}</Button>
           </div>
         </Form>
       </Modal>
 
       {/* Edit node */}
-      <Modal title="编辑节点" open={editModal} onCancel={() => setEditModal(false)} footer={null}>
+      <Modal title={t('kg.edit_node_title')} open={editModal} onCancel={() => setEditModal(false)} footer={null}>
         <Form form={editForm} layout="vertical" onFinish={handleEditNode} className="mt-4">
-          <Form.Item name="label" label="节点名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="type" label="实体类型" rules={[{ required: true }]}>
+          <Form.Item name="label" label={t('kg.node_name')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="type" label={t('kg.entity_type')} rules={[{ required: true }]}>
             <Select options={entityTypes.map((t) => ({ label: t, value: t }))} />
           </Form.Item>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setEditModal(false)}>取消</Button>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button onClick={() => setEditModal(false)}>{t('common.cancel')}</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </div>
         </Form>
       </Modal>

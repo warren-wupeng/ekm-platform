@@ -4,13 +4,13 @@ import { Dropdown, Button } from 'antd'
 import { GlobalOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 
-const LANGS = [
-  { key: 'en', label: 'English' },
-  { key: 'zh', label: '中文' },
-]
-
 export default function LanguageSwitcher() {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
+
+  const LANGS = [
+    { key: 'en', label: 'English' },
+    { key: 'zh', label: t('language.zh') },
+  ]
 
   const current = LANGS.find(l => l.key === i18n.language) ?? LANGS[0]
 

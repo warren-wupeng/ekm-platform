@@ -97,10 +97,10 @@ export default function KnowledgePage() {
   async function handleArchive(id: string) {
     try {
       await api.post('/api/v1/archive/request', { knowledge_item_id: Number(id) })
-      message.success(t('knowledge.archived') ?? '已归档')
+      message.success(t('knowledge.archived'))
       removeItem(id)
     } catch {
-      message.error(t('common.error') ?? '操作失败')
+      message.error(t('common.operation_failed'))
     }
   }
 
@@ -223,12 +223,12 @@ export default function KnowledgePage() {
             />
           </Tooltip>
           <Popconfirm
-            title={t('knowledge.archive_confirm') ?? '确认归档此文件？'}
+            title={t('knowledge.archive_confirm')}
             onConfirm={() => handleArchive(record.id)}
-            okText={t('common.confirm') ?? '确认'}
+            okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Tooltip title={t('knowledge.archive_button') ?? '归档'}>
+            <Tooltip title={t('knowledge.archive_button')}>
               <Button
                 type="text" size="small"
                 icon={<InboxOutlined />}
@@ -284,12 +284,12 @@ export default function KnowledgePage() {
             showIcon
             message={
               docNotFound
-                ? `未找到 ID 为 ${docFilter} 的文件（可能已被删除或无权访问）`
-                : `已按 AI 助手引用筛选至文件 #${docFilter}`
+                ? t('knowledge.doc_not_found', { id: docFilter })
+                : t('knowledge.doc_filtered', { id: docFilter })
             }
             action={
               <Button size="small" type="link" onClick={clearDocFilter}>
-                清除筛选
+                {t('knowledge.clear_filter')}
               </Button>
             }
             className="rounded-xl"
@@ -300,13 +300,13 @@ export default function KnowledgePage() {
         {showUpload && (
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-700">上传文件</h2>
+              <h2 className="text-sm font-semibold text-slate-700">{t('knowledge.upload_files')}</h2>
               <Button
                 type="text" size="small"
                 onClick={() => setShowUpload(false)}
                 className="text-slate-400 text-xs"
               >
-                收起
+                {t('common.collapse')}
               </Button>
             </div>
             <UploadZone onUploaded={handleUploaded} onParseSettled={handleParseSettled} />
@@ -366,7 +366,7 @@ export default function KnowledgePage() {
                 // virtual scroll kicks in for lists > 100 rows; pagination handles smaller sets
                 virtual
                 scroll={{ y: 600 }}
-                pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
+                pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (total) => t('common.total_count', { count: total }) }}
                 className="ekm-knowledge-table"
               />
             )}

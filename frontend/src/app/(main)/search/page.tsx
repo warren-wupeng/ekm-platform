@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   App, Input, Select, Space, Segmented, Empty, Spin, Tag, Tooltip,
   AutoComplete, Skeleton,
@@ -13,20 +14,6 @@ import { searchItems, suggestQuery } from '@/lib/searchApi'
 import ResultCard from '@/components/search/ResultCard'
 import type { SearchFilters, SortBy, SearchResult } from '@/types/search'
 
-const SORT_OPTIONS = [
-  { label: '相关度', value: 'relevance' },
-  { label: '最新', value: 'date' },
-  { label: '最热', value: 'popularity' },
-]
-
-const TYPE_OPTIONS = [
-  { label: '全部', value: 'all' },
-  { label: <span><FileTextOutlined className="mr-1" />文档</span>, value: 'document' },
-  { label: <span><BookOutlined className="mr-1" />Wiki</span>, value: 'wiki' },
-  { label: <span><MessageOutlined className="mr-1" />帖子</span>, value: 'post' },
-  { label: <span><PaperClipOutlined className="mr-1" />文件</span>, value: 'file' },
-]
-
 const DEFAULT_FILTERS: SearchFilters = {
   type: 'all',
   dateRange: 'all',
@@ -35,7 +22,22 @@ const DEFAULT_FILTERS: SearchFilters = {
 }
 
 export default function SearchPage() {
+  const { t } = useTranslation()
   const { message } = App.useApp()
+
+  const SORT_OPTIONS = [
+    { label: t('search.sort_relevance'), value: 'relevance' },
+    { label: t('search.sort_date'), value: 'date' },
+    { label: t('search.sort_popularity'), value: 'popularity' },
+  ]
+
+  const TYPE_OPTIONS = [
+    { label: t('search.type_all'), value: 'all' },
+    { label: <span><FileTextOutlined className="mr-1" />{t('search.type_document')}</span>, value: 'document' },
+    { label: <span><BookOutlined className="mr-1" />{t('search.type_wiki')}</span>, value: 'wiki' },
+    { label: <span><MessageOutlined className="mr-1" />{t('search.type_post')}</span>, value: 'post' },
+    { label: <span><PaperClipOutlined className="mr-1" />{t('search.type_file')}</span>, value: 'file' },
+  ]
   const [query, setQuery]         = useState('')
   const [inputVal, setInputVal]   = useState('')
   const [filters, setFilters]     = useState<SearchFilters>(DEFAULT_FILTERS)
@@ -61,8 +63,8 @@ export default function SearchPage() {
       setTotal(0)
       const detail =
         (e as { response?: { data?: { detail?: string } }; message?: string })
-          ?.response?.data?.detail ?? (e as Error)?.message ?? '搜索失败'
-      message.error(`搜索失败：${detail}`)
+          ?.response?.data?.detail ?? (e as Error)?.message ?? t('search.search_failed')
+      message.error(`${t('search.search_failed')}：${detail}`)
     } finally {
       setLoading(false)
     }
@@ -127,7 +129,7 @@ export default function SearchPage() {
           >
             <Input
               size="large"
-              placeholder="搜索知识库、文档、帖子…"
+              placeholder={t('search.placeholder')}
               prefix={<SearchOutlined className="text-slate-400 text-base" />}
               suffix={
                 inputVal ? (
@@ -158,25 +160,25 @@ export default function SearchPage() {
 
           <div className="flex items-center gap-2 ml-auto">
             {/* Date range */}
-            <Tooltip title="时间范围">
+            <Tooltip title={t('search.date_range')}>
               <Select
                 value={filters.dateRange}
                 onChange={(val) => setFilter('dateRange', val)}
                 style={{ width: 130 }}
                 size="small"
                 options={[
-                  { label: '不限时间', value: 'all' },
-                  { label: '近 7 天', value: '7d' },
-                  { label: '近 30 天', value: '30d' },
-                  { label: '近 90 天', value: '90d' },
-                  { label: '近 1 年', value: '1y' },
+                  { label: t('search.date_all'), value: 'all' },
+                  { label: t('search.date_7d'), value: '7d' },
+                  { label: t('search.date_30d'), value: '30d' },
+                  { label: t('search.date_90d'), value: '90d' },
+                  { label: t('search.date_1y'), value: '1y' },
                 ]}
                 prefix={<FilterOutlined />}
               />
             </Tooltip>
 
             {/* Sort */}
-            <Tooltip title="排序方式">
+            <Tooltip title={t('search.sort_label')}>
               <Select
                 value={sortBy}
                 onChange={(val) => setSortBy(val as SortBy)}
@@ -195,7 +197,7 @@ export default function SearchPage() {
                 onClose={() => setFilters(DEFAULT_FILTERS)}
                 className="text-xs"
               >
-                {activeFilterCount} 个筛选
+                {t('search.active_filters', { count: activeFilterCount })}
               </Tag>
             )}
           </div>
@@ -210,9 +212,9 @@ export default function SearchPage() {
             >
               <SearchOutlined className="text-primary text-2xl" />
             </div>
-            <p className="text-slate-400 text-sm">输入关键词搜索知识库、文档、社区帖子</p>
+            <p className="text-slate-400 text-sm">{t('search.empty_hint')}</p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {['知识管理', '产品规划', '数据治理', '开发规范'].map((kw) => (
+              {[t('search.hot_keyword_1'), t('search.hot_keyword_2'), t('search.hot_keyword_3'), t('search.hot_keyword_4')].map((kw) => (
                 <Tag
                   key={kw}
                   icon={<FireOutlined />}
@@ -252,9 +254,9 @@ export default function SearchPage() {
             {/* Result stats */}
             {results.length > 0 && (
               <p className="text-slate-400 text-xs mb-3">
-                找到 <span className="text-slate-700 font-medium">{total}</span> 条结果
+                {t('search.results_count', { total })}
                 {query && (
-                  <span>，关键词：<span className="text-primary font-medium">"{query}"</span></span>
+                  <span>，{t('search.results_keyword', { query })}</span>
                 )}
               </p>
             )}
@@ -271,14 +273,14 @@ export default function SearchPage() {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   <div className="text-center">
-                    <p className="text-slate-500 text-sm">没有找到相关结果</p>
+                    <p className="text-slate-500 text-sm">{t('search.no_results')}</p>
                     <p className="text-slate-400 text-xs mt-1">
-                      试试换个关键词，或者
+                      {t('search.no_results_hint')}
                       <span
                         className="text-primary cursor-pointer ml-1"
                         onClick={() => setFilters(DEFAULT_FILTERS)}
                       >
-                        清除筛选条件
+                        {t('search.clear_filters')}
                       </span>
                     </p>
                   </div>

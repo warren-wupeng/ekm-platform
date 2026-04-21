@@ -7,6 +7,7 @@ import {
   TagOutlined,
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 
 interface Post {
   id: string
@@ -39,6 +40,7 @@ const DEPT_COLOR: Record<string, string> = { 技术: 'blue', 产品: 'purple', �
 const ALL_TAGS = Array.from(new Set(MOCK_POSTS.flatMap((p) => p.tags)))
 
 export default function CommunityPage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const [posts, setPosts]           = useState<Post[]>(MOCK_POSTS)
   const [search, setSearch]         = useState('')
@@ -85,11 +87,11 @@ export default function CommunityPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <TeamOutlined className="text-slate-500 text-lg" />
-              <h1 className="text-lg font-semibold text-slate-800">社区</h1>
+              <h1 className="text-lg font-semibold text-slate-800">{t('community.page_title')}</h1>
             </div>
             <div className="flex items-center gap-2">
               <Input
-                size="small" placeholder="搜索帖子…"
+                size="small" placeholder={t('community.search_placeholder')}
                 prefix={<SearchOutlined className="text-slate-300 text-xs" />}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value.toLowerCase()); setVisibleCount(5) }}
@@ -98,14 +100,14 @@ export default function CommunityPage() {
                 style={{ width: 180 }}
               />
               <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => router.push('/community/new')}>
-                <span className="hidden sm:inline">发帖</span>
+                <span className="hidden sm:inline">{t('community.new_post')}</span>
               </Button>
             </div>
           </div>
           {/* Mobile search */}
           <div className="mt-2 sm:hidden">
             <Input
-              size="small" placeholder="搜索帖子…"
+              size="small" placeholder={t('community.search_placeholder')}
               prefix={<SearchOutlined className="text-slate-300 text-xs" />}
               value={search}
               onChange={(e) => { setSearch(e.target.value.toLowerCase()); setVisibleCount(5) }}
@@ -121,9 +123,9 @@ export default function CommunityPage() {
           {/* Sort tabs */}
           <div className="flex items-center gap-1">
             {([
-              { key: 'latest',   label: '最新' },
-              { key: 'hot',      label: '最热' },
-              { key: 'comments', label: '最多评论' },
+              { key: 'latest',   label: t('community.sort_latest') },
+              { key: 'hot',      label: t('community.sort_hot') },
+              { key: 'comments', label: t('community.sort_comments') },
             ] as { key: SortKey; label: string }[]).map((s) => (
               <button
                 key={s.key}
@@ -157,7 +159,7 @@ export default function CommunityPage() {
                 className="text-[10px] text-slate-400 hover:text-red-400 transition-colors"
                 onClick={() => setActiveTags(new Set())}
               >
-                清除
+                {t('community.clear_tags')}
               </button>
             )}
           </div>
@@ -193,7 +195,7 @@ export default function CommunityPage() {
               </p>
               {post.content.length > 120 && (
                 <button className="text-xs text-primary mb-3 hover:opacity-70" onClick={() => setExpandedId(expanded ? null : post.id)}>
-                  {expanded ? '收起' : '查看全文'}
+                  {expanded ? t('community.collapse') : t('community.expand')}
                 </button>
               )}
 
@@ -227,7 +229,7 @@ export default function CommunityPage() {
                 </button>
                 {post.likes >= 15 && (
                   <span className="flex items-center gap-1 text-[10px] text-orange-500 ml-auto">
-                    <FireOutlined />热门
+                    <FireOutlined />{t('community.hot_label')}
                   </span>
                 )}
               </div>
@@ -236,7 +238,7 @@ export default function CommunityPage() {
         })}
 
         {sorted.length === 0 && (
-          <div className="text-center py-16 text-slate-400 text-sm">没有相关帖子</div>
+          <div className="text-center py-16 text-slate-400 text-sm">{t('community.no_posts')}</div>
         )}
 
         {/* Load more */}
@@ -246,7 +248,7 @@ export default function CommunityPage() {
               onClick={() => setVisibleCount((v) => v + 5)}
               className="text-slate-500"
             >
-              加载更多（还剩 {sorted.length - visibleCount} 条）
+              {t('community.load_more', { count: sorted.length - visibleCount })}
             </Button>
           </div>
         )}

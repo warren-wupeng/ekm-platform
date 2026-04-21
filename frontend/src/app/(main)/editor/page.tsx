@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   App, Button, Input, Tag, Divider, Spin, Tooltip,
 } from 'antd'
@@ -33,12 +34,7 @@ const MOCK_REFS: KnowledgeRef[] = [
   { id: 'r3', title: 'EKM 技术架构设计', excerpt: 'AI 层采用混合策略：开发环境使用 API，生产关键路径自建 vLLM…', relevance: 0.81 },
 ]
 
-const ACTION_PROMPTS: Record<AIAction, string> = {
-  summarize:   '一键生成摘要',
-  continue:    'AI 续写',
-  rewrite:     'AI 改写选中内容',
-  recommend:   '相关内容推荐',
-}
+// ACTION_PROMPTS built inside component via t()
 
 const INITIAL_DOC = `# AI 技术选型调研报告
 
@@ -86,15 +82,23 @@ function simulateAI(action: AIAction, context: string): Promise<string> {
 }
 
 export default function EditorPage() {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const router = useRouter()
+
+  const ACTION_PROMPTS: Record<AIAction, string> = {
+    summarize:   t('editor.prompt_summarize'),
+    continue:    t('editor.prompt_continue'),
+    rewrite:     t('editor.prompt_rewrite'),
+    recommend:   t('editor.prompt_recommend'),
+  }
   const [doc, setDoc]           = useState(INITIAL_DOC)
   const [selected, setSelected] = useState('')
   const [messages, setMessages] = useState<AIMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: '你好！我是 EKM AI 助手。选中文档中的内容，或使用下方快捷操作，我可以帮你生成摘要、续写内容、改写表达，以及从知识库中推荐相关资料。',
+      content: t('editor.welcome_message'),
     },
   ])
   const [inputVal, setInputVal] = useState('')
@@ -112,15 +116,15 @@ export default function EditorPage() {
   async function handleAction(action: AIAction) {
     const sel = getSelection()
     if ((action === 'rewrite') && !sel) {
-      message.info('请先选中要改写的文字')
+      message.info(t('editor.select_text_first'))
       return
     }
     if (action === 'recommend') {
       setShowRefs(true)
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 'u', role: 'user', content: '推荐相关知识库内容' },
-        { id: Date.now() + 'a', role: 'assistant', content: '已找到 3 篇相关内容，展示在参考资料面板中。', action },
+        { id: Date.now() + 'u', role: 'user', content: t('editor.recommend_user_msg') },
+        { id: Date.now() + 'a', role: 'assistant', content: t('editor.recommend_assistant_msg'), action },
       ])
       return
     }
@@ -148,7 +152,7 @@ export default function EditorPage() {
       {
         id: Date.now() + 'a',
         role: 'assistant',
-        content: `关于「${q}」：根据知识库内容，建议参考 *RAG 架构最佳实践* 和 *LLM Serving 选型对比* 两篇文档。如需我直接生成内容，请描述具体需求。`,
+        content: t('editor.chat_reply_template', { q }),
       },
     ])
   }
@@ -159,7 +163,7 @@ export default function EditorPage() {
       const pos = ta.selectionEnd
       const newDoc = doc.substring(0, pos) + '\n\n' + content + '\n' + doc.substring(pos)
       setDoc(newDoc)
-      message.success('内容已插入到光标位置')
+      message.success(t('editor.insert_to_doc'))
     }
   }
 
@@ -176,12 +180,12 @@ export default function EditorPage() {
       <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center gap-3">
         <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => router.back()} className="text-slate-500" />
         <div>
-          <h1 className="text-base font-semibold text-slate-800">AI 辅助写作</h1>
-          <p className="text-xs text-slate-400">AI 技术选型调研报告.md</p>
+          <h1 className="text-base font-semibold text-slate-800">{t('editor.page_title')}</h1>
+          <p className="text-xs text-slate-400">{t('editor.doc_filename')}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button size="small" type="primary" icon={<CheckOutlined />}>
-            保存
+            {t('editor.save')}
           </Button>
         </div>
       </div>
@@ -195,7 +199,7 @@ export default function EditorPage() {
             onChange={(e) => setDoc(e.target.value)}
             className="flex-1 resize-none p-6 font-mono text-sm text-slate-700 bg-white focus:outline-none leading-relaxed"
             style={{ fontFamily: "'JetBrains Mono', monospace, 'SF Mono'" }}
-            placeholder="开始编写…"
+            placeholder={t('editor.placeholder')}
           />
         </div>
 
@@ -209,18 +213,18 @@ export default function EditorPage() {
             <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
               <RobotOutlined className="text-white text-xs" />
             </div>
-            <span className="text-sm font-medium text-slate-700">AI 助手</span>
+            <span className="text-sm font-medium text-slate-700">{t('editor.ai_assistant')}</span>
           </div>
 
           {/* Quick actions */}
           <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-xs text-slate-400 mb-2">快捷操作</p>
+            <p className="text-xs text-slate-400 mb-2">{t('editor.quick_actions')}</p>
             <div className="grid grid-cols-2 gap-1.5">
               {[
-                { action: 'summarize' as AIAction, icon: <FileTextOutlined />, label: '生成摘要' },
-                { action: 'continue'  as AIAction, icon: <ThunderboltOutlined />, label: 'AI 续写' },
-                { action: 'rewrite'   as AIAction, icon: <EditOutlined />, label: '改写选中' },
-                { action: 'recommend' as AIAction, icon: <SearchOutlined />, label: '相关推荐' },
+                { action: 'summarize' as AIAction, icon: <FileTextOutlined />, label: t('editor.action_summarize') },
+                { action: 'continue'  as AIAction, icon: <ThunderboltOutlined />, label: t('editor.action_continue') },
+                { action: 'rewrite'   as AIAction, icon: <EditOutlined />, label: t('editor.action_rewrite') },
+                { action: 'recommend' as AIAction, icon: <SearchOutlined />, label: t('editor.action_recommend') },
               ].map(({ action, icon, label }) => (
                 <Button
                   key={action}
@@ -254,7 +258,7 @@ export default function EditorPage() {
                   </div>
                   {msg.role === 'assistant' && msg.content && msg.action !== 'recommend' && (
                     <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Tooltip title="复制">
+                      <Tooltip title={t('editor.copy')}>
                         <button
                           className="text-slate-400 hover:text-slate-600 text-[10px]"
                           onClick={() => copyContent(msg.id, msg.content)}
@@ -262,12 +266,12 @@ export default function EditorPage() {
                           {copiedId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
                         </button>
                       </Tooltip>
-                      <Tooltip title="插入到文档">
+                      <Tooltip title={t('editor.insert_to_doc')}>
                         <button
                           className="text-slate-400 hover:text-primary text-[10px]"
                           onClick={() => insertContent(msg.content)}
                         >
-                          <BulbOutlined /> 插入
+                          <BulbOutlined /> {t('editor.insert_to_doc')}
                         </button>
                       </Tooltip>
                     </div>
@@ -291,7 +295,7 @@ export default function EditorPage() {
           {showRefs && (
             <div className="border-t border-slate-100 px-4 py-3 max-h-48 overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-slate-500 font-medium">相关知识库内容</p>
+                <p className="text-xs text-slate-500 font-medium">{t('editor.related_knowledge')}</p>
                 <button className="text-slate-300 hover:text-slate-500 text-xs" onClick={() => setShowRefs(false)}>×</button>
               </div>
               {MOCK_REFS.map((ref) => (
@@ -314,7 +318,7 @@ export default function EditorPage() {
               <Input.TextArea
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
-                placeholder="向 AI 提问…"
+                placeholder={t('editor.input_placeholder')}
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 className="text-xs flex-1"
                 // #90: switched off onPressEnter because it fires before
@@ -341,7 +345,7 @@ export default function EditorPage() {
                 className="flex-shrink-0"
               />
             </div>
-            <p className="text-[10px] text-slate-300 mt-1">Enter 发送 · Shift+Enter 换行</p>
+            <p className="text-[10px] text-slate-300 mt-1">{t('editor.send_hint')}</p>
           </div>
         </div>
       </div>

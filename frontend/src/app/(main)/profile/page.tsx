@@ -8,6 +8,7 @@ import {
   CheckCircleOutlined, WarningOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '@/hooks/useAuth'
+import { useTranslation } from 'react-i18next'
 
 const MOCK_DOCS = [
   { id: 'd1', name: '技术架构设计.docx', date: '2026-04-16', downloads: 18, tags: ['技术', '架构'] },
@@ -55,6 +56,7 @@ const NOTIF_ICON: Record<string, React.ReactNode> = {
 export default function ProfilePage() {
   const { message } = App.useApp()
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [editing, setEditing]               = useState(false)
   const [msgOpen, setMsgOpen]               = useState(false)
   const [notifications, setNotifications]   = useState<Notification[]>(MOCK_NOTIFICATIONS)
@@ -65,7 +67,7 @@ export default function ProfilePage() {
   const unread      = notifications.filter((n) => !n.read).length
 
   function handleSave(values: { displayName: string; department: string; bio: string }) {
-    message.success('个人信息已保存')
+    message.success(t('profile.profile_saved'))
     setEditing(false)
   }
 
@@ -89,9 +91,9 @@ export default function ProfilePage() {
               <h1 className="text-xl font-bold text-slate-800">{displayName}</h1>
               <p className="text-sm text-slate-500 mt-0.5">{email}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Tag color="blue" className="text-xs">技术</Tag>
+                <Tag color="blue" className="text-xs">{t('profile.dept_label')}</Tag>
                 <Tag color="purple" className="text-xs">CTO</Tag>
-                <span className="text-xs text-slate-400">加入于 2026-01-10</span>
+                <span className="text-xs text-slate-400">{t('profile.joined_at')} 2026-01-10</span>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -101,17 +103,17 @@ export default function ProfilePage() {
                   size="small" icon={<BellOutlined />}
                   onClick={() => setMsgOpen(true)}
                 >
-                  消息
+                  {t('profile.messages')}
                 </Button>
               </Badge>
               <Button
                 size="small" icon={<EditOutlined />}
                 onClick={() => {
-                  form.setFieldsValue({ displayName, department: '技术', bio: '分布式系统 & AI infra 工程师，前 Databricks。' })
+                  form.setFieldsValue({ displayName, department: t('profile.dept_label'), bio: t('profile.default_bio') })
                   setEditing(true)
                 }}
               >
-                编辑资料
+                {t('profile.edit_profile')}
               </Button>
             </div>
           </div>
@@ -119,9 +121,9 @@ export default function ProfilePage() {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mt-6">
             {[
-              { title: '上传文档', value: MOCK_DOCS.length },
-              { title: '社区帖子', value: MOCK_POSTS.length },
-              { title: '获赞数',   value: MOCK_POSTS.reduce((s, p) => s + p.likes, 0) },
+              { title: t('profile.stat_docs'), value: MOCK_DOCS.length },
+              { title: t('profile.stat_posts'), value: MOCK_POSTS.length },
+              { title: t('profile.stat_likes'),   value: MOCK_POSTS.reduce((s, p) => s + p.likes, 0) },
             ].map((s) => (
               <div key={s.title} className="text-center">
                 <p className="text-xl font-bold text-slate-800">{s.value}</p>
@@ -138,7 +140,7 @@ export default function ProfilePage() {
           items={[
             {
               key: 'docs',
-              label: <span><FileTextOutlined className="mr-1" />我的文档</span>,
+              label: <span><FileTextOutlined className="mr-1" />{t('profile.tab_docs')}</span>,
               children: (
                 <div className="space-y-2">
                   {MOCK_DOCS.map((d) => (
@@ -146,7 +148,7 @@ export default function ProfilePage() {
                       <FileTextOutlined className="text-primary text-base flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-700 truncate">{d.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{d.date} · 下载 {d.downloads} 次</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{d.date} · {t('profile.download_count', { count: d.downloads })}</p>
                       </div>
                       <div className="hidden sm:flex gap-1 flex-shrink-0">
                         {d.tags.map((t) => (
@@ -160,7 +162,7 @@ export default function ProfilePage() {
             },
             {
               key: 'posts',
-              label: <span><TeamOutlined className="mr-1" />我的帖子</span>,
+              label: <span><TeamOutlined className="mr-1" />{t('profile.tab_posts')}</span>,
               children: (
                 <div className="space-y-2">
                   {MOCK_POSTS.map((p) => (
@@ -179,7 +181,7 @@ export default function ProfilePage() {
             },
             {
               key: 'favorites',
-              label: <span><StarOutlined className="mr-1" />我的收藏</span>,
+              label: <span><StarOutlined className="mr-1" />{t('profile.tab_favorites')}</span>,
               children: (
                 <div className="space-y-2">
                   {MOCK_FAVORITES.map((f) => (
@@ -191,7 +193,7 @@ export default function ProfilePage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-700 truncate">{(f as any).name ?? (f as any).title}</p>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {f.type === 'document' ? '文档' : '帖子'} · 收藏于 {f.date}
+                          {f.type === 'document' ? t('profile.fav_document') : t('profile.fav_post')} · {t('profile.fav_date')} {f.date}
                         </p>
                       </div>
                     </div>
@@ -207,10 +209,10 @@ export default function ProfilePage() {
       <Drawer
         title={
           <div className="flex items-center justify-between pr-4">
-            <span>消息中心</span>
+            <span>{t('profile.msg_center')}</span>
             {unread > 0 && (
               <button className="text-xs text-primary font-normal" onClick={markAllRead}>
-                全部已读
+                {t('profile.mark_all_read')}
               </button>
             )}
           </div>
@@ -243,7 +245,7 @@ export default function ProfilePage() {
           {notifications.every((n) => n.read) && (
             <div className="text-center py-12 text-slate-400 flex flex-col items-center gap-2">
               <CheckCircleOutlined className="text-2xl text-green-400" />
-              <p className="text-sm">没有新消息</p>
+              <p className="text-sm">{t('common.no_new_messages')}</p>
             </div>
           )}
         </div>
@@ -253,25 +255,25 @@ export default function ProfilePage() {
       {editing && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-base font-semibold text-slate-800 mb-4">编辑个人资料</h2>
+            <h2 className="text-base font-semibold text-slate-800 mb-4">{t('profile.edit_title')}</h2>
             <Form form={form} layout="vertical" onFinish={handleSave}>
-              <Form.Item name="displayName" label="姓名" rules={[{ required: true }]}>
+              <Form.Item name="displayName" label={t('profile.label_name')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="department" label="部门">
+              <Form.Item name="department" label={t('profile.label_department')}>
                 <Select options={[
-                  { label: '技术', value: '技术' },
-                  { label: '产品', value: '产品' },
-                  { label: '市场', value: '市场' },
-                  { label: '项目', value: '项目' },
+                  { label: t('profile.dept_tech'), value: '技术' },
+                  { label: t('profile.dept_product'), value: '产品' },
+                  { label: t('profile.dept_marketing'), value: '市场' },
+                  { label: t('profile.dept_pm'), value: '项目' },
                 ]} />
               </Form.Item>
-              <Form.Item name="bio" label="个人简介">
+              <Form.Item name="bio" label={t('profile.label_bio')}>
                 <Input.TextArea rows={3} maxLength={100} showCount />
               </Form.Item>
               <div className="flex justify-end gap-2">
-                <Button onClick={() => setEditing(false)}>取消</Button>
-                <Button type="primary" htmlType="submit" icon={<CheckOutlined />}>保存</Button>
+                <Button onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
+                <Button type="primary" htmlType="submit" icon={<CheckOutlined />}>{t('common.save')}</Button>
               </div>
             </Form>
           </div>
