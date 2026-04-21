@@ -198,15 +198,22 @@ export default function EditorPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Editor area — Tiptap with Yjs collaboration */}
-        <CollabEditor
-          roomName={roomName}
-          userName={userName}
-          collabUrl={COLLAB_URL}
-          token={token ?? ''}
-          onUsersChange={setOnlineUsers}
-          onConnectionChange={setConnStatus}
-          placeholder={t('editor.placeholder')}
-        />
+        {token ? (
+          <CollabEditor
+            roomName={roomName}
+            userName={userName}
+            collabUrl={COLLAB_URL}
+            token={token}
+            onUsersChange={setOnlineUsers}
+            onConnectionChange={setConnStatus}
+            placeholder={t('editor.placeholder')}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400">
+            <p className="text-sm font-medium">{t('editor.login_required')}</p>
+            <p className="text-xs">{t('editor.login_to_edit')}</p>
+          </div>
+        )}
 
         {/* AI Sidebar */}
         <div

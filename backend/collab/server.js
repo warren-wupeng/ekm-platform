@@ -67,7 +67,9 @@ const ekmExtension = {
 
       return { user }
     } catch (err) {
-      throw new Error(`Authentication error: ${err.message}`)
+      // P2-1: don't echo err.message to client — it may contain backend internals
+      console.error('[onAuthenticate] Error:', err.message)
+      throw new Error('Authentication failed')
     }
   },
 
