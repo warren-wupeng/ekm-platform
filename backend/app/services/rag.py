@@ -95,7 +95,7 @@ async def stream_answer(
                 yield {"event": "delta", "data": delta}
     except Exception as exc:
         log.exception("LLM stream failed: %s", exc)
-        yield {"event": "error", "data": f"LLM error: {type(exc).__name__}: {exc}"}
+        yield {"event": "error", "data": "服务暂时不可用，请稍后重试"}
         return
 
     yield {"event": "done", "data": "[DONE]"}
