@@ -6,34 +6,37 @@ import {
   UserOutlined, LockOutlined, ApartmentOutlined,
   ReadOutlined, TeamOutlined, BranchesOutlined,
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/store/auth'
+import LanguageSwitcher from '@/components/layout/LanguageSwitcher'
 import type { User } from '@/types/auth'
 import api from '@/lib/api'
 
-const FEATURES = [
-  {
-    icon: <ReadOutlined className="text-xl" />,
-    title: '统一知识库',
-    desc: '文档、Wiki、附件集中管理，全员可检索',
-  },
-  {
-    icon: <BranchesOutlined className="text-xl" />,
-    title: '知识图谱',
-    desc: '可视化概念关系，挖掘隐性知识连接',
-  },
-  {
-    icon: <TeamOutlined className="text-xl" />,
-    title: '协作社区',
-    desc: '跨部门知识共享，沉淀团队智慧资产',
-  },
-]
-
 export default function LoginPage() {
   const router = useRouter()
+  const { t } = useTranslation()
   const { setAuth } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [ssoLoading, setSsoLoading] = useState(false)
   const [form] = Form.useForm()
+
+  const FEATURES = [
+    {
+      icon: <ReadOutlined className="text-xl" />,
+      title: t('login.feature_knowledge'),
+      desc: t('login.feature_knowledge_desc'),
+    },
+    {
+      icon: <BranchesOutlined className="text-xl" />,
+      title: t('login.feature_graph'),
+      desc: t('login.feature_graph_desc'),
+    },
+    {
+      icon: <TeamOutlined className="text-xl" />,
+      title: t('login.feature_community'),
+      desc: t('login.feature_community_desc'),
+    },
+  ]
 
   async function handleLogin(values: { username: string; password: string }) {
     setLoading(true)
@@ -54,12 +57,12 @@ export default function LoginPage() {
         roles: [raw.role],
       }
       setAuth(user, access_token, refresh_token)
-      message.success('登录成功')
+      message.success(t('common.success'))
       router.replace('/dashboard')
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: { message?: string } | string } } }
       const detail = axiosErr?.response?.data?.detail
-      const msg = (typeof detail === 'object' ? detail?.message : detail) ?? '登录失败，请检查用户名或密码'
+      const msg = (typeof detail === 'object' ? detail?.message : detail) ?? t('common.error')
       message.error(msg)
     } finally {
       setLoading(false)
@@ -68,7 +71,7 @@ export default function LoginPage() {
 
   function handleSSO() {
     setSsoLoading(true)
-    message.info('SSO 集成开发中，请使用账号密码登录')
+    message.info(t('login.sso_button'))
     setSsoLoading(false)
   }
 
@@ -108,10 +111,10 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-white text-3xl font-bold leading-snug mb-3">
-            连接知识，<br />驱动创新
+            {t('login.title')}
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
-            企业级知识管理平台——让每一条经验沉淀为组织资产，让每一次检索都触达最优答案。
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -134,7 +137,7 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="relative z-10 text-slate-600 text-xs">© 2026 EKM · 企业知识管理平台</p>
+        <p className="relative z-10 text-slate-600 text-xs">© 2026 EKM</p>
       </div>
 
       {/* ── Right: form panel ── */}
@@ -148,20 +151,26 @@ export default function LoginPage() {
             >
               <ApartmentOutlined className="text-white text-sm" />
             </div>
-            <span className="text-slate-800 text-lg font-semibold">EKM</span>
+            <span className="text-slate-800 text-lg font-semibold flex-1">EKM</span>
+            <LanguageSwitcher />
           </div>
 
-          <h2 className="text-slate-800 text-2xl font-semibold mb-1">欢迎回来</h2>
-          <p className="text-slate-400 text-sm mb-8">登录以访问企业知识库</p>
+          {/* Desktop language switcher */}
+          <div className="hidden md:flex justify-end mb-4">
+            <LanguageSwitcher />
+          </div>
+
+          <h2 className="text-slate-800 text-2xl font-semibold mb-1">{t('login.title')}</h2>
+          <p className="text-slate-400 text-sm mb-8">{t('login.subtitle')}</p>
 
           <Form form={form} onFinish={handleLogin} layout="vertical" size="large">
             <Form.Item
               name="username"
-              rules={[{ required: true, message: '请输入用户名' }]}
+              rules={[{ required: true, message: t('login.username_placeholder') }]}
             >
               <Input
                 prefix={<UserOutlined className="text-slate-400" />}
-                placeholder="用户名 / 邮箱"
+                placeholder={t('login.username_placeholder')}
                 autoComplete="username"
                 className="rounded-lg"
               />
@@ -169,11 +178,11 @@ export default function LoginPage() {
 
             <Form.Item
               name="password"
-              rules={[{ required: true, message: '请输入密码' }]}
+              rules={[{ required: true, message: t('login.password_placeholder') }]}
             >
               <Input.Password
                 prefix={<LockOutlined className="text-slate-400" />}
-                placeholder="密码"
+                placeholder={t('login.password_placeholder')}
                 autoComplete="current-password"
                 className="rounded-lg"
               />
@@ -186,12 +195,12 @@ export default function LoginPage() {
                 loading={loading}
                 className="w-full h-11 text-base font-medium rounded-lg"
               >
-                登录
+                {loading ? t('login.logging_in') : t('login.login_button')}
               </Button>
             </Form.Item>
           </Form>
 
-          <Divider className="text-slate-400 text-xs">或</Divider>
+          <Divider className="text-slate-400 text-xs" />
 
           <Button
             onClick={handleSSO}
@@ -200,11 +209,11 @@ export default function LoginPage() {
             className="w-full h-11 text-slate-600 border-slate-200 rounded-lg"
             icon={<ApartmentOutlined />}
           >
-            企业 SSO 登录（ADFS）
+            {t('login.sso_button')}
           </Button>
 
           <p className="text-center text-slate-400 text-xs mt-8 md:hidden">
-            © 2026 EKM · 企业知识管理平台
+            © 2026 EKM
           </p>
         </div>
       </div>

@@ -2,23 +2,25 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { AntdRegistry } from '@ant-design/nextjs-registry'
 import { ConfigProvider } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
 import { antdTheme } from '@/lib/theme'
+import I18nProvider from '@/components/I18nProvider'
 
 export const metadata: Metadata = {
-  title: 'EKM · 企业知识管理平台',
+  title: 'EKM · Enterprise Knowledge Management',
   description: 'Enterprise Knowledge Management Platform',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body>
-        <AntdRegistry>
-          <ConfigProvider theme={antdTheme} locale={zhCN}>
-            {children}
-          </ConfigProvider>
-        </AntdRegistry>
+        <I18nProvider>
+          <AntdRegistry>
+            <ConfigProvider theme={antdTheme}>
+              {children}
+            </ConfigProvider>
+          </AntdRegistry>
+        </I18nProvider>
       </body>
     </html>
   )

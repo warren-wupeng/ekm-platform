@@ -6,6 +6,7 @@ import { MenuOutlined } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
 import { useUIStore } from '@/store/ui'
 import Sidebar, { COLLAPSED_W, EXPANDED_W } from '@/components/layout/Sidebar'
+import LanguageSwitcher from '@/components/layout/LanguageSwitcher'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, _hasHydrated } = useAuthStore()
@@ -49,7 +50,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             icon={<MenuOutlined className="text-slate-500" />}
             onClick={() => setMobileSidebarOpen(true)}
           />
-          <span className="text-sm font-semibold text-slate-800">EKM</span>
+          <span className="text-sm font-semibold text-slate-800 flex-1">EKM</span>
+          <LanguageSwitcher />
         </div>
 
         {/* Content — on desktop shift right, on mobile full-width */}

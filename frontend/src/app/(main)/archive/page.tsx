@@ -11,6 +11,7 @@ import {
   StarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 
 // ── Types aligned to backend responses ─────────────────────────────
@@ -43,24 +44,27 @@ interface RestoreRequest {
 
 // ── Display configs ────────────────────────────────────────────────
 
-const FILE_TYPE_LABEL: Record<string, string> = {
-  document: '文档',
-  image: '图片',
-  archive: '压缩包',
-  audio: '音频',
-  video: '视频',
-  other: '其他',
-}
-
-const APPROVAL_CONFIG: Record<string, { color: string; text: string }> = {
-  pending:  { color: 'orange',  text: '待审批' },
-  approved: { color: 'success', text: '已通过' },
-  rejected: { color: 'error',   text: '已拒绝' },
-}
+// FILE_TYPE_LABEL and APPROVAL_CONFIG are built inside component via t()
 
 // ── Component ──────────────────────────────────────────────────────
 
 export default function ArchivePage() {
+  const { t } = useTranslation()
+
+  const FILE_TYPE_LABEL: Record<string, string> = {
+    document: t('archive.type_document'),
+    image: t('archive.type_image'),
+    archive: t('archive.type_archive'),
+    audio: t('archive.type_audio'),
+    video: t('archive.type_video'),
+    other: t('archive.type_other'),
+  }
+
+  const APPROVAL_CONFIG: Record<string, { color: string; text: string }> = {
+    pending:  { color: 'orange',  text: t('archive.status_pending') },
+    approved: { color: 'success', text: t('archive.status_approved') },
+    rejected: { color: 'error',   text: t('archive.status_rejected') },
+  }
   const [items, setItems] = useState<ArchivedItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
   const [itemsPage, setItemsPage] = useState(1)
@@ -135,7 +139,7 @@ export default function ArchivePage() {
       await api.post(`/api/v1/archive/restore-requests/${id}/${action}`, {
         note: comment ?? null,
       })
-      message.success(approved ? '已批准恢复申请' : '已拒绝恢复申请')
+      message.success(approved ? t('archive.review_success') : t('archive.review_success'))
       setReviewModal(null)
       reviewForm.resetFields()
       void fetchItems()
@@ -158,7 +162,7 @@ export default function ArchivePage() {
 
   const archiveColumns: ColumnsType<ArchivedItem> = [
     {
-      title: '文件名',
+      title: t('archive.col_name'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => (
@@ -166,14 +170,14 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '类型',
+      title: t('archive.col_type'),
       dataIndex: 'file_type',
       key: 'file_type',
       width: 90,
       render: (t: string) => <Tag className="text-xs">{FILE_TYPE_LABEL[t] ?? t}</Tag>,
     },
     {
-      title: '归档时间',
+      title: t('archive.col_archived_at'),
       dataIndex: 'archived_at',
       key: 'archived_at',
       width: 120,
@@ -184,7 +188,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '上传者',
+      title: t('archive.col_uploader'),
       dataIndex: 'uploader_name',
       key: 'uploader_name',
       width: 100,
@@ -193,7 +197,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       key: 'status',
       width: 110,
       render: (_, record) => {
@@ -205,7 +209,7 @@ export default function ArchivePage() {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 120,
       align: 'center',
@@ -225,7 +229,7 @@ export default function ArchivePage() {
             {hasPending ? (
               <Tag color="orange" className="text-xs">审批中</Tag>
             ) : (
-              <Tooltip title="申请恢复">
+              <Tooltip title={t('archive.restore_button')}>
                 <Button
                   type="text" size="small"
                   icon={<RollbackOutlined />}
@@ -242,7 +246,7 @@ export default function ArchivePage() {
 
   const requestColumns: ColumnsType<RestoreRequest> = [
     {
-      title: '文件名',
+      title: t('archive.col_name'),
       dataIndex: 'knowledge_item_name',
       key: 'knowledge_item_name',
       render: (v: string | null) => (
@@ -250,7 +254,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '申请人',
+      title: t('common.uploader'),
       dataIndex: 'submitted_by_name',
       key: 'submitted_by_name',
       width: 90,
@@ -259,7 +263,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '申请时间',
+      title: t('common.created_at'),
       dataIndex: 'submitted_at',
       key: 'submitted_at',
       width: 110,
@@ -270,7 +274,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '申请原因',
+      title: t('archive.restore_reason_label'),
       dataIndex: 'reason',
       key: 'reason',
       render: (v: string | null) => (
@@ -278,7 +282,7 @@ export default function ArchivePage() {
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 90,
@@ -288,7 +292,7 @@ export default function ArchivePage() {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 140,
       align: 'center',
@@ -296,11 +300,11 @@ export default function ArchivePage() {
         record.status === 'pending' ? (
           <Space size={4}>
             <Popconfirm
-              title="确认批准"
-              description="批准后文件将从归档状态恢复"
+              title={t('archive.review_approve')}
+              description={t('archive.restore_confirm')}
               onConfirm={() => handleApproval(record.id, true)}
-              okText="批准"
-              cancelText="取消"
+              okText={t('archive.review_approve')}
+              cancelText={t('common.cancel')}
               okButtonProps={{ type: 'primary' }}
             >
               <Button
@@ -338,7 +342,7 @@ export default function ArchivePage() {
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-3 mb-1">
             <InboxOutlined className="text-slate-500 text-lg" />
-            <h1 className="text-lg font-semibold text-slate-800">归档管理</h1>
+            <h1 className="text-lg font-semibold text-slate-800">{t('archive.page_title')}</h1>
           </div>
           <p className="text-xs text-slate-400">管理已归档内容，处理恢复申请</p>
         </div>
@@ -408,7 +412,7 @@ export default function ArchivePage() {
         title={
           <span className="flex items-center gap-2">
             <RollbackOutlined className="text-primary" />
-            申请恢复文件
+            {t('archive.restore_modal_title')}
           </span>
         }
         open={!!restoreModal}
@@ -426,7 +430,7 @@ export default function ArchivePage() {
             <Form form={form} layout="vertical" onFinish={handleRestoreRequest}>
               <Form.Item
                 name="reason"
-                label="申请恢复原因"
+                label={t('archive.restore_reason_label')}
                 rules={[{ required: true, message: '请填写恢复原因' }]}
               >
                 <Input.TextArea
@@ -451,7 +455,7 @@ export default function ArchivePage() {
 
       {/* Rejection reason modal */}
       <Modal
-        title="拒绝恢复申请"
+        title={t('archive.review_modal_title')}
         open={!!reviewModal}
         onCancel={() => { setReviewModal(null); reviewForm.resetFields() }}
         footer={null}
@@ -490,7 +494,7 @@ export default function ArchivePage() {
         title="归档详情"
         open={!!detailItem}
         onCancel={() => setDetailItem(null)}
-        footer={<Button onClick={() => setDetailItem(null)}>关闭</Button>}
+        footer={<Button onClick={() => setDetailItem(null)}>{t('common.close')}</Button>}
       >
         {detailItem && (
           <div className="space-y-4">

@@ -20,24 +20,11 @@ import {
   RobotOutlined,
 } from '@ant-design/icons'
 import { Tooltip, Avatar } from 'antd'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import { useUIStore } from '@/store/ui'
+import LanguageSwitcher from './LanguageSwitcher'
 import clsx from 'clsx'
-
-const NAV_ITEMS = [
-  { key: '/dashboard',        icon: <HomeOutlined />,       label: '首页' },
-  { key: '/portal',           icon: <GlobalOutlined />,     label: '知识门户' },
-  { key: '/search',           icon: <SearchOutlined />,     label: '搜索' },
-  { key: '/assistant',        icon: <RobotOutlined />,      label: 'AI 助手' },
-  { key: '/knowledge',        icon: <BookOutlined />,       label: '知识库' },
-  { key: '/community',        icon: <TeamOutlined />,       label: '社区' },
-  { key: '/knowledge-graph',  icon: <BranchesOutlined />,   label: '知识图谱' },
-  { key: '/archive',          icon: <InboxOutlined />,      label: '归档管理' },
-  { key: '/ontology',         icon: <NodeIndexOutlined />,  label: 'Ontology' },
-  { key: '/editor',           icon: <EditOutlined />,       label: 'AI 写作' },
-  { key: '/developer',        icon: <CodeOutlined />,       label: 'Developer' },
-  { key: '/tags',             icon: <TagsOutlined />,       label: '标签管理' },
-]
 
 const COLLAPSED_W = 64
 const EXPANDED_W  = 200
@@ -47,9 +34,25 @@ export { COLLAPSED_W, EXPANDED_W }
 export default function Sidebar() {
   const pathname  = usePathname()
   const router    = useRouter()
+  const { t }     = useTranslation()
   const { user, logout }                                 = useAuth()
   const { sidebarExpanded, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
   const expanded = sidebarExpanded
+
+  const NAV_ITEMS = [
+    { key: '/dashboard',        icon: <HomeOutlined />,       label: t('nav.dashboard') },
+    { key: '/portal',           icon: <GlobalOutlined />,     label: t('nav.portal') },
+    { key: '/search',           icon: <SearchOutlined />,     label: t('nav.search') },
+    { key: '/assistant',        icon: <RobotOutlined />,      label: t('nav.assistant') },
+    { key: '/knowledge',        icon: <BookOutlined />,       label: t('nav.knowledge') },
+    { key: '/community',        icon: <TeamOutlined />,       label: t('nav.community') },
+    { key: '/knowledge-graph',  icon: <BranchesOutlined />,   label: t('nav.knowledge_graph') },
+    { key: '/archive',          icon: <InboxOutlined />,      label: t('nav.archive') },
+    { key: '/ontology',         icon: <NodeIndexOutlined />,  label: t('nav.ontology') },
+    { key: '/editor',           icon: <EditOutlined />,       label: t('nav.editor') },
+    { key: '/developer',        icon: <CodeOutlined />,       label: t('nav.developer') },
+    { key: '/tags',             icon: <TagsOutlined />,       label: t('nav.tags') },
+  ]
 
   function isActive(key: string) {
     return pathname === key || pathname.startsWith(key + '/')
@@ -66,7 +69,6 @@ export default function Sidebar() {
     <aside
       className={[
         'fixed left-0 top-0 h-screen flex flex-col py-4 z-50 transition-[width,transform] duration-200',
-        // Mobile: hidden by default, slide in when open; Desktop: always visible
         'md:translate-x-0',
         mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
       ].join(' ')}
@@ -79,7 +81,7 @@ export default function Sidebar() {
     >
       {/* Logo row */}
       <div className={clsx('flex items-center mb-6', expanded ? 'px-4' : 'justify-center')}>
-        <Tooltip title={expanded ? undefined : '返回首页'} placement="right">
+        <Tooltip title={expanded ? undefined : t('nav.dashboard')} placement="right">
           <div
             className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
             style={{ background: 'var(--ekm-primary)' }}
@@ -125,9 +127,16 @@ export default function Sidebar() {
         })}
       </nav>
 
+      {/* Language switcher (desktop, expanded only) */}
+      {expanded && (
+        <div className="px-3 mb-1">
+          <LanguageSwitcher />
+        </div>
+      )}
+
       {/* Toggle button */}
       <div className={clsx('flex mb-2', expanded ? 'justify-end px-3' : 'justify-center')}>
-        <Tooltip title={expanded ? '收起' : '展开'} placement="right">
+        <Tooltip title={expanded ? t('nav.dashboard') : undefined} placement="right">
           <button
             onClick={toggleSidebar}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-700 transition-all text-sm"
@@ -150,11 +159,11 @@ export default function Sidebar() {
               <UserOutlined className="text-slate-400 text-base flex-shrink-0" />
             )}
             <span className="text-slate-300 text-sm truncate whitespace-nowrap">
-              {user?.displayName ?? '我'}
+              {user?.displayName ?? t('nav.profile')}
             </span>
           </button>
         ) : (
-          <Tooltip title={user?.displayName ?? '我'} placement="right">
+          <Tooltip title={user?.displayName ?? t('nav.profile')} placement="right">
             <button
               onClick={() => router.push('/profile')}
               className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-slate-700 transition-all"
@@ -174,10 +183,10 @@ export default function Sidebar() {
             className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-all"
           >
             <LogoutOutlined className="text-base flex-shrink-0" />
-            <span className="text-sm whitespace-nowrap">退出登录</span>
+            <span className="text-sm whitespace-nowrap">{t('nav.logout')}</span>
           </button>
         ) : (
-          <Tooltip title="退出登录" placement="right">
+          <Tooltip title={t('nav.logout')} placement="right">
             <button
               onClick={logout}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-all"

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Input, Table, Tag, Tabs, Empty, Tooltip, Space, Popconfirm, Spin, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { useTranslation } from 'react-i18next'
 import {
   UploadOutlined, SearchOutlined, DownloadOutlined,
   DeleteOutlined, EyeOutlined, TagOutlined, FireOutlined,
@@ -42,10 +43,7 @@ function getFileIcon(name: string): React.ReactNode {
   }
 }
 
-const TYPE_LABEL: Record<FileType, string> = {
-  document: '文档', image: '图片', archive: '压缩包',
-  audio: '音频', video: '视频', other: '其他',
-}
+// TYPE_LABEL is built dynamically via t() inside the component
 
 const TYPE_COLOR: Record<FileType, string> = {
   document: 'blue', image: 'cyan', archive: 'orange',
@@ -53,8 +51,18 @@ const TYPE_COLOR: Record<FileType, string> = {
 }
 
 export default function KnowledgePage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  const TYPE_LABEL: Record<FileType, string> = {
+    document: t('knowledge.type_document'),
+    image: t('knowledge.type_image'),
+    archive: t('knowledge.type_archive'),
+    audio: t('knowledge.type_audio'),
+    video: t('knowledge.type_video'),
+    other: t('knowledge.type_other'),
+  }
   // ?doc=<id> — AI assistant links use this to deep-link to a specific
   // document. We filter the table to just that row so the user lands on
   // the referenced doc without manual searching. Clicking "清除" drops
@@ -102,7 +110,7 @@ export default function KnowledgePage() {
 
   const columns: ColumnsType<KnowledgeItem> = [
     {
-      title: '文件名',
+      title: t('knowledge.col_name'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => (
@@ -113,7 +121,7 @@ export default function KnowledgePage() {
       ),
     },
     {
-      title: '类型',
+      title: t('knowledge.col_type'),
       dataIndex: 'fileType',
       key: 'fileType',
       width: 80,
@@ -124,7 +132,7 @@ export default function KnowledgePage() {
       onFilter: (v, record) => record.fileType === v,
     },
     {
-      title: '大小',
+      title: t('knowledge.col_size'),
       dataIndex: 'size',
       key: 'size',
       width: 90,
@@ -132,7 +140,7 @@ export default function KnowledgePage() {
       sorter: (a, b) => a.size - b.size,
     },
     {
-      title: '标签',
+      title: t('common.actions'),
       dataIndex: 'tags',
       key: 'tags',
       width: 160,
@@ -145,14 +153,14 @@ export default function KnowledgePage() {
       ),
     },
     {
-      title: '上传者',
+      title: t('knowledge.col_uploader'),
       dataIndex: 'uploadedBy',
       key: 'uploadedBy',
       width: 100,
       render: (v: string) => <span className="text-slate-400 text-xs">{v}</span>,
     },
     {
-      title: '上传时间',
+      title: t('knowledge.col_created'),
       dataIndex: 'uploadedAt',
       key: 'uploadedAt',
       width: 100,
@@ -161,7 +169,7 @@ export default function KnowledgePage() {
       defaultSortOrder: 'descend',
     },
     {
-      title: '下载',
+      title: t('common.download'),
       dataIndex: 'downloads',
       key: 'downloads',
       width: 72,
@@ -175,27 +183,27 @@ export default function KnowledgePage() {
       sorter: (a, b) => a.downloads - b.downloads,
     },
     {
-      title: '操作',
+      title: t('knowledge.col_actions'),
       key: 'actions',
       width: 140,
       align: 'center',
       render: (_, record) => (
         <Space size={4}>
-          <Tooltip title="预览">
+          <Tooltip title={t('common.view')}>
             <Button
               type="text" size="small"
               icon={<EyeOutlined />}
               className="text-slate-400 hover:text-primary"
             />
           </Tooltip>
-          <Tooltip title="下载">
+          <Tooltip title={t('common.download')}>
             <Button
               type="text" size="small"
               icon={<DownloadOutlined />}
               className="text-slate-400 hover:text-primary"
             />
           </Tooltip>
-          <Tooltip title="版本历史">
+          <Tooltip title={t('common.more')}>
             <Button
               type="text" size="small"
               icon={<HistoryOutlined />}
@@ -204,14 +212,14 @@ export default function KnowledgePage() {
             />
           </Tooltip>
           <Popconfirm
-            title="确认删除"
-            description="此操作不可恢复，确认删除该文件？"
+            title={t('knowledge.delete_confirm')}
+            description={t('knowledge.delete_confirm')}
             onConfirm={() => handleDelete(record.id)}
-            okText="删除"
-            cancelText="取消"
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
             okButtonProps={{ danger: true }}
           >
-            <Tooltip title="删除">
+            <Tooltip title={t('common.delete')}>
               <Button
                 type="text" size="small"
                 icon={<DeleteOutlined />}
@@ -230,15 +238,15 @@ export default function KnowledgePage() {
       <div className="bg-white border-b border-slate-100 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">知识库</h1>
-            <p className="text-xs text-slate-400 mt-0.5">{items.length} 个文件 · 按部门共享</p>
+            <h1 className="text-lg font-semibold text-slate-800">{t('knowledge.page_title')}</h1>
+            <p className="text-xs text-slate-400 mt-0.5">{items.length} {t('common.total')}</p>
           </div>
           <Button
             type="primary"
             icon={<UploadOutlined />}
             onClick={() => setShowUpload((v) => !v)}
           >
-            上传文件
+            {t('knowledge.upload_button')}
           </Button>
         </div>
       </div>
@@ -287,10 +295,10 @@ export default function KnowledgePage() {
             onChange={setActiveTab}
             className="px-5 pt-3"
             items={[
-              { key: 'list', label: '全部文件' },
-              { key: 'doc',  label: '文档' },
-              { key: 'img',  label: '图片' },
-              { key: 'arc',  label: '压缩包' },
+              { key: 'list', label: t('knowledge.tab_all') },
+              { key: 'doc',  label: t('knowledge.type_document') },
+              { key: 'img',  label: t('knowledge.type_image') },
+              { key: 'arc',  label: t('knowledge.type_archive') },
             ]}
             size="small"
           />
@@ -299,7 +307,7 @@ export default function KnowledgePage() {
             {/* Search bar */}
             <div className="mb-4">
               <Input
-                placeholder="搜索文件名或标签…"
+                placeholder={t('knowledge.search_placeholder')}
                 prefix={<SearchOutlined className="text-slate-300" />}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -315,7 +323,7 @@ export default function KnowledgePage() {
             ) : filtered.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="暂无文件，点击右上角「上传文件」开始"
+                description={t('knowledge.empty_tip')}
                 className="py-10"
               />
             ) : (
