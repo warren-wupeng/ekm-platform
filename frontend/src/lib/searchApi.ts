@@ -55,7 +55,7 @@ function mapHit(hit: EsHit): SearchResult {
     title: src.name,
     snippet: src.description ?? '',
     highlightedSnippet: firstHighlight(hit.highlight),
-    url: `/knowledge?id=${src.id}`,
+    url: `/knowledge?doc=${src.id}`,
     author: '',                // backend doesn't return this yet
     department: '',             // ditto
     tags: src.tags ?? [],

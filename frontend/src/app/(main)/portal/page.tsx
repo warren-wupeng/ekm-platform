@@ -1,13 +1,16 @@
 'use client'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Breadcrumb, Tag, Tabs, Input, Empty, Tooltip } from 'antd'
+import { Breadcrumb, Tag, Tabs, Input, Empty, Tooltip, Spin } from 'antd'
 import {
   FireOutlined, SearchOutlined, BookOutlined,
   FileTextOutlined, DownloadOutlined, EyeOutlined,
   AppstoreOutlined, UnorderedListOutlined, RightOutlined,
   TrophyOutlined,
 } from '@ant-design/icons'
+import { useRouter } from 'next/navigation'
+import { useKnowledgeList } from '@/lib/useKnowledgeList'
+import type { KnowledgeItem } from '@/types/upload'
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -16,24 +19,10 @@ interface DocEntry {
   name: string
   department: string
   tags: string[]
-  views: number
   downloads: number
-  likes: number
   date: string
 }
 
-const TOP_DOCS: DocEntry[] = [
-  { id: 't1', name: 'EKM 使用指南 2026 版',           department: '产品', tags: ['指南', '新人'], views: 312, downloads: 88, likes: 31, date: '2026-04-10' },
-  { id: 't2', name: '技术架构设计 v5.docx',             department: '技术', tags: ['架构', '技术'], views: 278, downloads: 54, likes: 24, date: '2026-04-16' },
-  { id: 't3', name: 'RAG Pipeline 优化实验记录',        department: '技术', tags: ['RAG', 'AI'],    views: 241, downloads: 42, likes: 31, date: '2026-04-15' },
-  { id: 't4', name: '产品路线图 Q2 2026',               department: '产品', tags: ['路线图'],       views: 198, downloads: 37, likes: 19, date: '2026-04-12' },
-  { id: 't5', name: '前端组件库设计规范',               department: '技术', tags: ['前端', '规范'], views: 175, downloads: 31, likes: 15, date: '2026-04-08' },
-  { id: 't6', name: '市场推广策略 2026 H1',             department: '市场', tags: ['市场', '策略'], views: 162, downloads: 28, likes: 14, date: '2026-04-11' },
-  { id: 't7', name: '新员工入职手册',                   department: 'HR',   tags: ['HR', '入职'],   views: 154, downloads: 72, likes: 18, date: '2026-03-20' },
-  { id: 't8', name: 'API 设计规范 v2.md',              department: '技术', tags: ['API', '规范'],  views: 148, downloads: 31, likes: 12, date: '2026-03-28' },
-  { id: 't9', name: '年度财务报告 2025',                department: '财务', tags: ['财务'],         views: 137, downloads: 24, likes: 9,  date: '2026-02-15' },
-  { id: 't10', name: 'EKM 知识图谱产品说明',            department: '产品', tags: ['图谱', 'KG'],  views: 125, downloads: 19, likes: 13, date: '2026-04-17' },
-]
 
 interface CategoryNode {
   key: string
@@ -93,16 +82,32 @@ const MEDAL: Record<number, string> = { 0: 'text-yellow-500', 1: 'text-slate-400
 
 export default function PortalPage() {
   const { t } = useTranslation()
+  const router = useRouter()
   const [search, setSearch]                   = useState('')
-  const [sortBy, setSortBy]                   = useState<'views' | 'downloads' | 'likes'>('views')
+  const [sortBy, setSortBy]                   = useState<'downloads' | 'date'>('downloads')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [expandedKeys, setExpandedKeys]       = useState<Set<string>>(new Set(['tech', 'product']))
   const [breadcrumb, setBreadcrumb]           = useState<{ key: string; label: string }[]>([])
   const [viewMode, setViewMode]               = useState<'list' | 'grid'>('list')
 
-  const filteredDocs = TOP_DOCS
-    .filter((d) => !search || d.name.toLowerCase().includes(search) || d.tags.some((t) => t.includes(search)) || d.department.includes(search))
-    .sort((a, b) => b[sortBy] - a[sortBy])
+  const { items, isLoading } = useKnowledgeList()
+
+  // Map KnowledgeItem to DocEntry shape for the list
+  function toDocEntry(item: KnowledgeItem) {
+    return {
+      id: String(item.id),
+      name: item.name,
+      department: item.uploadedBy ?? '',
+      tags: item.tags ?? [],
+      date: item.uploadedAt ?? '',
+      downloads: item.downloads ?? 0,
+    }
+  }
+
+  const filteredDocs = items
+    .map(toDocEntry)
+    .filter((d) => !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.tags.some((tag) => tag.includes(search)) || d.department.includes(search))
+    .sort((a, b) => sortBy === 'downloads' ? b.downloads - a.downloads : b.date.localeCompare(a.date))
 
   function selectCategory(node: CategoryNode, parent?: CategoryNode) {
     setSelectedCategory(node.key)
@@ -186,13 +191,13 @@ export default function PortalPage() {
             />
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400">{t('search.sort_label')}:</span>
-              {(['views', 'downloads', 'likes'] as const).map((s) => (
+              {(['downloads', 'date'] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSortBy(s)}
                   className={`text-xs px-2 py-1 rounded-lg transition-colors ${sortBy === s ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 >
-                  {s === 'views' ? t('portal.sort_views') : s === 'downloads' ? t('portal.sort_downloads') : t('portal.sort_likes')}
+                  {s === 'downloads' ? t('portal.sort_downloads') : t('portal.sort_date')}
                 </button>
               ))}
               <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
@@ -225,11 +230,13 @@ export default function PortalPage() {
                 label: <span><FireOutlined className="mr-1 text-orange-500" />{t('portal.hot_top10')}</span>,
                 children: (
                   <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-2'}>
-                    {filteredDocs.length === 0 ? (
+                    {isLoading ? (
+                      <div className="py-10 flex justify-center"><Spin /></div>
+                    ) : filteredDocs.length === 0 ? (
                       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('portal.no_matching_docs')} className="py-10" />
                     ) : filteredDocs.map((doc, idx) => (
                       viewMode === 'list' ? (
-                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 hover:border-primary/30 transition-colors cursor-pointer">
+                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 hover:border-primary/30 transition-colors cursor-pointer" onClick={() => router.push(`/knowledge?doc=${doc.id}`)}>
                           {/* Rank badge */}
                           <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${idx < 3 ? 'bg-orange-50' : 'bg-slate-50'}`}>
                             {idx < 3
@@ -251,13 +258,12 @@ export default function PortalPage() {
                           </div>
 
                           <div className="hidden sm:flex items-center gap-4 flex-shrink-0 text-[10px] text-slate-400">
-                            <span className="flex items-center gap-1"><EyeOutlined />{doc.views}</span>
                             <span className="flex items-center gap-1"><DownloadOutlined />{doc.downloads}</span>
                             {idx < 3 && <FireOutlined className="text-orange-400" />}
                           </div>
                         </div>
                       ) : (
-                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-100 p-4 hover:border-primary/30 transition-colors cursor-pointer">
+                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-100 p-4 hover:border-primary/30 transition-colors cursor-pointer" onClick={() => router.push(`/knowledge?doc=${doc.id}`)}>
                           <div className="flex items-center gap-2 mb-2">
                             {idx < 3
                               ? <TrophyOutlined className={`text-sm ${MEDAL[idx]}`} />
@@ -267,7 +273,6 @@ export default function PortalPage() {
                           </div>
                           <p className="text-sm font-medium text-slate-700 line-clamp-2 mb-3">{doc.name}</p>
                           <div className="flex items-center justify-between text-[10px] text-slate-400">
-                            <span className="flex items-center gap-1"><EyeOutlined />{doc.views}</span>
                             <span className="flex items-center gap-1"><DownloadOutlined />{doc.downloads}</span>
                             {idx < 3 && <FireOutlined className="text-orange-400" />}
                           </div>
