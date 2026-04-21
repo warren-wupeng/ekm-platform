@@ -28,20 +28,13 @@ const redisHost = redisUrl.hostname
 const redisPort = parseInt(redisUrl.port || '6379')
 const redisDb = parseInt(redisUrl.pathname.replace('/', '') || '0')
 
-const server = Server.configure({
-  port: PORT,
-
-  extensions: [
-    new Logger(),
-    new Redis({
-      host: redisHost,
-      port: redisPort,
-      options: {
-        db: redisDb,
-      },
-    }),
-  ],
-
+// EKM auth + persistence extension.
+// IMPORTANT: onAuthenticate MUST be on an extension object inside the
+// `extensions` array — Hocuspocus's `requiresAuthentication` getter only
+// checks extensions, not top-level hooks.  A top-level onAuthenticate
+// would silently be ignored for the "requires auth?" check, allowing
+// unauthenticated WebSocket connections (see P0 security bug).
+const ekmExtension = {
   async onAuthenticate(data) {
     const token = data.token
     if (!token) {
@@ -82,7 +75,6 @@ const server = Server.configure({
     const itemId = parseItemId(documentName)
 
     try {
-      // Encode Y.Doc state as binary update
       const update = Y.encodeStateAsUpdate(document)
       const updateBase64 = Buffer.from(update).toString('base64')
 
@@ -101,10 +93,25 @@ const server = Server.configure({
         console.error(`[onStoreDocument] PUT failed for item ${itemId}: ${resp.status}`)
       }
     } catch (err) {
-      // Do not throw — storage failure should not crash the collab session
       console.error(`[onStoreDocument] Error for item ${itemId}:`, err.message)
     }
   },
+}
+
+const server = Server.configure({
+  port: PORT,
+
+  extensions: [
+    new Logger(),
+    new Redis({
+      host: redisHost,
+      port: redisPort,
+      options: {
+        db: redisDb,
+      },
+    }),
+    ekmExtension,
+  ],
 })
 
 server.listen()
