@@ -6,8 +6,21 @@ const Y = require('yjs')
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 const EKM_BACKEND_URL = process.env.EKM_BACKEND_URL || 'https://ekm-backend.fly.dev'
 const EKM_BACKEND_INTERNAL_URL = process.env.EKM_BACKEND_INTERNAL_URL || 'http://ekm-backend.internal:8000'
-const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || ''
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY
+if (!INTERNAL_SERVICE_KEY) {
+  console.error('FATAL: INTERNAL_SERVICE_KEY not set')
+  process.exit(1)
+}
 const PORT = parseInt(process.env.PORT || '1234')
+
+function parseItemId(documentName) {
+  const rawId = documentName.replace('doc:', '')
+  const itemId = parseInt(rawId, 10)
+  if (!Number.isInteger(itemId) || itemId <= 0) {
+    throw new Error('Invalid document name')
+  }
+  return itemId
+}
 
 // Parse redis URL into host/port for the extension
 const redisUrl = new URL(REDIS_URL)
@@ -46,8 +59,7 @@ const server = Server.configure({
       const user = await authResp.json()
 
       // Check room-level access
-      const documentName = data.documentName
-      const itemId = documentName.replace('doc:', '')
+      const itemId = parseItemId(data.documentName)
       const accessResp = await fetch(
         `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/access?user_id=${user.id}`,
         { headers: { 'X-Service-Key': INTERNAL_SERVICE_KEY } }
@@ -67,7 +79,7 @@ const server = Server.configure({
   },
 
   async onStoreDocument({ documentName, document }) {
-    const itemId = documentName.replace('doc:', '')
+    const itemId = parseItemId(documentName)
 
     try {
       // Encode Y.Doc state as binary update
