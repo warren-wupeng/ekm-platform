@@ -345,7 +345,11 @@
       "title_required": "请输入标题",
       "content_required": "请输入内容",
       "published": "帖子已发布"
-    }
+    },
+    "dept_tech": "技术",
+    "dept_product": "产品",
+    "dept_project": "项目",
+    "dept_marketing": "市场"
   },
   "profile": {
     "messages": "消息",
