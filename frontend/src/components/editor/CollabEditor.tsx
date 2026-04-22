@@ -117,7 +117,7 @@ export default function CollabEditor({
   const editor = useEditor(
     {
       extensions: [
-        StarterKit.configure({ history: false }),
+        StarterKit.configure({ undoRedo: false }),
         Collaboration.configure({ document: ydoc }),
         CollaborationCursor.configure({
           provider,
