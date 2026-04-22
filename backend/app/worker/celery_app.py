@@ -46,6 +46,11 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
 
+    # Write STARTED to result backend when a worker picks up a task.
+    # Without this, result backend stays PENDING during execution, making
+    # it impossible to distinguish "queued" from "running" (issue #168).
+    task_track_started=True,
+
     # Periodic jobs — requires running `celery beat` alongside the worker:
     #     celery -A app.worker.celery_app beat --loglevel=info
     # See docker-compose.yml `beat` service (profile: worker).
