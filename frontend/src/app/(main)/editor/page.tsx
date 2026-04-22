@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   App, Button, Drawer, Input, Tag, Spin, Tooltip, Badge,
@@ -82,6 +82,14 @@ async function* readSSE(
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function EditorPage() {
+  return (
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Spin /></div>}>
+      <EditorPageInner />
+    </Suspense>
+  )
+}
+
+function EditorPageInner() {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const router = useRouter()
