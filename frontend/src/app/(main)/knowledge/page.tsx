@@ -95,23 +95,26 @@ export default function KnowledgePage() {
   }
 
   async function handleViewFile(record: KnowledgeItem) {
+    // Open the blank tab synchronously while the user gesture is still active.
+    // Popup blockers track "transient user activation"; any window.open / click
+    // called *after* an await crosses that boundary and gets blocked.
+    const newTab = window.open('', '_blank')
+    if (!newTab) {
+      message.error(t('common.operation_failed'))
+      return
+    }
     try {
       const res = await api.get(`/api/v1/knowledge/items/${record.id}/file`, {
         params: { inline: true },
         responseType: 'blob',
       })
       const url = URL.createObjectURL(res.data)
-      // Use anchor click instead of window.open to avoid popup-blocker
-      // interference (async calls break the synchronous user-gesture chain).
-      const a = document.createElement('a')
-      a.href = url
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      newTab.location.href = url
+      // Revoke after a delay — the new tab needs time to finish navigating
+      // to the blob URL before we release the object.
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
+      newTab.close()
       message.error(t('common.operation_failed'))
     }
   }
