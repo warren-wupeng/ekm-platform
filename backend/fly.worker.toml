@@ -25,16 +25,49 @@ primary_region = "sin"
   TIKA_URL = "http://ekm-tika.internal:9998"
   # S3-compatible storage (Fly Tigris). Secrets: S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
   S3_ENDPOINT_URL = "https://fly.storage.tigris.dev"
+  # Port for the minimal health-check server started by start_worker.sh.
+  HEALTH_PORT = "8080"
 
-# Worker does not serve HTTP — no [[services]] section.
 # No volume mount — files are read from S3/Tigris.
 
 [processes]
-  worker = "celery -A app.worker.celery_app worker --loglevel=info --concurrency=2"
-  beat = "celery -A app.worker.celery_app beat --loglevel=info"
+  # start_worker.sh runs python -m http.server in the background so
+  # Fly's proxy can auto-wake a suspended machine, then execs Celery.
+  worker = "sh /app/scripts/start_worker.sh"
+  beat   = "celery -A app.worker.celery_app beat --loglevel=info"
+
+# Minimal HTTP service that enables Fly's auto-stop / auto-start for the
+# worker process.  Port 80 is exposed only on Fly's private 6PN network
+# (ekm-worker.flycast); the backend pings it fire-and-forget when a task
+# is dispatched so that a suspended machine is resumed before Celery picks
+# up the queued job.
+#
+# Cost trade-off vs min_machines_running = 1:
+#   • auto_stop_machines = "suspend"  →  idle machine is paused (not billed
+#     for CPU), resumes in ~seconds when the health-check probe arrives.
+#   • min_machines_running = 0        →  no always-on cost; accept a short
+#     cold-start delay (typically < 10 s) for the first task after idle.
+[[services]]
+  internal_port    = 8080
+  protocol         = "tcp"
+  auto_stop_machines  = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes        = ["worker"]
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+
+  [[services.http_checks]]
+    grace_period = "30s"
+    interval     = "60s"
+    method       = "GET"
+    path         = "/"
+    timeout      = "5s"
 
 [[vm]]
-  size = "shared-cpu-1x"
+  size   = "shared-cpu-1x"
   memory = "512mb"
 
 [[restart]]

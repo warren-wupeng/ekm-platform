@@ -10,9 +10,13 @@ via /api/v1/documents/{id}/parse-status which reads the DB directly.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import logging
+
+import httpx
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.deps import CurrentUser, DB
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
@@ -20,11 +24,31 @@ from app.models.user import UserRole
 from app.worker.tasks import parse_document
 
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 
+async def _wake_worker() -> None:
+    """Fire-and-forget HTTP ping to resume a suspended Fly.io worker machine.
+
+    When WORKER_WAKE_URL is set (e.g. ``http://ekm-worker.flycast`` on Fly.io),
+    this pings the worker's health endpoint so Fly's proxy auto-starts a
+    suspended machine before Celery picks up the queued task.  Any network
+    error is swallowed — the task is already in the Redis queue and will be
+    processed once the worker is up.
+    """
+    url = settings.WORKER_WAKE_URL
+    if not url:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.get(url)
+    except Exception:  # noqa: BLE001
+        log.debug("Worker wake-up ping to %s failed (non-fatal)", url)
+
+
 @router.post("/{document_id}/parse", status_code=202)
-async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
+async def trigger_parse(document_id: int, db: DB, user: CurrentUser, background_tasks: BackgroundTasks):
     """Enqueue a Tika parse job. Returns 202 + task_id for polling."""
     item = (await db.execute(
         select(KnowledgeItem).where(KnowledgeItem.id == document_id)
@@ -46,6 +70,7 @@ async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
         }
 
     async_result = parse_document.delay(document_id)
+    background_tasks.add_task(_wake_worker)
 
     if rec is None:
         rec = DocumentParseRecord(
