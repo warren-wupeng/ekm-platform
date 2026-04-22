@@ -94,6 +94,38 @@ export default function KnowledgePage() {
     refresh()
   }
 
+  async function handleViewFile(record: KnowledgeItem) {
+    try {
+      const res = await api.get(`/api/v1/knowledge/items/${record.id}/file`, {
+        params: { inline: true },
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch {
+      message.error(t('common.operation_failed'))
+    }
+  }
+
+  async function handleDownloadFile(record: KnowledgeItem) {
+    try {
+      const res = await api.get(`/api/v1/knowledge/items/${record.id}/file`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = record.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      message.error(t('common.operation_failed'))
+    }
+  }
+
   async function handleArchive(id: string) {
     try {
       await api.post('/api/v1/archive/request', { knowledge_item_id: Number(id) })
@@ -205,6 +237,7 @@ export default function KnowledgePage() {
               type="text" size="small"
               icon={<EyeOutlined />}
               className="text-slate-400 hover:text-primary"
+              onClick={() => handleViewFile(record)}
             />
           </Tooltip>
           <Tooltip title={t('common.download')}>
@@ -212,6 +245,7 @@ export default function KnowledgePage() {
               type="text" size="small"
               icon={<DownloadOutlined />}
               className="text-slate-400 hover:text-primary"
+              onClick={() => handleDownloadFile(record)}
             />
           </Tooltip>
           <Tooltip title={t('common.more')}>

@@ -1,16 +1,22 @@
 """Knowledge items API.
 
 Endpoints:
-  GET /api/v1/knowledge/items   paginated list of non-archived items
+  GET /api/v1/knowledge/items              paginated list of non-archived items
+  GET /api/v1/knowledge/items/{id}/file    serve raw file bytes (auth required)
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+import asyncio
+import mimetypes
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, DB
 from app.models.knowledge import KnowledgeItem, TagAssignment, Tag
+from app.services import storage
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
@@ -84,3 +90,50 @@ async def list_items(
             for item in rows
         ],
     }
+
+
+@router.get("/items/{item_id}/file")
+async def serve_file(
+    item_id: int,
+    user: CurrentUser,
+    db: DB,
+    inline: bool = Query(False, description="inline=true opens in browser; false triggers download"),
+):
+    """Serve the raw file bytes for a knowledge item.
+
+    Access rules mirror list_items: admins/km_ops see all, others only own uploads.
+    Increments download_count on each successful fetch.
+    """
+    from app.models.user import UserRole
+
+    item = await db.get(KnowledgeItem, item_id)
+    if item is None or item.is_archived:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if user.role not in (UserRole.KM_OPS, UserRole.ADMIN) and item.uploader_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not item.file_path:
+        raise HTTPException(status_code=404, detail="File not available")
+
+    try:
+        content = await asyncio.to_thread(storage.download, item.file_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found in storage")
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    item.download_count += 1
+    await db.commit()
+
+    mime, _ = mimetypes.guess_type(item.name)
+    disposition = "inline" if inline else "attachment"
+    safe_name = item.name.replace('"', '\\"')
+    return Response(
+        content=content,
+        media_type=mime or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{safe_name}"',
+            "Content-Length": str(len(content)),
+        },
+    )
