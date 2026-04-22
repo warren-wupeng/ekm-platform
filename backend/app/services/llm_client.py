@@ -72,6 +72,26 @@ class LLMClient:
             if delta:
                 yield delta
 
+    async def complete_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        **overrides,
+    ):
+        """Non-streaming completion with tool definitions.
+
+        Returns the raw ``choices[0].message`` object from LiteLLM, which
+        exposes ``.content`` (str | None) and ``.tool_calls`` (list | None).
+        """
+        resp = await litellm.acompletion(
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            stream=False,
+            **self._common_kwargs(**overrides),
+        )
+        return resp.choices[0].message
+
 
 # Module-level singleton — cheap, thread-safe because litellm is stateless.
 llm = LLMClient()

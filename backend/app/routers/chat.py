@@ -1,7 +1,11 @@
-"""RAG chat endpoint (Server-Sent Events).
+"""AI assistant chat endpoint (Server-Sent Events).
 
 POST /api/v1/chat/stream  { "query": "...", "top_k": 5 }
   → text/event-stream
+
+     event: tool_call
+     data: {"tool": "vector_search", "status": "running"}
+
      event: sources
      data: [{"document_id":..., "chunk_index":..., "content":"...", "score":...}]
 
@@ -11,9 +15,9 @@ POST /api/v1/chat/stream  { "query": "...", "top_k": 5 }
      event: done
      data: [DONE]
 
-SSE beats WebSocket here: it's one-way streaming, works over plain HTTP,
-survives any proxy that allows chunked transfer-encoding, and the frontend
-uses the browser's native EventSource API — no client library needed.
+Backed by a Tool-calling Agent (see services/agent.py). The LLM dynamically
+selects from four tools (vector_search, kg_stats, kg_query, unified_search).
+Sources are only emitted for high-relevance vector hits (score ≥ 0.68).
 """
 from __future__ import annotations
 
@@ -24,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.deps import CurrentUser
-from app.services.rag import stream_answer
+from app.services.agent import stream_answer
 
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])

@@ -208,7 +208,12 @@
     "greeting_subtitle": "I'll answer questions based on your enterprise knowledge base and cite my sources",
     "example_1": "Summarise the recently uploaded product docs",
     "example_2": "What is our company's expense reimbursement process?",
-    "example_3": "How did last week's sales figures compare year-over-year?"
+    "example_3": "How did last week's sales figures compare year-over-year?",
+    "tool_call_vector_search": "Searching knowledge base…",
+    "tool_call_kg_stats": "Querying knowledge graph stats…",
+    "tool_call_kg_query": "Querying knowledge graph…",
+    "tool_call_unified_search": "Running full-text search…",
+    "tool_call_default": "Calling tool…"
   },
   "dashboard": {
     "greeting_morning": "Good morning",
