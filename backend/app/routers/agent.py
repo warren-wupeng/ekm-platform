@@ -23,8 +23,6 @@ Design notes:
   500 where possible — Tom's Agent should see a partial or empty result
   instead of an outage. Unexpected errors still bubble.
 """
-from __future__ import annotations
-
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
