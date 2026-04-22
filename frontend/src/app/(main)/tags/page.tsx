@@ -313,7 +313,7 @@ export default function TagsPage() {
               label: <span><ApartmentOutlined className="mr-1" />{t('tags.tab_categories')}</span>,
               children: (
                 <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex flex-wrap gap-2 items-center justify-between mb-4">
                     <p className="text-sm text-slate-500">{t('tags.category_desc')}</p>
                     <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => openCatModal()}>
                       {t('tags.add_category')}
