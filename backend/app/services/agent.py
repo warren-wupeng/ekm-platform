@@ -298,7 +298,10 @@ async def stream_answer(
             msg = await llm.complete_with_tools(messages, TOOLS)
         except Exception as exc:
             log.exception("LLM tool-decision failed: %s", exc)
-            yield {"event": "error", "data": f"LLM error: {type(exc).__name__}"}
+            yield {
+                "event": "error",
+                "data": "Unable to process your request right now.",
+            }
             return
 
         tool_calls = getattr(msg, "tool_calls", None) or []
