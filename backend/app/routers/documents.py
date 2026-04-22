@@ -1,10 +1,12 @@
 """Document processing endpoints.
 
-- POST /api/v1/documents/{id}/parse — enqueue Tika parse + fan-out
-- GET  /api/v1/documents/{id}/chunks — peek at parsed chunks (debugging UI)
+- POST /api/v1/documents/{id}/parse       — enqueue Tika parse + fan-out
+- GET  /api/v1/documents/{id}/parse-status — poll parse progress from DB (issue #168)
+- GET  /api/v1/documents/{id}/chunks      — peek at parsed chunks (debugging UI)
 
 The actual parsing runs in a Celery worker; this endpoint just returns a
-task_id that the UI polls via /api/v1/tasks/{task_id}.
+task_id that the UI polls via /api/v1/tasks/{task_id}, or more reliably
+via /api/v1/documents/{id}/parse-status which reads the DB directly.
 """
 from __future__ import annotations
 
@@ -37,7 +39,11 @@ async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
         select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
     )).scalar_one_or_none()
     if rec and rec.status == ParseStatus.PARSING:
-        return {"task_id": rec.task_id, "status": "already_parsing"}
+        return {
+            "task_id": rec.task_id,
+            "status": "already_parsing",
+            "parse_status_url": f"/api/v1/documents/{document_id}/parse-status",
+        }
 
     async_result = parse_document.delay(document_id)
 
@@ -54,7 +60,11 @@ async def trigger_parse(document_id: int, db: DB, user: CurrentUser):
         rec.error = None
     await db.commit()
 
-    return {"task_id": async_result.id, "status": "queued"}
+    return {
+        "task_id": async_result.id,
+        "status": "queued",
+        "parse_status_url": f"/api/v1/documents/{document_id}/parse-status",
+    }
 
 
 @router.get("/{document_id}/kg-status")
@@ -88,6 +98,31 @@ async def get_kg_status(document_id: int, db: DB, user: CurrentUser):
         "task_id": item.kg_task_id,
         "started_at": item.kg_started_at.isoformat() if item.kg_started_at else None,
         "completed_at": item.kg_completed_at.isoformat() if item.kg_completed_at else None,
+    }
+
+
+@router.get("/{document_id}/parse-status")
+async def get_parse_status(document_id: int, db: DB, user: CurrentUser):
+    """Return parse pipeline status for a document, read directly from DB.
+
+    Prefer this over polling /api/v1/tasks/{task_id} — Celery result backend
+    stays PENDING during task execution (unless task_track_started=True), but
+    DocumentParseRecord transitions to PARSING immediately when the worker
+    starts, so this endpoint gives accurate real-time status.
+
+    Returns 404 if parse has never been triggered for this document.
+    """
+    rec = (await db.execute(
+        select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
+    )).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(status_code=404, detail="no parse record for this document")
+
+    return {
+        "document_id": document_id,
+        "status": rec.status.value,
+        "task_id": rec.task_id,
+        "error": rec.error,
     }
 
 
