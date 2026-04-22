@@ -101,7 +101,15 @@ export default function KnowledgePage() {
         responseType: 'blob',
       })
       const url = URL.createObjectURL(res.data)
-      window.open(url, '_blank')
+      // Use anchor click instead of window.open to avoid popup-blocker
+      // interference (async calls break the synchronous user-gesture chain).
+      const a = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch {
       message.error(t('common.operation_failed'))
