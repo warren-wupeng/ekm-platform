@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -51,30 +51,37 @@ export default function CollabEditor({
 }: CollabEditorProps) {
   const cursorColor = useMemo(() => hashColor(userName), [userName])
 
-  const ydocRef = useRef<Y.Doc | null>(null)
-  const providerRef = useRef<HocuspocusProvider | null>(null)
-  const [ready, setReady] = useState(false)
+  // ── Synchronous Y.Doc + Provider init ──────────────────────────────────────
+  // Create Y.Doc and HocuspocusProvider synchronously during the first render
+  // so that useEditor ALWAYS receives Collaboration extensions from the start.
+  // This avoids the two-phase editor creation (StarterKit-only → reconfigure
+  // with Collaboration) that crashes ProseMirror during SPA navigation.
+  const collabRef = useRef<{ ydoc: Y.Doc; provider: HocuspocusProvider; key: string } | null>(null)
+  const collabKey = `${roomName}::${collabUrl}::${token}`
 
-  // P1-1 fix: useEffect lifecycle — destroy + recreate on roomName/token change.
-  // useMemo would leak WebSocket connections when switching documents.
-  useEffect(() => {
+  if (!collabRef.current || collabRef.current.key !== collabKey) {
+    // Tear down previous connection when room/token changes
+    if (collabRef.current) {
+      collabRef.current.provider.destroy()
+      collabRef.current.ydoc.destroy()
+    }
     const ydoc = new Y.Doc()
     const provider = new HocuspocusProvider({
       url: collabUrl,
       name: roomName,
       document: ydoc,
-      // P1-2 fix: pass JWT token so Hocuspocus onAuthenticate can verify
       token,
       onStatus: ({ status }: { status: string }) => {
         onConnectionChange?.(status as ConnectionStatus)
       },
     })
+    collabRef.current = { ydoc, provider, key: collabKey }
+  }
 
-    ydocRef.current = ydoc
-    providerRef.current = provider
-    setReady(true)
+  const { ydoc, provider } = collabRef.current
 
-    // Track online users via awareness
+  // Track online users via awareness
+  useEffect(() => {
     const awareness = provider.awareness
     function updateUsers() {
       const states = awareness?.getStates()
@@ -95,31 +102,27 @@ export default function CollabEditor({
     }
     awareness?.on('change', updateUsers)
     updateUsers()
+    return () => { awareness?.off('change', updateUsers) }
+  }, [provider, onUsersChange])
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      awareness?.off('change', updateUsers)
-      provider.destroy()
-      ydoc.destroy()
-      ydocRef.current = null
-      providerRef.current = null
-      setReady(false)
+      collabRef.current?.provider.destroy()
+      collabRef.current?.ydoc.destroy()
+      collabRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomName, collabUrl, token])
+  }, [])
 
   const editor = useEditor(
     {
       extensions: [
-        StarterKit.configure({}),
-        ...(ydocRef.current
-          ? [
-              Collaboration.configure({ document: ydocRef.current }),
-              CollaborationCursor.configure({
-                provider: providerRef.current!,
-                user: { name: userName, color: cursorColor },
-              }),
-            ]
-          : []),
+        StarterKit.configure({ history: false }),
+        Collaboration.configure({ document: ydoc }),
+        CollaborationCursor.configure({
+          provider,
+          user: { name: userName, color: cursorColor },
+        }),
       ],
       editorProps: {
         attributes: {
@@ -129,7 +132,7 @@ export default function CollabEditor({
         },
       },
     },
-    [ready, userName, cursorColor],
+    [collabKey, userName, cursorColor],
   )
 
   return (
