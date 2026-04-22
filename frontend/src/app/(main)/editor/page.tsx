@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  App, Button, Input, Tag, Spin, Tooltip, Badge,
+  App, Button, Drawer, Input, Tag, Spin, Tooltip, Badge,
 } from 'antd'
 import {
   RobotOutlined, ThunderboltOutlined, EditOutlined,
@@ -112,6 +112,7 @@ export default function EditorPage() {
   const [onlineUsers, setOnlineUsers] = useState<CollabUser[]>([])
   const [connStatus, setConnStatus]   = useState<ConnectionStatus>('connecting')
   const [saving, setSaving]       = useState(false)
+  const [mobileAIOpen, setMobileAIOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const handleSave = useCallback(async () => {
@@ -231,18 +232,18 @@ export default function EditorPage() {
   const isConnected = connStatus === 'connected'
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
+    <div className="h-full flex flex-col bg-slate-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-6 py-3 flex items-center gap-3">
-        <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => router.back()} className="text-slate-500" />
-        <div>
-          <h1 className="text-base font-semibold text-slate-800">{t('editor.page_title')}</h1>
-          <p className="text-xs text-slate-400">
+      <div className="bg-white border-b border-slate-100 px-3 md:px-6 py-3 flex items-center gap-2 md:gap-3 flex-shrink-0">
+        <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => router.back()} className="text-slate-500 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-sm md:text-base font-semibold text-slate-800 truncate">{t('editor.page_title')}</h1>
+          <p className="text-xs text-slate-400 truncate hidden sm:block">
             {docId === 'draft' ? t('editor.doc_filename') : `doc:${docId}`}
           </p>
         </div>
 
-        <div className="ml-4">
+        <div className="hidden sm:flex ml-2">
           <OnlineUsers users={onlineUsers} />
         </div>
 
@@ -256,6 +257,15 @@ export default function EditorPage() {
               }
             </span>
           </Tooltip>
+          {/* Mobile: AI assistant toggle */}
+          <Tooltip title={t('editor.ai_assistant')}>
+            <Button
+              size="small"
+              icon={<RobotOutlined />}
+              onClick={() => setMobileAIOpen(true)}
+              className="md:hidden"
+            />
+          </Tooltip>
           <Button
             size="small"
             type="primary"
@@ -263,12 +273,12 @@ export default function EditorPage() {
             loading={saving}
             onClick={handleSave}
           >
-            {t('editor.save')}
+            <span className="hidden sm:inline">{t('editor.save')}</span>
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Editor area */}
         {token ? (
           <CollabEditor
@@ -287,142 +297,214 @@ export default function EditorPage() {
           </div>
         )}
 
-        {/* AI Sidebar */}
+        {/* AI Sidebar — hidden on mobile, shown as drawer */}
         <div
-          className="flex-shrink-0 flex flex-col border-l border-slate-200 bg-white"
+          className="hidden md:flex flex-shrink-0 flex-col border-l border-slate-200 bg-white"
           style={{ width: 320 }}
         >
-          {/* Sidebar header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
-              <RobotOutlined className="text-white text-xs" />
-            </div>
-            <span className="text-sm font-medium text-slate-700">{t('editor.ai_assistant')}</span>
-          </div>
-
-          {/* Quick actions */}
-          <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-xs text-slate-400 mb-2">{t('editor.quick_actions')}</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { action: 'summarize' as AIAction, icon: <FileTextOutlined />, label: t('editor.action_summarize') },
-                { action: 'continue'  as AIAction, icon: <ThunderboltOutlined />, label: t('editor.action_continue') },
-                { action: 'rewrite'   as AIAction, icon: <EditOutlined />, label: t('editor.action_rewrite') },
-                { action: 'recommend' as AIAction, icon: <SearchOutlined />, label: t('editor.action_recommend') },
-              ].map(({ action, icon, label }) => (
-                <Button
-                  key={action}
-                  size="small"
-                  icon={icon}
-                  className="text-xs text-slate-600 border-slate-200 hover:border-primary hover:text-primary"
-                  onClick={() => handleAction(action)}
-                  disabled={loading}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.map((msg) => (
-              <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                {msg.role === 'assistant' && (
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-0.5" style={{ background: 'var(--ekm-primary)' }}>
-                    <RobotOutlined className="text-white text-[10px]" />
-                  </div>
-                )}
-                <div className={`max-w-[85%] group`}>
-                  <div className={`rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'user'
-                      ? 'bg-primary text-white rounded-tr-sm'
-                      : 'bg-slate-100 text-slate-700 rounded-tl-sm'
-                  }`}>
-                    {msg.content}
-                  </div>
-                  {msg.role === 'assistant' && msg.content && msg.action !== 'recommend' && (
-                    <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Tooltip title={t('editor.copy')}>
-                        <button
-                          className="text-slate-400 hover:text-slate-600 text-[10px]"
-                          onClick={() => copyContent(msg.id, msg.content)}
-                        >
-                          {copiedId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
-                        </button>
-                      </Tooltip>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mr-2" style={{ background: 'var(--ekm-primary)' }}>
-                  <RobotOutlined className="text-white text-[10px]" />
-                </div>
-                <div className="bg-slate-100 rounded-xl rounded-tl-sm px-3 py-2">
-                  <Spin size="small" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Knowledge refs panel */}
-          {showRefs && (
-            <div className="border-t border-slate-100 px-4 py-3 max-h-48 overflow-y-auto">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-slate-500 font-medium">{t('editor.related_knowledge')}</p>
-                <button className="text-slate-300 hover:text-slate-500 text-xs" onClick={() => setShowRefs(false)}>x</button>
-              </div>
-              {refs.length === 0 ? (
-                <p className="text-xs text-slate-400">{t('common.no_results')}</p>
-              ) : refs.map((ref) => (
-                <div key={ref.id} className="mb-2 p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="text-xs font-medium text-slate-700 leading-tight">{ref.title}</p>
-                    {ref.relevance != null && (
-                      <Tag color="geekblue" className="text-[10px] m-0 flex-shrink-0">
-                        {Math.round(ref.relevance * 100)}%
-                      </Tag>
-                    )}
-                  </div>
-                  {ref.excerpt && (
-                    <p className="text-[10px] text-slate-400 mt-1 leading-tight line-clamp-2">{ref.excerpt}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Input */}
-          <div className="border-t border-slate-100 px-3 py-3">
-            <div className="flex items-end gap-2">
-              <Input.TextArea
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
-                placeholder={t('editor.input_placeholder')}
-                autoSize={{ minRows: 1, maxRows: 4 }}
-                className="text-xs flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    void handleSend()
-                  }
-                }}
-              />
-              <Button
-                type="primary" size="small"
-                icon={<SendOutlined />}
-                onClick={handleSend}
-                disabled={!inputVal.trim() || loading}
-                className="flex-shrink-0"
-              />
-            </div>
-            <p className="text-[10px] text-slate-300 mt-1">{t('editor.send_hint')}</p>
-          </div>
+          <AISidebarContent
+            messages={messages}
+            loading={loading}
+            inputVal={inputVal}
+            setInputVal={setInputVal}
+            showRefs={showRefs}
+            refs={refs}
+            copiedId={copiedId}
+            setShowRefs={setShowRefs}
+            handleAction={handleAction}
+            handleSend={handleSend}
+            copyContent={copyContent}
+          />
         </div>
       </div>
+
+      {/* Mobile: AI sidebar drawer */}
+      <Drawer
+        open={mobileAIOpen}
+        onClose={() => setMobileAIOpen(false)}
+        placement="bottom"
+        styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' }, wrapper: { height: '80%' } }}
+        title={
+          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
+              <RobotOutlined className="text-white text-xs" />
+            </div>
+            {t('editor.ai_assistant')}
+          </span>
+        }
+        className="md:hidden"
+      >
+        <AISidebarContent
+          messages={messages}
+          loading={loading}
+          inputVal={inputVal}
+          setInputVal={setInputVal}
+          showRefs={showRefs}
+          refs={refs}
+          copiedId={copiedId}
+          setShowRefs={setShowRefs}
+          handleAction={handleAction}
+          handleSend={handleSend}
+          copyContent={copyContent}
+        />
+      </Drawer>
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+
+interface AISidebarContentProps {
+  messages: AIMessage[]
+  loading: boolean
+  inputVal: string
+  setInputVal: (v: string) => void
+  showRefs: boolean
+  refs: KnowledgeRef[]
+  copiedId: string | null
+  setShowRefs: (v: boolean) => void
+  handleAction: (action: AIAction) => Promise<void>
+  handleSend: () => Promise<void>
+  copyContent: (id: string, content: string) => void
+}
+
+function AISidebarContent({
+  messages, loading, inputVal, setInputVal,
+  showRefs, refs, copiedId, setShowRefs,
+  handleAction, handleSend, copyContent,
+}: AISidebarContentProps) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {/* Sidebar header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 flex-shrink-0">
+        <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
+          <RobotOutlined className="text-white text-xs" />
+        </div>
+        <span className="text-sm font-medium text-slate-700">{t('editor.ai_assistant')}</span>
+      </div>
+
+      {/* Quick actions */}
+      <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+        <p className="text-xs text-slate-400 mb-2">{t('editor.quick_actions')}</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {[
+            { action: 'summarize' as AIAction, icon: <FileTextOutlined />, label: t('editor.action_summarize') },
+            { action: 'continue'  as AIAction, icon: <ThunderboltOutlined />, label: t('editor.action_continue') },
+            { action: 'rewrite'   as AIAction, icon: <EditOutlined />, label: t('editor.action_rewrite') },
+            { action: 'recommend' as AIAction, icon: <SearchOutlined />, label: t('editor.action_recommend') },
+          ].map(({ action, icon, label }) => (
+            <Button
+              key={action}
+              size="small"
+              icon={icon}
+              className="text-xs text-slate-600 border-slate-200 hover:border-primary hover:text-primary"
+              onClick={() => handleAction(action)}
+              disabled={loading}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {messages.map((msg) => (
+          <div key={msg.id} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+            {msg.role === 'assistant' && (
+              <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mr-2 mt-0.5" style={{ background: 'var(--ekm-primary)' }}>
+                <RobotOutlined className="text-white text-[10px]" />
+              </div>
+            )}
+            <div className="max-w-[85%] group">
+              <div className={`rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                msg.role === 'user'
+                  ? 'bg-primary text-white rounded-tr-sm'
+                  : 'bg-slate-100 text-slate-700 rounded-tl-sm'
+              }`}>
+                {msg.content}
+              </div>
+              {msg.role === 'assistant' && msg.content && msg.action !== 'recommend' && (
+                <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Tooltip title={t('editor.copy')}>
+                    <button
+                      className="text-slate-400 hover:text-slate-600 text-[10px]"
+                      onClick={() => copyContent(msg.id, msg.content)}
+                    >
+                      {copiedId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
+                    </button>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mr-2" style={{ background: 'var(--ekm-primary)' }}>
+              <RobotOutlined className="text-white text-[10px]" />
+            </div>
+            <div className="bg-slate-100 rounded-xl rounded-tl-sm px-3 py-2">
+              <Spin size="small" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Knowledge refs panel */}
+      {showRefs && (
+        <div className="border-t border-slate-100 px-4 py-3 max-h-48 overflow-y-auto flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-slate-500 font-medium">{t('editor.related_knowledge')}</p>
+            <button className="text-slate-300 hover:text-slate-500 text-xs" onClick={() => setShowRefs(false)}>x</button>
+          </div>
+          {refs.length === 0 ? (
+            <p className="text-xs text-slate-400">{t('common.no_results')}</p>
+          ) : refs.map((ref) => (
+            <div key={ref.id} className="mb-2 p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-xs font-medium text-slate-700 leading-tight">{ref.title}</p>
+                {ref.relevance != null && (
+                  <Tag color="geekblue" className="text-[10px] m-0 flex-shrink-0">
+                    {Math.round(ref.relevance * 100)}%
+                  </Tag>
+                )}
+              </div>
+              {ref.excerpt && (
+                <p className="text-[10px] text-slate-400 mt-1 leading-tight line-clamp-2">{ref.excerpt}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="border-t border-slate-100 px-3 py-3 flex-shrink-0">
+        <div className="flex items-end gap-2">
+          <Input.TextArea
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            placeholder={t('editor.input_placeholder')}
+            autoSize={{ minRows: 1, maxRows: 4 }}
+            className="text-xs flex-1"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                void handleSend()
+              }
+            }}
+          />
+          <Button
+            type="primary" size="small"
+            icon={<SendOutlined />}
+            onClick={handleSend}
+            disabled={!inputVal.trim() || loading}
+            className="flex-shrink-0"
+          />
+        </div>
+        <p className="text-[10px] text-slate-300 mt-1">{t('editor.send_hint')}</p>
+      </div>
+    </>
   )
 }

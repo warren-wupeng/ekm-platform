@@ -29,7 +29,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const ml = sidebarExpanded ? EXPANDED_W : COLLAPSED_W
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-dvh overflow-hidden">
       {/* Mobile backdrop */}
       {mobileSidebarOpen && (
         <div
@@ -40,11 +40,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
       <Sidebar />
 
-      <div className="flex-1 min-h-screen flex flex-col md:transition-[margin-left] md:duration-200"
+      <div className="flex-1 flex flex-col overflow-hidden md:transition-[margin-left] md:duration-200"
         style={{ marginLeft: 0 }}
       >
         {/* Mobile top bar */}
-        <div className="md:hidden sticky top-0 z-30 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
+        <div className="md:hidden sticky top-0 z-30 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           <Button
             type="text" size="small"
             icon={<MenuOutlined className="text-slate-500" />}
@@ -56,12 +56,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         {/* Content — on desktop shift right, on mobile full-width */}
         <main
-          className="flex-1 hidden md:block transition-[margin-left] duration-200"
+          className="flex-1 min-h-0 overflow-auto hidden md:block transition-[margin-left] duration-200"
           style={{ marginLeft: ml }}
         >
           {children}
         </main>
-        <main className="flex-1 md:hidden">
+        <main className="flex-1 min-h-0 overflow-auto md:hidden">
           {children}
         </main>
       </div>
