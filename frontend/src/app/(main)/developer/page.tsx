@@ -391,8 +391,7 @@ export default function DeveloperPage() {
                         placeholder={t('developer.key_name_placeholder')}
                         value={newKeyName}
                         onChange={(e) => setNewKeyName(e.target.value)}
-                        className="flex-1 min-w-0"
-                        style={{ maxWidth: 300 }}
+                        className="w-full sm:max-w-[300px]"
                         onPressEnter={createKey}
                       />
                       <Button type="primary" icon={<PlusOutlined />} loading={creating} onClick={createKey}>
