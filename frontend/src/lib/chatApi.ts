@@ -3,10 +3,12 @@
  *
  * Backend contract (backend/app/routers/chat.py):
  *   POST /api/v1/chat/stream  { query, top_k? }
- *   → text/event-stream with three event types:
- *       event: sources   data: [{document_id, chunk_index, content, score}]
- *       event: delta     data: "token chunk"   (may be quoted JSON string)
- *       event: done      data: [DONE]
+ *   → text/event-stream with five event types:
+ *       event: tool_call  data: {"tool": "...", "status": "running"}
+ *       event: sources    data: [{document_id, chunk_index, content, score}]
+ *       event: delta      data: "token chunk"   (may be quoted JSON string)
+ *       event: done       data: [DONE]
+ *       event: error      data: "human-readable error message"
  *
  * We can't use the browser's EventSource here — it only supports GET and
  * can't attach an Authorization header. So we read the raw ReadableStream

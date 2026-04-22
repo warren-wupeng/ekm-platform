@@ -257,13 +257,28 @@ _EXECUTORS: dict = {
 }
 
 
-async def _run_tool(tc) -> dict:
+def _dedup_hits(hits: list[dict]) -> list[dict]:
+    """Return hits de-duplicated by (document_id, chunk_index), preserving order."""
+    seen: set[tuple] = set()
+    result: list[dict] = []
+    for h in hits:
+        key = (h.get("document_id"), h.get("chunk_index"))
+        if key not in seen:
+            seen.add(key)
+            result.append(h)
+    return result
+
+
+async def _run_tool(tc, default_top_k: int | None = None) -> dict:
     """Execute one tool call; returns a result dict (never raises)."""
     fn_name = tc.function.name
     try:
         fn_args = json.loads(tc.function.arguments or "{}")
     except json.JSONDecodeError:
         fn_args = {}
+    # Inject request-level top_k as a default when the model did not specify one.
+    if fn_name == "vector_search" and default_top_k is not None and "top_k" not in fn_args:
+        fn_args["top_k"] = default_top_k
     executor = _EXECUTORS.get(fn_name)
     if executor is None:
         return {"error": f"未知工具: {fn_name}"}
@@ -310,7 +325,7 @@ async def stream_answer(
             # LLM chose to answer directly — surface collected sources, then
             # emit the already-completed content as a single delta.
             if vector_hits:
-                yield {"event": "sources", "data": vector_hits}
+                yield {"event": "sources", "data": _dedup_hits(vector_hits)}
             content = (getattr(msg, "content", None) or "").strip()
             if content:
                 yield {"event": "delta", "data": content}
@@ -326,7 +341,8 @@ async def stream_answer(
 
         # ── execute all tools concurrently ────────────────────────────────────
         results = await asyncio.gather(
-            *[_run_tool(tc) for tc in tool_calls], return_exceptions=True
+            *[_run_tool(tc, default_top_k=top_k) for tc in tool_calls],
+            return_exceptions=True,
         )
 
         # ── append assistant turn + tool results to message history ───────────
@@ -348,7 +364,7 @@ async def stream_answer(
             }
         )
 
-        for tc, result in zip(tool_calls, results):
+        for i, (tc, result) in enumerate(zip(tool_calls, results)):
             if isinstance(result, Exception):
                 log.warning("tool %s raised: %s", tc.function.name, result)
                 result = {"error": "工具调用失败"}
@@ -360,14 +376,14 @@ async def stream_answer(
             messages.append(
                 {
                     "role": "tool",
-                    "tool_call_id": tc.id or f"call_{tool_calls.index(tc)}",
+                    "tool_call_id": tc.id or f"call_{i}",
                     "content": json.dumps(result, ensure_ascii=False, default=str),
                 }
             )
 
     # ── stream final answer after all tool rounds ─────────────────────────────
     if vector_hits:
-        yield {"event": "sources", "data": vector_hits}
+        yield {"event": "sources", "data": _dedup_hits(vector_hits)}
 
     try:
         async for delta in llm.stream(messages):
