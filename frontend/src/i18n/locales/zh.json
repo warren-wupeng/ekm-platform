@@ -208,7 +208,12 @@
     "greeting_subtitle": "我会基于你的企业知识库回答问题，并列出引用来源",
     "example_1": "帮我总结一下最近上传的产品文档",
     "example_2": "我们公司的报销流程是怎样的？",
-    "example_3": "上周的销售数据同比有什么变化？"
+    "example_3": "上周的销售数据同比有什么变化？",
+    "tool_call_vector_search": "正在检索知识库…",
+    "tool_call_kg_stats": "正在查询知识图谱统计…",
+    "tool_call_kg_query": "正在查询知识图谱…",
+    "tool_call_unified_search": "正在执行全文搜索…",
+    "tool_call_default": "正在调用工具…"
   },
   "dashboard": {
     "greeting_morning": "早上好",

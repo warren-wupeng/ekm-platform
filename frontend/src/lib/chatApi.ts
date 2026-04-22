@@ -29,6 +29,7 @@ export interface ChatSource {
 export type ChatEvent =
   | { type: 'sources'; sources: ChatSource[] }
   | { type: 'delta'; delta: string }
+  | { type: 'tool_call'; tool: string; status: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -68,6 +69,13 @@ function parseFrame(block: string): ChatEvent | null {
       }
       return { type: 'delta', delta }
     }
+    case 'tool_call':
+      try {
+        const payload = JSON.parse(data) as { tool: string; status: string }
+        return { type: 'tool_call', tool: payload.tool, status: payload.status }
+      } catch {
+        return null
+      }
     case 'done':
       return { type: 'done' }
     case 'error':

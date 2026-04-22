@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { App, Button, Input, Tag, Tooltip } from 'antd'
 import {
   SendOutlined, ClearOutlined, RobotOutlined, UserOutlined,
-  FileTextOutlined, LinkOutlined,
+  FileTextOutlined, LinkOutlined, LoadingOutlined,
 } from '@ant-design/icons'
 import clsx from 'clsx'
 import { nanoid } from 'nanoid'
@@ -16,6 +16,8 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   sources?: ChatSource[]
+  /** Names of tools currently being called (cleared on first delta). */
+  activeTools?: string[]
   /** Set while the assistant is still streaming tokens into this bubble. */
   streaming?: boolean
   error?: string
@@ -73,13 +75,21 @@ export default function AssistantPage() {
 
     try {
       for await (const evt of streamChat({ query: text, signal: ctrl.signal })) {
-        if (evt.type === 'sources') {
+        if (evt.type === 'tool_call') {
+          setMessages((prev) => prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, activeTools: [...(m.activeTools ?? []), evt.tool] }
+              : m,
+          ))
+        } else if (evt.type === 'sources') {
           setMessages((prev) => prev.map((m) =>
             m.id === assistantId ? { ...m, sources: evt.sources } : m,
           ))
         } else if (evt.type === 'delta') {
           setMessages((prev) => prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + evt.delta } : m,
+            m.id === assistantId
+              ? { ...m, content: m.content + evt.delta, activeTools: [] }
+              : m,
           ))
         } else if (evt.type === 'error') {
           antdMessage.error(evt.message || t('assistant.error_message'))
@@ -271,6 +281,14 @@ export default function AssistantPage() {
 function MessageBubble({ message }: { message: Message }) {
   const { t } = useTranslation()
   const isUser = message.role === 'user'
+
+  const toolLabel = (tool: string) => {
+    const key = `assistant.tool_call_${tool}` as const
+    const translated = t(key)
+    // If no specific key, fall back to the generic label.
+    return translated === key ? t('assistant.tool_call_default') : translated
+  }
+
   return (
     <div className={clsx('flex gap-3', isUser && 'flex-row-reverse')}>
       <div
@@ -293,8 +311,19 @@ function MessageBubble({ message }: { message: Message }) {
             message.error && 'border-red-200 bg-red-50',
           )}
         >
+          {/* Tool call progress indicators */}
+          {!message.content && message.activeTools && message.activeTools.length > 0 && (
+            <div className="flex flex-col gap-1 mb-1">
+              {[...new Set(message.activeTools)].map((tool) => (
+                <div key={tool} className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <LoadingOutlined className="text-primary" spin />
+                  <span>{toolLabel(tool)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {message.content}
-          {message.streaming && <TypingDots />}
+          {message.streaming && !message.activeTools?.length && <TypingDots />}
         </div>
         {!isUser && message.sources && message.sources.length > 0 && (
           <div className="mt-1.5 text-xs text-slate-400">
