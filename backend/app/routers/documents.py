@@ -112,6 +112,14 @@ async def get_parse_status(document_id: int, db: DB, user: CurrentUser):
 
     Returns 404 if parse has never been triggered for this document.
     """
+    item = (await db.execute(
+        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
+    )).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="forbidden")
+
     rec = (await db.execute(
         select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
     )).scalar_one_or_none()

@@ -63,40 +63,47 @@ def parse_and_persist(document_id: int) -> dict[str, Any]:
         try:
             file_bytes = storage.download(item.file_path)
             text, meta = _run(tika.extract(file_bytes))
-        except TikaError as e:
-            log.exception("tika failed for doc %s", document_id)
-            record.status = ParseStatus.FAILED
-            record.error = str(e)
+
+            chunks = chunk_text(text)
+            log.info("parsed doc=%s chars=%d chunks=%d", document_id, len(text), len(chunks))
+
+            # Replace any prior chunks — parse is idempotent on re-run.
+            db.execute(delete(DocumentChunk).where(DocumentChunk.knowledge_item_id == document_id))
+            db.flush()
+
+            from app.services.chunk_updater import content_hash
+
+            rows = [
+                DocumentChunk(
+                    knowledge_item_id=document_id,
+                    chunk_index=c.index,
+                    content=c.content,
+                    token_count=c.char_count,  # char-count proxy; replaced in #22
+                    content_hash=content_hash(c.content),
+                )
+                for c in chunks
+            ]
+            db.add_all(rows)
+            db.flush()
+            chunk_ids = [r.id for r in rows]
+
+            record.status = ParseStatus.PARSED
+            record.error = None
+            record.metadata_json = json.dumps(_trim_meta(meta), ensure_ascii=False)
             db.commit()
+        except Exception as e:
+            # Catch-all: any failure after PARSING is set must mark the record
+            # FAILED so that /parse-status reflects the real terminal state.
+            # Without this, non-TikaError exceptions leave the DB stuck at PARSING
+            # while Celery result backend already shows FAILURE (issue #168).
+            log.exception("parse pipeline failed for doc %s", document_id)
+            try:
+                record.status = ParseStatus.FAILED
+                record.error = f"{type(e).__name__}: {e}"
+                db.commit()
+            except Exception:
+                log.exception("failed to persist FAILED status for doc %s", document_id)
             raise
-
-        chunks = chunk_text(text)
-        log.info("parsed doc=%s chars=%d chunks=%d", document_id, len(text), len(chunks))
-
-        # Replace any prior chunks — parse is idempotent on re-run.
-        db.execute(delete(DocumentChunk).where(DocumentChunk.knowledge_item_id == document_id))
-        db.flush()
-
-        from app.services.chunk_updater import content_hash
-
-        rows = [
-            DocumentChunk(
-                knowledge_item_id=document_id,
-                chunk_index=c.index,
-                content=c.content,
-                token_count=c.char_count,  # char-count proxy; replaced in #22
-                content_hash=content_hash(c.content),
-            )
-            for c in chunks
-        ]
-        db.add_all(rows)
-        db.flush()
-        chunk_ids = [r.id for r in rows]
-
-        record.status = ParseStatus.PARSED
-        record.error = None
-        record.metadata_json = json.dumps(_trim_meta(meta), ensure_ascii=False)
-        db.commit()
 
         return {
             "document_id": document_id,
