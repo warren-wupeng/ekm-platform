@@ -40,80 +40,37 @@ interface CollabEditorProps {
   placeholder?: string
 }
 
-export default function CollabEditor({
-  roomName,
+interface CollabResources {
+  key: string
+  provider: HocuspocusProvider
+  ydoc: Y.Doc
+}
+
+interface CollabEditorContentProps {
+  provider: HocuspocusProvider
+  ydoc: Y.Doc
+  userName: string
+  cursorColor: string
+  placeholder?: string
+}
+
+interface AwarenessUserState {
+  name?: string
+  color?: string
+}
+
+function destroyResources(resources: CollabResources) {
+  resources.provider.destroy()
+  resources.ydoc.destroy()
+}
+
+function CollabEditorContent({
+  provider,
+  ydoc,
   userName,
-  collabUrl,
-  token,
-  onUsersChange,
-  onConnectionChange,
+  cursorColor,
   placeholder,
-}: CollabEditorProps) {
-  const cursorColor = useMemo(() => hashColor(userName), [userName])
-
-  // ── Synchronous Y.Doc + Provider init ──────────────────────────────────────
-  // Create Y.Doc and HocuspocusProvider synchronously during the first render
-  // so that useEditor ALWAYS receives Collaboration extensions from the start.
-  // This avoids the two-phase editor creation (StarterKit-only → reconfigure
-  // with Collaboration) that crashes ProseMirror during SPA navigation.
-  const collabRef = useRef<{ ydoc: Y.Doc; provider: HocuspocusProvider; key: string } | null>(null)
-  const collabKey = `${roomName}::${collabUrl}::${token}`
-
-  if (!collabRef.current || collabRef.current.key !== collabKey) {
-    // Tear down previous connection when room/token changes
-    if (collabRef.current) {
-      collabRef.current.provider.destroy()
-      collabRef.current.ydoc.destroy()
-    }
-    const ydoc = new Y.Doc()
-    const provider = new HocuspocusProvider({
-      url: collabUrl,
-      name: roomName,
-      document: ydoc,
-      token,
-      onStatus: ({ status }: { status: string }) => {
-        onConnectionChange?.(status as ConnectionStatus)
-      },
-    })
-    collabRef.current = { ydoc, provider, key: collabKey }
-  }
-
-  const { ydoc, provider } = collabRef.current
-
-  // Track online users via awareness
-  useEffect(() => {
-    const awareness = provider.awareness
-    function updateUsers() {
-      const states = awareness?.getStates()
-      if (!states) return
-      const users: CollabUser[] = []
-      states.forEach((state) => {
-        if (state.user?.name) {
-          users.push({ name: state.user.name, color: state.user.color })
-        }
-      })
-      const seen = new Set<string>()
-      const unique = users.filter((u) => {
-        if (seen.has(u.name)) return false
-        seen.add(u.name)
-        return true
-      })
-      onUsersChange?.(unique)
-    }
-    awareness?.on('change', updateUsers)
-    updateUsers()
-    return () => { awareness?.off('change', updateUsers) }
-  }, [provider, onUsersChange])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      collabRef.current?.provider.destroy()
-      collabRef.current?.ydoc.destroy()
-      collabRef.current = null
-    }
-  }, [])
-
+}: CollabEditorContentProps) {
   const editor = useEditor(
     {
       extensions: [
@@ -132,12 +89,112 @@ export default function CollabEditor({
         },
       },
     },
-    [collabKey, userName, cursorColor],
+    [provider, ydoc, userName, cursorColor, placeholder],
   )
+
+  return <EditorContent editor={editor} className="h-full" />
+}
+
+export default function CollabEditor({
+  roomName,
+  userName,
+  collabUrl,
+  token,
+  onUsersChange,
+  onConnectionChange,
+  placeholder,
+}: CollabEditorProps) {
+  const cursorColor = useMemo(() => hashColor(userName), [userName])
+  const connectionKey = `${roomName}::${collabUrl}::${token}`
+  const resourcesRef = useRef<CollabResources | null>(null)
+  const onConnectionChangeRef = useRef(onConnectionChange)
+  const onUsersChangeRef = useRef(onUsersChange)
+
+  onConnectionChangeRef.current = onConnectionChange
+  onUsersChangeRef.current = onUsersChange
+
+  let resources = resourcesRef.current
+
+  if (!resources || resources.key !== connectionKey) {
+    if (resources) {
+      destroyResources(resources)
+    }
+
+    const ydoc = new Y.Doc()
+    const provider = new HocuspocusProvider({
+      url: collabUrl,
+      name: roomName,
+      document: ydoc,
+      token,
+      onStatus: ({ status }: { status: string }) => {
+        onConnectionChangeRef.current?.(status as ConnectionStatus)
+      },
+    })
+
+    resources = {
+      key: connectionKey,
+      provider,
+      ydoc,
+    }
+
+    resourcesRef.current = resources
+  }
+
+  useEffect(() => {
+    return () => {
+      if (resourcesRef.current) {
+        destroyResources(resourcesRef.current)
+        resourcesRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const awareness = resources.provider.awareness
+
+    function updateUsers() {
+      const states = awareness?.getStates()
+      if (!states) return
+
+      const users: CollabUser[] = []
+      states.forEach((state) => {
+        const user = (state as { user?: AwarenessUserState }).user
+        if (typeof user?.name === 'string') {
+          users.push({
+            name: user.name,
+            color: typeof user.color === 'string' ? user.color : hashColor(user.name),
+          })
+        }
+      })
+
+      const seen = new Set<string>()
+      const unique = users.filter((user) => {
+        if (seen.has(user.name)) return false
+        seen.add(user.name)
+        return true
+      })
+
+      onUsersChangeRef.current?.(unique)
+    }
+
+    awareness?.on('change', updateUsers)
+    updateUsers()
+
+    return () => {
+      awareness?.off('change', updateUsers)
+    }
+  }, [resources])
 
   return (
     <div className="flex-1 overflow-y-auto bg-white collab-editor">
-      <EditorContent editor={editor} className="h-full" />
+      <CollabEditorContent
+        key={connectionKey}
+        provider={resources.provider}
+        ydoc={resources.ydoc}
+        userName={userName}
+        cursorColor={cursorColor}
+        placeholder={placeholder}
+      />
       <style jsx global>{`
         .collab-editor .ProseMirror {
           min-height: 100%;
