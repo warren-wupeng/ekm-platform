@@ -196,7 +196,7 @@ async def _exec_kg_stats(_args: dict) -> dict:
         )
         types = await graph.run(
             "MATCH (n:Entity) UNWIND labels(n) AS lbl "
-            "WHERE lbl <> 'Entity' "
+            "WITH n, lbl WHERE lbl <> 'Entity' "
             "RETURN lbl AS type, count(n) AS cnt ORDER BY cnt DESC LIMIT 20"
         )
         return {
