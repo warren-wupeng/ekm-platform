@@ -257,6 +257,18 @@ _EXECUTORS: dict = {
 }
 
 
+def _dedup_hits(hits: list[dict]) -> list[dict]:
+    """Return hits de-duplicated by (document_id, chunk_index), preserving order."""
+    seen: set[tuple] = set()
+    result: list[dict] = []
+    for h in hits:
+        key = (h.get("document_id"), h.get("chunk_index"))
+        if key not in seen:
+            seen.add(key)
+            result.append(h)
+    return result
+
+
 async def _run_tool(tc, default_top_k: int | None = None) -> dict:
     """Execute one tool call; returns a result dict (never raises)."""
     fn_name = tc.function.name
@@ -313,14 +325,7 @@ async def stream_answer(
             # LLM chose to answer directly — surface collected sources, then
             # emit the already-completed content as a single delta.
             if vector_hits:
-                seen: set[tuple] = set()
-                unique_hits: list[dict] = []
-                for h in vector_hits:
-                    key = (h.get("document_id"), h.get("chunk_index"))
-                    if key not in seen:
-                        seen.add(key)
-                        unique_hits.append(h)
-                yield {"event": "sources", "data": unique_hits}
+                yield {"event": "sources", "data": _dedup_hits(vector_hits)}
             content = (getattr(msg, "content", None) or "").strip()
             if content:
                 yield {"event": "delta", "data": content}
@@ -378,14 +383,7 @@ async def stream_answer(
 
     # ── stream final answer after all tool rounds ─────────────────────────────
     if vector_hits:
-        seen: set[tuple] = set()
-        unique_hits: list[dict] = []
-        for h in vector_hits:
-            key = (h.get("document_id"), h.get("chunk_index"))
-            if key not in seen:
-                seen.add(key)
-                unique_hits.append(h)
-        yield {"event": "sources", "data": unique_hits}
+        yield {"event": "sources", "data": _dedup_hits(vector_hits)}
 
     try:
         async for delta in llm.stream(messages):
