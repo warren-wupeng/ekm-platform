@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     # Service-to-service auth key for internal APIs (ekm-collab → ekm-backend).
     INTERNAL_SERVICE_KEY: str = ""
 
+    # Worker wake-up URL — set to "http://ekm-worker.flycast" on Fly.io so
+    # the API can resume a suspended worker machine before dispatching tasks.
+    # Leave empty to disable (e.g. local dev where Celery runs continuously).
+    WORKER_WAKE_URL: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

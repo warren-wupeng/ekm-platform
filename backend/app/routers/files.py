@@ -1,8 +1,10 @@
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+import httpx
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from typing import Optional
 
+from app.core.config import settings
 from app.core.deps import CurrentUser, DB
 from app.schemas.files import BatchUploadResponse, FileUploadedResponse
 from app.services.files import FileUploadError, upload_batch, upload_single
@@ -10,6 +12,21 @@ from app.services.files import FileUploadError, upload_batch, upload_single
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
+
+
+async def _wake_worker() -> None:
+    """Fire-and-forget HTTP ping to resume a suspended Fly.io worker machine.
+
+    See documents.py for the full explanation.  Empty WORKER_WAKE_URL = no-op.
+    """
+    url = settings.WORKER_WAKE_URL
+    if not url:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.get(url)
+    except Exception:  # noqa: BLE001
+        log.debug("Worker wake-up ping to %s failed (non-fatal)", url)
 
 
 def _dispatch_kg_pipeline(document_id: int) -> None:
@@ -41,6 +58,7 @@ async def upload_file(
     category_id: Optional[int] = Form(None),
     db: DB = None,
     user: CurrentUser = None,
+    background_tasks: BackgroundTasks = None,
 ):
     try:
         item = await upload_single(db, file, uploader_id=user.id, category_id=category_id)
@@ -51,6 +69,7 @@ async def upload_file(
     # Two-phase: commit first, then dispatch. If dispatch raises, the
     # document is still saved; ops can re-trigger the pipeline later.
     _dispatch_kg_pipeline(item.id)
+    background_tasks.add_task(_wake_worker)
     return FileUploadedResponse.model_validate(item)
 
 
@@ -65,10 +84,12 @@ async def upload_files_batch(
     category_id: Optional[int] = Form(None),
     db: DB = None,
     user: CurrentUser = None,
+    background_tasks: BackgroundTasks = None,
 ):
     result = await upload_batch(db, files, uploader_id=user.id, category_id=category_id)
     # Batch path: commit already happened inside upload_batch; fan out
     # per uploaded item. Failures here are non-fatal (see helper).
     for uploaded in result.uploaded:
         _dispatch_kg_pipeline(uploaded.id)
+    background_tasks.add_task(_wake_worker)
     return result
