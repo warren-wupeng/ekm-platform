@@ -156,7 +156,12 @@ def _do_retrieve(query: str, top_k: int) -> list[dict]:
 
 async def _exec_vector_search(args: dict) -> dict:
     query = str(args.get("query", ""))
-    top_k = min(int(args.get("top_k", settings.RAG_TOP_K)), 20)
+    raw_top_k = args.get("top_k", settings.RAG_TOP_K)
+    try:
+        top_k = int(raw_top_k)
+    except (TypeError, ValueError):
+        top_k = int(settings.RAG_TOP_K)
+    top_k = min(top_k, 20)
     try:
         hits = await asyncio.to_thread(_do_retrieve, query, top_k)
     except Exception as exc:
