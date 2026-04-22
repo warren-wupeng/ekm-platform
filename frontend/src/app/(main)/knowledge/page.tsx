@@ -312,8 +312,8 @@ export default function KnowledgePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Page header */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+      <div className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
+        <div className="max-w-5xl mx-auto flex flex-wrap gap-3 items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold text-slate-800">{t('knowledge.page_title')}</h1>
             <p className="text-xs text-slate-400 mt-0.5">{items.length} {t('common.total')}</p>
@@ -328,7 +328,7 @@ export default function KnowledgePage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-5 space-y-4">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 space-y-4">
         {/* AI-assistant deep-link banner */}
         {docFilter && (
           <Alert
@@ -389,7 +389,7 @@ export default function KnowledgePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 allowClear
-                style={{ width: 280 }}
+                className="w-full sm:max-w-[280px]"
                 size="small"
               />
             </div>
@@ -417,7 +417,7 @@ export default function KnowledgePage() {
                 size="small"
                 // virtual scroll kicks in for lists > 100 rows; pagination handles smaller sets
                 virtual
-                scroll={{ y: 600 }}
+                scroll={{ x: 'max-content', y: 600 }}
                 pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (total) => t('common.total_count', { count: total }) }}
                 className="ekm-knowledge-table"
               />

@@ -348,8 +348,8 @@ export default function OntologyPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+      <div className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
+        <div className="max-w-6xl mx-auto flex flex-wrap gap-3 items-start sm:items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <ApartmentOutlined className="text-slate-500 text-lg" />
@@ -368,10 +368,10 @@ export default function OntologyPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-5">
-        <div className="flex gap-5">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
+        <div className="flex flex-col lg:flex-row gap-5">
           {/* Left: Type hierarchy tree */}
-          <div className="w-64 flex-shrink-0">
+          <div className="w-full lg:w-64 lg:flex-shrink-0">
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ApartmentOutlined className="text-slate-400 text-sm" />
@@ -420,6 +420,7 @@ export default function OntologyPage() {
                         rowKey="id"
                         size="small"
                         pagination={false}
+                        scroll={{ x: 'max-content' }}
                       />
                     </div>
                   ),
@@ -435,6 +436,7 @@ export default function OntologyPage() {
                         rowKey="id"
                         size="small"
                         pagination={false}
+                        scroll={{ x: 'max-content' }}
                       />
                     </div>
                   ),

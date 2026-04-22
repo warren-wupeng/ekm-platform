@@ -339,7 +339,7 @@ export default function ArchivePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4">
+      <div className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-3 mb-1">
             <InboxOutlined className="text-slate-500 text-lg" />
@@ -349,7 +349,7 @@ export default function ArchivePage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-5">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -369,6 +369,7 @@ export default function ArchivePage() {
                     rowKey="id"
                     size="small"
                     loading={itemsLoading}
+                    scroll={{ x: 'max-content' }}
                     pagination={{
                       current: itemsPage,
                       total: itemsTotal,
@@ -399,6 +400,7 @@ export default function ArchivePage() {
                     rowKey="id"
                     size="small"
                     loading={requestsLoading}
+                    scroll={{ x: 'max-content' }}
                     pagination={{ pageSize: 20, showTotal: (total) => t('common.total_count', { count: total }) }}
                   />
                 </div>

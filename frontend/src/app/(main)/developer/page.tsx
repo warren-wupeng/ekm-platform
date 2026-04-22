@@ -253,7 +253,7 @@ export default function DeveloperPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4">
+      <div className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-2 mb-1">
             <CodeOutlined className="text-slate-500 text-lg" />
@@ -263,7 +263,7 @@ export default function DeveloperPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-5">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -273,7 +273,7 @@ export default function DeveloperPage() {
               key: 'console',
               label: <span><SendOutlined className="mr-1" />{t('developer.tab_console')}</span>,
               children: (
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {/* Left: request builder */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
                     <p className="text-sm font-semibold text-slate-700">{t('developer.build_request')}</p>
@@ -386,12 +386,12 @@ export default function DeveloperPage() {
                   {/* Create new key */}
                   <div className="bg-white rounded-2xl border border-slate-100 p-5">
                     <p className="text-sm font-semibold text-slate-700 mb-3">{t('developer.create_key_title')}</p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Input
                         placeholder={t('developer.key_name_placeholder')}
                         value={newKeyName}
                         onChange={(e) => setNewKeyName(e.target.value)}
-                        style={{ maxWidth: 300 }}
+                        className="w-full sm:max-w-[300px]"
                         onPressEnter={createKey}
                       />
                       <Button type="primary" icon={<PlusOutlined />} loading={creating} onClick={createKey}>
@@ -408,6 +408,7 @@ export default function DeveloperPage() {
                       size="small"
                       pagination={false}
                       loading={keysLoading}
+                      scroll={{ x: 'max-content' }}
                     />
                   </div>
                 </div>
@@ -436,9 +437,10 @@ export default function DeveloperPage() {
                     columns={logColumns}
                     rowKey="id"
                     size="small"
+                    scroll={{ x: 'max-content' }}
                     expandable={{
                       expandedRowRender: (record) => (
-                        <div className="grid grid-cols-2 gap-4 py-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
                           <div>
                             <p className="text-xs text-slate-500 mb-1 font-medium">Request</p>
                             <pre className="text-xs font-mono bg-slate-50 p-3 rounded-lg overflow-auto max-h-32">{record.requestBody || t('developer.no_body')}</pre>
@@ -462,7 +464,7 @@ export default function DeveloperPage() {
               label: <span><BarChartOutlined className="mr-1" />{t('developer.tab_stats')}</span>,
               children: (
                 <div className="space-y-5">
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { title: t('developer.stat_total_calls'), value: totalCalls, suffix: t('dashboard.unit_times'), color: '#7c3aed' },
                       { title: t('developer.stat_success_rate'), value: successRate, suffix: '%',                       color: '#16a34a' },
