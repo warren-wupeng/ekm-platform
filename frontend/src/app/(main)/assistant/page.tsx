@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { App, Button, Input, Tag, Tooltip } from 'antd'
+import { App, Button, Drawer, Input, Tag, Tooltip } from 'antd'
 import {
   SendOutlined, ClearOutlined, RobotOutlined, UserOutlined,
   FileTextOutlined, LinkOutlined, LoadingOutlined,
@@ -32,6 +32,7 @@ export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
   const [sending, setSending]   = useState(false)
+  const [mobileSourcesOpen, setMobileSourcesOpen] = useState(false)
   const abortRef                = useRef<AbortController | null>(null)
   const scrollRef               = useRef<HTMLDivElement>(null)
 
@@ -141,41 +142,57 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-0px)] flex bg-slate-50">
+    <div className="h-full flex bg-slate-50">
       {/* Left: conversation */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {/* Header */}
-        <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="bg-white border-b border-slate-100 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white flex-shrink-0"
               style={{ background: 'var(--ekm-primary)' }}
             >
               <RobotOutlined />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-800">{t('assistant.page_title')}</h1>
-              <p className="text-xs text-slate-400 mt-0.5">
+            <div className="min-w-0">
+              <h1 className="text-base md:text-lg font-semibold text-slate-800 leading-tight">{t('assistant.page_title')}</h1>
+              <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">
                 {t('assistant.empty_tip')}
               </p>
             </div>
           </div>
-          <Tooltip title={t('assistant.clear_button')}>
-            <Button
-              icon={<ClearOutlined />}
-              onClick={handleClear}
-              disabled={messages.length === 0}
-              size="small"
-            >
-              {t('assistant.clear_button')}
-            </Button>
-          </Tooltip>
+          <div className="flex items-center gap-2">
+            {/* Mobile: sources toggle button */}
+            <Tooltip title={t('assistant.sources_title')}>
+              <Button
+                icon={<LinkOutlined />}
+                onClick={() => setMobileSourcesOpen(true)}
+                size="small"
+                aria-label={t('assistant.sources_title')}
+                className="md:hidden"
+                {...(latestSources.length > 0 ? { type: 'primary' } : {})}
+              >
+                {latestSources.length > 0 ? latestSources.length : undefined}
+              </Button>
+            </Tooltip>
+            <Tooltip title={t('assistant.clear_button')}>
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClear}
+                disabled={messages.length === 0}
+                size="small"
+                aria-label={t('assistant.clear_button')}
+              >
+                <span className="hidden sm:inline">{t('assistant.clear_button')}</span>
+              </Button>
+            </Tooltip>
+          </div>
         </div>
 
         {/* Message list */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto px-6 py-6 space-y-5"
+          className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-5"
         >
           {messages.length === 0 ? (
             <EmptyHint onPick={(q) => setInput(q)} />
@@ -185,7 +202,7 @@ export default function AssistantPage() {
         </div>
 
         {/* Composer */}
-        <div className="bg-white border-t border-slate-100 px-6 py-4">
+        <div className="bg-white border-t border-slate-100 px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
           <div className="max-w-3xl mx-auto flex items-end gap-2">
             <Input.TextArea
               value={input}
@@ -214,64 +231,45 @@ export default function AssistantPage() {
               loading={sending}
               onClick={() => void handleSend()}
               disabled={!input.trim()}
+              aria-label={t('assistant.send_button')}
             >
-              {t('assistant.send_button')}
+              <span className="hidden sm:inline">{t('assistant.send_button')}</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Right: sources panel */}
+      {/* Right: sources panel — hidden on mobile, shown as drawer */}
       <aside
-        className="border-l border-slate-100 bg-white overflow-y-auto"
+        className="hidden md:flex md:flex-col border-l border-slate-100 bg-white overflow-y-auto"
         style={{ width: SOURCE_PANEL_W, flex: `0 0 ${SOURCE_PANEL_W}px` }}
       >
-        <div className="px-4 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+        <SourcesPanel
+          latestSources={latestSources}
+          onSourceClick={handleSourceClick}
+        />
+      </aside>
+
+      {/* Mobile: sources drawer */}
+      <Drawer
+        open={mobileSourcesOpen}
+        onClose={() => setMobileSourcesOpen(false)}
+        placement="bottom"
+        styles={{ body: { padding: 0 }, wrapper: { height: '70%' } }}
+        title={
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             <LinkOutlined className="text-slate-400" />
             {t('assistant.sources_title')}
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {latestSources.length > 0
-              ? t('assistant.sources_count', { count: latestSources.length })
-              : t('assistant.sources_empty_hint')}
-          </p>
-        </div>
-
-        <div className="p-3 space-y-2">
-          {latestSources.length === 0 ? (
-            <div className="text-center text-slate-300 text-xs py-10">
-              {t('assistant.no_sources')}
-            </div>
-          ) : (
-            latestSources.map((src, i) => (
-              <button
-                key={`${src.document_id}-${src.chunk_index}-${i}`}
-                onClick={() => handleSourceClick(src)}
-                className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-primary hover:bg-primary/5 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <FileTextOutlined className="text-slate-400" />
-                    <span className="font-medium text-slate-700 truncate max-w-[180px]">
-                      {src.filename ?? t('assistant.doc_fallback', { id: src.document_id })}
-                    </span>
-                  </div>
-                  <Tag color="blue" className="m-0 text-[10px]">
-                    #{src.chunk_index}
-                  </Tag>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
-                  {src.content}
-                </p>
-                <div className="mt-1.5 text-[10px] text-slate-300">
-                  {t('assistant.relevance', { score: (src.score * 100).toFixed(0) })}
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      </aside>
+          </span>
+        }
+        rootClassName="md:hidden"
+      >
+        <SourcesPanel
+          latestSources={latestSources}
+          onSourceClick={(src) => { handleSourceClick(src); setMobileSourcesOpen(false) }}
+          hideHeader
+        />
+      </Drawer>
     </div>
   )
 }
@@ -353,7 +351,7 @@ function EmptyHint({ onPick }: { onPick: (q: string) => void }) {
     t('assistant.example_3'),
   ]
   return (
-    <div className="max-w-2xl mx-auto text-center pt-16">
+    <div className="max-w-2xl mx-auto text-center pt-10 md:pt-16 px-4">
       <div
         className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-4"
         style={{ background: 'var(--ekm-primary)' }}
@@ -376,5 +374,69 @@ function EmptyHint({ onPick }: { onPick: (q: string) => void }) {
         ))}
       </div>
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+
+function SourcesPanel({
+  latestSources,
+  onSourceClick,
+  hideHeader,
+}: {
+  latestSources: ChatSource[]
+  onSourceClick: (src: ChatSource) => void
+  hideHeader?: boolean
+}) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {!hideHeader && (
+        <div className="px-4 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <LinkOutlined className="text-slate-400" />
+            {t('assistant.sources_title')}
+          </h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {latestSources.length > 0
+              ? t('assistant.sources_count', { count: latestSources.length })
+              : t('assistant.sources_empty_hint')}
+          </p>
+        </div>
+      )}
+      <div className="p-3 space-y-2">
+        {latestSources.length === 0 ? (
+          <div className="text-center text-slate-300 text-xs py-10">
+            {t('assistant.no_sources')}
+          </div>
+        ) : (
+          latestSources.map((src, i) => (
+            <button
+              key={`${src.document_id}-${src.chunk_index}-${i}`}
+              onClick={() => onSourceClick(src)}
+              className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-primary hover:bg-primary/5 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <FileTextOutlined className="text-slate-400" />
+                  <span className="font-medium text-slate-700 truncate max-w-[180px]">
+                    {src.filename ?? t('assistant.doc_fallback', { id: src.document_id })}
+                  </span>
+                </div>
+                <Tag color="blue" className="m-0 text-[10px]">
+                  #{src.chunk_index}
+                </Tag>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                {src.content}
+              </p>
+              <div className="mt-1.5 text-[10px] text-slate-300">
+                {t('assistant.relevance', { score: (src.score * 100).toFixed(0) })}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </>
   )
 }

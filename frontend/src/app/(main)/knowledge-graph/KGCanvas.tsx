@@ -191,7 +191,7 @@ function KGCanvasInner() {
   const entityTypes = Object.keys(TYPE_COLOR)
 
   return (
-    <div className="flex-1" style={{ height: 'calc(100vh - 57px)' }}>
+    <div className="flex-1 min-h-0">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -212,16 +212,16 @@ function KGCanvasInner() {
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#cbd5e1" />
 
         <Panel position="top-left">
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2">
+          <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2 flex-wrap">
             <Input
               size="small" placeholder={t('kg.search_placeholder')}
               prefix={<SearchOutlined className="text-slate-400 text-xs" />}
-              style={{ width: 180 }}
+              style={{ width: 140 }}
               onChange={(e) => handleSearch(e.target.value)}
               allowClear
             />
             <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setAddModal(true)}>
-              {t('kg.add_node')}
+              <span className="hidden sm:inline">{t('kg.add_node')}</span>
             </Button>
             <Tooltip title={t('kg.reset_view')}>
               <Button size="small" icon={<ReloadOutlined />} onClick={() => fitView({ duration: 400 })} />
@@ -246,6 +246,7 @@ function KGCanvasInner() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={300}
+        styles={{ wrapper: { maxWidth: '100%' } }}
         extra={
           <Space>
             <Tooltip title={t('common.edit')}>
