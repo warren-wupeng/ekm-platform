@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import { yCursorPlugin, defaultSelectionBuilder } from '@tiptap/y-tiptap'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import * as Y from 'yjs'
 
@@ -64,6 +64,35 @@ function destroyResources(resources: CollabResources) {
   resources.ydoc.destroy()
 }
 
+function makeCursorExtension(
+  provider: HocuspocusProvider,
+  user: { name: string; color: string },
+) {
+  return Extension.create({
+    name: 'collaborationCursor',
+    addProseMirrorPlugins() {
+      const awareness = provider.awareness!
+      awareness.setLocalStateField('user', user)
+      return [
+        yCursorPlugin(awareness, {
+          cursorBuilder: (u: { name?: string; color?: string }) => {
+            const cursor = document.createElement('span')
+            cursor.classList.add('collaboration-cursor__caret')
+            cursor.setAttribute('style', `border-color: ${u.color}`)
+            const label = document.createElement('div')
+            label.classList.add('collaboration-cursor__label')
+            label.setAttribute('style', `background-color: ${u.color}`)
+            label.insertBefore(document.createTextNode(u.name ?? ''), null)
+            cursor.insertBefore(label, null)
+            return cursor
+          },
+          selectionBuilder: defaultSelectionBuilder,
+        }),
+      ]
+    },
+  })
+}
+
 function CollabEditorContent({
   provider,
   ydoc,
@@ -71,15 +100,17 @@ function CollabEditorContent({
   cursorColor,
   placeholder,
 }: CollabEditorContentProps) {
+  const cursorExt = useMemo(
+    () => makeCursorExtension(provider, { name: userName, color: cursorColor }),
+    [provider, userName, cursorColor],
+  )
+
   const editor = useEditor(
     {
       extensions: [
         StarterKit.configure({ undoRedo: false }),
         Collaboration.configure({ document: ydoc }),
-        CollaborationCursor.configure({
-          provider,
-          user: { name: userName, color: cursorColor },
-        }),
+        cursorExt,
       ],
       editorProps: {
         attributes: {
