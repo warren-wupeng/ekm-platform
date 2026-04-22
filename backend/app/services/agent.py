@@ -375,7 +375,10 @@ async def stream_answer(
                 yield {"event": "delta", "data": delta}
     except Exception as exc:
         log.exception("LLM final stream failed: %s", exc)
-        yield {"event": "error", "data": f"LLM error: {type(exc).__name__}"}
+        yield {
+            "event": "error",
+            "data": "An internal error occurred while generating the response.",
+        }
         return
 
     yield {"event": "done", "data": "[DONE]"}
