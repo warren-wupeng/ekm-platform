@@ -263,6 +263,7 @@ export default function EditorPage() {
               size="small"
               icon={<RobotOutlined />}
               onClick={() => setMobileAIOpen(true)}
+              aria-label={t('editor.ai_assistant')}
               className="md:hidden"
             />
           </Tooltip>
@@ -272,6 +273,7 @@ export default function EditorPage() {
             icon={<CheckOutlined />}
             loading={saving}
             onClick={handleSave}
+            aria-label={t('editor.save')}
           >
             <span className="hidden sm:inline">{t('editor.save')}</span>
           </Button>
@@ -332,7 +334,7 @@ export default function EditorPage() {
             {t('editor.ai_assistant')}
           </span>
         }
-        className="md:hidden"
+        rootClassName="md:hidden"
       >
         <AISidebarContent
           messages={messages}
@@ -346,6 +348,7 @@ export default function EditorPage() {
           handleAction={handleAction}
           handleSend={handleSend}
           copyContent={copyContent}
+          hideHeader
         />
       </Drawer>
     </div>
@@ -366,23 +369,26 @@ interface AISidebarContentProps {
   handleAction: (action: AIAction) => Promise<void>
   handleSend: () => Promise<void>
   copyContent: (id: string, content: string) => void
+  hideHeader?: boolean
 }
 
 function AISidebarContent({
   messages, loading, inputVal, setInputVal,
   showRefs, refs, copiedId, setShowRefs,
-  handleAction, handleSend, copyContent,
+  handleAction, handleSend, copyContent, hideHeader,
 }: AISidebarContentProps) {
   const { t } = useTranslation()
   return (
     <>
       {/* Sidebar header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 flex-shrink-0">
-        <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
-          <RobotOutlined className="text-white text-xs" />
+      {!hideHeader && (
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 flex-shrink-0">
+          <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--ekm-primary)' }}>
+            <RobotOutlined className="text-white text-xs" />
+          </div>
+          <span className="text-sm font-medium text-slate-700">{t('editor.ai_assistant')}</span>
         </div>
-        <span className="text-sm font-medium text-slate-700">{t('editor.ai_assistant')}</span>
-      </div>
+      )}
 
       {/* Quick actions */}
       <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">

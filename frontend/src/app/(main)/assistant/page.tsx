@@ -168,6 +168,7 @@ export default function AssistantPage() {
                 icon={<LinkOutlined />}
                 onClick={() => setMobileSourcesOpen(true)}
                 size="small"
+                aria-label={t('assistant.sources_title')}
                 className="md:hidden"
                 {...(latestSources.length > 0 ? { type: 'primary' } : {})}
               >
@@ -180,6 +181,7 @@ export default function AssistantPage() {
                 onClick={handleClear}
                 disabled={messages.length === 0}
                 size="small"
+                aria-label={t('assistant.clear_button')}
               >
                 <span className="hidden sm:inline">{t('assistant.clear_button')}</span>
               </Button>
@@ -229,6 +231,7 @@ export default function AssistantPage() {
               loading={sending}
               onClick={() => void handleSend()}
               disabled={!input.trim()}
+              aria-label={t('assistant.send_button')}
             >
               <span className="hidden sm:inline">{t('assistant.send_button')}</span>
             </Button>
@@ -259,11 +262,12 @@ export default function AssistantPage() {
             {t('assistant.sources_title')}
           </span>
         }
-        className="md:hidden"
+        rootClassName="md:hidden"
       >
         <SourcesPanel
           latestSources={latestSources}
           onSourceClick={(src) => { handleSourceClick(src); setMobileSourcesOpen(false) }}
+          hideHeader
         />
       </Drawer>
     </div>
@@ -378,24 +382,28 @@ function EmptyHint({ onPick }: { onPick: (q: string) => void }) {
 function SourcesPanel({
   latestSources,
   onSourceClick,
+  hideHeader,
 }: {
   latestSources: ChatSource[]
   onSourceClick: (src: ChatSource) => void
+  hideHeader?: boolean
 }) {
   const { t } = useTranslation()
   return (
     <>
-      <div className="px-4 py-4 border-b border-slate-100">
-        <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-          <LinkOutlined className="text-slate-400" />
-          {t('assistant.sources_title')}
-        </h2>
-        <p className="text-xs text-slate-400 mt-0.5">
-          {latestSources.length > 0
-            ? t('assistant.sources_count', { count: latestSources.length })
-            : t('assistant.sources_empty_hint')}
-        </p>
-      </div>
+      {!hideHeader && (
+        <div className="px-4 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <LinkOutlined className="text-slate-400" />
+            {t('assistant.sources_title')}
+          </h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {latestSources.length > 0
+              ? t('assistant.sources_count', { count: latestSources.length })
+              : t('assistant.sources_empty_hint')}
+          </p>
+        </div>
+      )}
       <div className="p-3 space-y-2">
         {latestSources.length === 0 ? (
           <div className="text-center text-slate-300 text-xs py-10">
