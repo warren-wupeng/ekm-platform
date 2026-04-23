@@ -11,7 +11,7 @@ primary_region = "sin"
   PORT = "3000"
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"
-  BACKEND_URL = "http://ekm-backend.internal:8000"
+  BACKEND_URL = "https://ekm-backend.fly.dev"
 
 [[services]]
   internal_port = 3000
