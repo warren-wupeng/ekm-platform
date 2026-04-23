@@ -51,8 +51,9 @@ async function putDocumentState(itemId, updateBase64) {
     )
 
     if (!resp.ok) {
-      await resp.text()
-      throw new Error(`PUT failed with status ${resp.status}`)
+      const failureBody = await resp.text()
+      const failureDetail = failureBody ? `: ${failureBody.slice(0, 200)}` : ''
+      throw new Error(`PUT failed with status ${resp.status}${failureDetail}`)
     }
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -76,10 +77,6 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
       await new Promise((r) => setTimeout(r, delay))
       return storeWithRetry(itemId, updateBase64, attempt + 1)
     }
-    console.error(
-      `[onStoreDocument] Giving up after ${STORE_MAX_RETRIES} retries for item ${itemId}:`,
-      err.message
-    )
     throw new Error(
       `Failed to store document for item ${itemId} after ${STORE_MAX_RETRIES + 1} attempts: ${err.message}`
     )
