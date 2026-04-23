@@ -52,12 +52,16 @@ async function putDocumentState(itemId, updateBase64) {
 
     if (!resp.ok) {
       const failureBody = await resp.text()
-      const failureDetail = failureBody ? `: ${failureBody.slice(0, 200)}` : ''
+      const truncatedFailureBody =
+        failureBody.length > 200 ? `${failureBody.slice(0, 200)}...` : failureBody
+      const failureDetail = truncatedFailureBody ? `: ${truncatedFailureBody}` : ''
       throw new Error(`PUT failed with status ${resp.status}${failureDetail}`)
     }
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error(`PUT timed out after ${STORE_REQUEST_TIMEOUT_MS}ms`)
+      throw new Error(`PUT timed out after ${STORE_REQUEST_TIMEOUT_MS}ms`, {
+        cause: err,
+      })
     }
     throw err
   } finally {
