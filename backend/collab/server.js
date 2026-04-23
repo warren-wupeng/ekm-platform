@@ -28,6 +28,41 @@ const redisHost = redisUrl.hostname
 const redisPort = parseInt(redisUrl.port || '6379')
 const redisDb = parseInt(redisUrl.pathname.replace('/', '') || '0')
 
+const STORE_MAX_RETRIES = 3
+const STORE_RETRY_BASE_DELAY_MS = 500
+
+async function storeWithRetry(itemId, updateBase64, attempt = 0) {
+  try {
+    const resp = await fetch(
+      `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Service-Key': INTERNAL_SERVICE_KEY,
+        },
+        body: JSON.stringify({ yjs_state: updateBase64 }),
+      }
+    )
+    if (!resp.ok) {
+      throw new Error(`PUT failed with status ${resp.status}`)
+    }
+  } catch (err) {
+    if (attempt < STORE_MAX_RETRIES) {
+      const delay = STORE_RETRY_BASE_DELAY_MS * 2 ** attempt
+      console.warn(
+        `[onStoreDocument] Attempt ${attempt + 1} failed for item ${itemId}: ${err.message}. Retrying in ${delay}ms...`
+      )
+      await new Promise((r) => setTimeout(r, delay))
+      return storeWithRetry(itemId, updateBase64, attempt + 1)
+    }
+    console.error(
+      `[onStoreDocument] Giving up after ${STORE_MAX_RETRIES} retries for item ${itemId}:`,
+      err.message
+    )
+  }
+}
+
 // EKM auth + persistence extension.
 // IMPORTANT: onAuthenticate MUST be on an extension object inside the
 // `extensions` array — Hocuspocus's `requiresAuthentication` getter only
@@ -75,28 +110,9 @@ const ekmExtension = {
 
   async onStoreDocument({ documentName, document }) {
     const itemId = parseItemId(documentName)
-
-    try {
-      const update = Y.encodeStateAsUpdate(document)
-      const updateBase64 = Buffer.from(update).toString('base64')
-
-      const resp = await fetch(
-        `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Service-Key': INTERNAL_SERVICE_KEY,
-          },
-          body: JSON.stringify({ yjs_state: updateBase64 }),
-        }
-      )
-      if (!resp.ok) {
-        console.error(`[onStoreDocument] PUT failed for item ${itemId}: ${resp.status}`)
-      }
-    } catch (err) {
-      console.error(`[onStoreDocument] Error for item ${itemId}:`, err.message)
-    }
+    const update = Y.encodeStateAsUpdate(document)
+    const updateBase64 = Buffer.from(update).toString('base64')
+    await storeWithRetry(itemId, updateBase64)
   },
 }
 
