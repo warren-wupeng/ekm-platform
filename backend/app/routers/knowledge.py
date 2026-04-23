@@ -1,15 +1,17 @@
 """Knowledge items API.
 
 Endpoints:
-  GET /api/v1/knowledge/items              paginated list of non-archived items
-  GET /api/v1/knowledge/items/{id}/file    serve raw file bytes (auth required)
+  GET    /api/v1/knowledge/items              paginated list of non-archived items
+  GET    /api/v1/knowledge/items/{id}/file    serve raw file bytes (auth required)
+  DELETE /api/v1/knowledge/items/{id}         hard-delete an item (owner/km_ops/admin)
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import mimetypes
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -17,6 +19,8 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import CurrentUser, DB
 from app.models.knowledge import KnowledgeItem, TagAssignment, Tag
 from app.services import storage
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
@@ -137,3 +141,37 @@ async def serve_file(
             "Content-Length": str(len(content)),
         },
     )
+
+
+@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(
+    item_id: int,
+    user: CurrentUser,
+    db: DB,
+):
+    """Hard-delete a knowledge item.
+
+    The owner, KM_OPS, and ADMIN may delete. Cascade deletes (document
+    chunks, parse records, restore requests, tag assignments, sharing
+    records) are handled by the database FK constraints.  The underlying
+    storage object is removed best-effort; a storage failure does NOT roll
+    back the DB deletion.
+    """
+    from app.models.user import UserRole
+
+    item = await db.get(KnowledgeItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    if user.role not in (UserRole.KM_OPS, UserRole.ADMIN) and item.uploader_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    file_path = item.file_path
+    await db.delete(item)
+    await db.commit()
+
+    if file_path:
+        try:
+            await asyncio.to_thread(storage.delete, file_path)
+        except Exception:  # noqa: BLE001
+            log.warning("Storage delete failed for key=%s (item already removed from DB)", file_path)
