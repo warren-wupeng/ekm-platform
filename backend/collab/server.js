@@ -30,8 +30,12 @@ const redisDb = parseInt(redisUrl.pathname.replace('/', '') || '0')
 
 const STORE_MAX_RETRIES = 3
 const STORE_RETRY_BASE_DELAY_MS = 500
+const STORE_REQUEST_TIMEOUT_MS = 5000
 
-async function storeWithRetry(itemId, updateBase64, attempt = 0) {
+async function putDocumentState(itemId, updateBase64) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), STORE_REQUEST_TIMEOUT_MS)
+
   try {
     const resp = await fetch(
       `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`,
@@ -42,11 +46,27 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
           'X-Service-Key': INTERNAL_SERVICE_KEY,
         },
         body: JSON.stringify({ yjs_state: updateBase64 }),
+        signal: controller.signal,
       }
     )
+
     if (!resp.ok) {
+      await resp.body?.cancel()
       throw new Error(`PUT failed with status ${resp.status}`)
     }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`PUT timed out after ${STORE_REQUEST_TIMEOUT_MS}ms`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function storeWithRetry(itemId, updateBase64, attempt = 0) {
+  try {
+    await putDocumentState(itemId, updateBase64)
   } catch (err) {
     if (attempt < STORE_MAX_RETRIES) {
       const delay = STORE_RETRY_BASE_DELAY_MS * 2 ** attempt
@@ -60,6 +80,7 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
       `[onStoreDocument] Giving up after ${STORE_MAX_RETRIES} retries for item ${itemId}:`,
       err.message
     )
+    throw err
   }
 }
 
