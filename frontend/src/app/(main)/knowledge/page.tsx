@@ -154,8 +154,14 @@ export default function KnowledgePage() {
     }
   }
 
-  function handleDelete(id: string) {
-    removeItem(id)
+  async function handleDelete(id: string) {
+    try {
+      await api.delete(`/api/v1/knowledge/items/${id}`)
+      message.success(t('knowledge.delete_success'))
+      removeItem(id)
+    } catch {
+      message.error(t('common.operation_failed'))
+    }
   }
 
   const filtered = items.filter((i) => {

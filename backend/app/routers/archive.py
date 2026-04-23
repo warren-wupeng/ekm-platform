@@ -123,8 +123,8 @@ async def archive_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="knowledge item not found",
         )
-    # Permission: owner or admin
-    if item.uploader_id != user.id and user.role != UserRole.ADMIN:
+    # Permission: owner, km_ops, or admin can archive
+    if item.uploader_id != user.id and user.role not in (UserRole.ADMIN, UserRole.KM_OPS):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="only item owner or admin can archive",
