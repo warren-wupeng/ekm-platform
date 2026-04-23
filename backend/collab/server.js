@@ -80,7 +80,9 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
       `[onStoreDocument] Giving up after ${STORE_MAX_RETRIES} retries for item ${itemId}:`,
       err.message
     )
-    throw err
+    throw new Error(
+      `Failed to store document for item ${itemId} after ${STORE_MAX_RETRIES + 1} attempts: ${err.message}`
+    )
   }
 }
 
