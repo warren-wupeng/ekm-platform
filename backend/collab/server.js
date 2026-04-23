@@ -30,8 +30,12 @@ const redisDb = parseInt(redisUrl.pathname.replace('/', '') || '0')
 
 const STORE_MAX_RETRIES = 3
 const STORE_RETRY_BASE_DELAY_MS = 500
+const STORE_REQUEST_TIMEOUT_MS = 5000
 
-async function storeWithRetry(itemId, updateBase64, attempt = 0) {
+async function putDocumentState(itemId, updateBase64) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), STORE_REQUEST_TIMEOUT_MS)
+
   try {
     const resp = await fetch(
       `${EKM_BACKEND_INTERNAL_URL}/api/v1/internal/items/${itemId}/content`,
@@ -42,11 +46,32 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
           'X-Service-Key': INTERNAL_SERVICE_KEY,
         },
         body: JSON.stringify({ yjs_state: updateBase64 }),
+        signal: controller.signal,
       }
     )
+
     if (!resp.ok) {
-      throw new Error(`PUT failed with status ${resp.status}`)
+      const failureBody = await resp.text()
+      const truncatedFailureBody =
+        failureBody.length > 200 ? `${failureBody.slice(0, 200)}...` : failureBody
+      const failureDetail = truncatedFailureBody ? `: ${truncatedFailureBody}` : ''
+      throw new Error(`PUT failed with status ${resp.status}${failureDetail}`)
     }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`PUT timed out after ${STORE_REQUEST_TIMEOUT_MS}ms`, {
+        cause: err,
+      })
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function storeWithRetry(itemId, updateBase64, attempt = 0) {
+  try {
+    await putDocumentState(itemId, updateBase64)
   } catch (err) {
     if (attempt < STORE_MAX_RETRIES) {
       const delay = STORE_RETRY_BASE_DELAY_MS * 2 ** attempt
@@ -56,9 +81,8 @@ async function storeWithRetry(itemId, updateBase64, attempt = 0) {
       await new Promise((r) => setTimeout(r, delay))
       return storeWithRetry(itemId, updateBase64, attempt + 1)
     }
-    console.error(
-      `[onStoreDocument] Giving up after ${STORE_MAX_RETRIES} retries for item ${itemId}:`,
-      err.message
+    throw new Error(
+      `Failed to store document for item ${itemId} after ${STORE_MAX_RETRIES + 1} attempts: ${err.message}`
     )
   }
 }
