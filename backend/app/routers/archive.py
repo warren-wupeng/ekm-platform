@@ -127,7 +127,7 @@ async def archive_item(
     if item.uploader_id != user.id and user.role not in (UserRole.ADMIN, UserRole.KM_OPS):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="only item owner or admin can archive",
+            detail="only item owner, km_ops, or admin can archive",
         )
     if not item.is_archived:
         item.is_archived = True
