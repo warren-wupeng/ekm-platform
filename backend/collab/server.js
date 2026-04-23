@@ -51,7 +51,7 @@ async function putDocumentState(itemId, updateBase64) {
     )
 
     if (!resp.ok) {
-      await resp.body?.cancel()
+      await resp.text()
       throw new Error(`PUT failed with status ${resp.status}`)
     }
   } catch (err) {
