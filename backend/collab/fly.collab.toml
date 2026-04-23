@@ -7,6 +7,7 @@ primary_region = "sin"
 [env]
   PORT = "1234"
   EKM_BACKEND_URL = "https://ekm-backend.fly.dev"
+  EKM_BACKEND_INTERNAL_URL = "http://ekm-backend.internal:8001"
 
 [[services]]
   protocol = "tcp"

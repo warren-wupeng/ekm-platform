@@ -5,7 +5,7 @@ const Y = require('yjs')
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 const EKM_BACKEND_URL = process.env.EKM_BACKEND_URL || 'https://ekm-backend.fly.dev'
-const EKM_BACKEND_INTERNAL_URL = process.env.EKM_BACKEND_INTERNAL_URL || 'http://ekm-backend.internal:8000'
+const EKM_BACKEND_INTERNAL_URL = process.env.EKM_BACKEND_INTERNAL_URL || 'http://ekm-backend.internal:8001'
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY
 if (!INTERNAL_SERVICE_KEY) {
   console.error('FATAL: INTERNAL_SERVICE_KEY not set')
