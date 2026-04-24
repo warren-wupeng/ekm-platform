@@ -9,6 +9,7 @@ When we scale to >1 backend replica, swap the in-memory `_peers` for a
 Redis pub/sub bridge — the public interface (`connect`/`disconnect`/
 `send_to_user`) stays the same. Until then, keep it simple.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,7 +62,7 @@ class ConnectionManager:
             try:
                 await ws.send_text(text)
                 ok += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.info("WS send failed for user=%s: %s — dropping", user_id, exc)
                 # Best-effort cleanup; the endpoint's finally-block also unregisters.
                 await self.disconnect(user_id, ws)

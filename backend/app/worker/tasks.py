@@ -8,15 +8,16 @@ Stubs land here first; real implementations are filled in by:
 Keeping them co-located means one `celery -A app.worker.celery_app` discovers
 every task without chasing decorators across the codebase.
 """
+
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from typing import Any
 
 import httpx
 
 from app.worker.celery_app import celery_app
-
 
 log = logging.getLogger(__name__)
 
@@ -50,10 +51,11 @@ def index_to_es(self, document_id: int) -> dict[str, Any]:
     Runs after parse_document. Idempotent: bulk upsert overwrites prior docs.
     """
     from sqlalchemy import select
+
+    from app.models.document import DocumentChunk
+    from app.models.knowledge import KnowledgeItem, Tag, TagAssignment
     from app.services.document_parse import SyncSession
     from app.services.es_sync import bulk_index_chunks, index_item
-    from app.models.document import DocumentChunk
-    from app.models.knowledge import KnowledgeItem, TagAssignment, Tag
 
     document_id = int(document_id)
     with SyncSession() as db:
@@ -67,11 +69,15 @@ def index_to_es(self, document_id: int) -> dict[str, Any]:
             .order_by(DocumentChunk.chunk_index)
         ).all()
 
-        tag_names = db.execute(
-            select(Tag.name)
-            .join(TagAssignment, TagAssignment.tag_id == Tag.id)
-            .where(TagAssignment.knowledge_item_id == document_id)
-        ).scalars().all()
+        tag_names = (
+            db.execute(
+                select(Tag.name)
+                .join(TagAssignment, TagAssignment.tag_id == Tag.id)
+                .where(TagAssignment.knowledge_item_id == document_id)
+            )
+            .scalars()
+            .all()
+        )
 
         indexed = bulk_index_chunks(document_id, [(idx, content) for idx, content in chunks])
 
@@ -81,7 +87,9 @@ def index_to_es(self, document_id: int) -> dict[str, Any]:
                 "id": document_id,
                 "name": item.name,
                 "description": item.description,
-                "file_type": item.file_type.value if hasattr(item.file_type, "value") else str(item.file_type),
+                "file_type": item.file_type.value
+                if hasattr(item.file_type, "value")
+                else str(item.file_type),
                 "mime_type": item.mime_type,
                 "uploader_id": item.uploader_id,
                 "category_id": item.category_id,
@@ -103,13 +111,15 @@ def purge_expired_shares(self) -> dict[str, Any]:
     prevents users from touching these rows, so we can remove them without
     coordinating with live requests.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from sqlalchemy import delete as sa_delete
+
+    from app.models.sharing import SharingRecord
     from app.services.document_parse import SyncSession
     from app.services.sharing import RETENTION_DAYS
-    from app.models.sharing import SharingRecord
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=RETENTION_DAYS)
     with SyncSession() as db:
         result = db.execute(
             sa_delete(SharingRecord).where(
@@ -141,18 +151,20 @@ def archive_tick(self) -> dict[str, Any]:
     process, which has no WS ConnectionManager. Users receive the
     backlog via #27's WS-connect flush.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.core.config import settings
     from app.models.notification import Notification, NotificationType
     from app.models.user import User
     from app.services.archive import (
-        fetch_candidates, load_active_rules, resolve_effective_rule,
+        fetch_candidates,
+        load_active_rules,
+        resolve_effective_rule,
     )
     from app.services.document_parse import SyncSession
     from app.services.mailer import send_sync as mail_send
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     reminder_window = timedelta(days=settings.ARCHIVE_REMINDER_DAYS_BEFORE)
 
     reminders = 0
@@ -176,30 +188,34 @@ def archive_tick(self) -> dict[str, Any]:
                 # Phase 2a (DB): past threshold — auto-archive.
                 item.is_archived = True
                 item.archived_at = now
-                db.add(Notification(
-                    user_id=item.uploader_id,
-                    type=NotificationType.AUTO_ARCHIVED,
-                    title=f"已自动归档: {item.name}",
-                    payload={
-                        "knowledge_id": item.id,
-                        "name": item.name,
-                        "rule_id": eff.rule_id,
-                        "rule_name": eff.rule_name,
-                        "inactive_days": eff.inactive_days,
-                    },
-                ))
+                db.add(
+                    Notification(
+                        user_id=item.uploader_id,
+                        type=NotificationType.AUTO_ARCHIVED,
+                        title=f"已自动归档: {item.name}",
+                        payload={
+                            "knowledge_id": item.id,
+                            "name": item.name,
+                            "rule_id": eff.rule_id,
+                            "rule_name": eff.rule_name,
+                            "inactive_days": eff.inactive_days,
+                        },
+                    )
+                )
                 archived += 1
                 uploader = db.get(User, item.uploader_id)
                 if uploader and uploader.email:
-                    pending_mails.append({
-                        "to": uploader.email,
-                        "subject": f"[EKM] 文档已自动归档: {item.name}",
-                        "body": (
-                            f"您的文档「{item.name}」已根据规则「{eff.rule_name}」"
-                            f"自动归档（超过 {eff.inactive_days} 天未更新）。\n"
-                            f"如需恢复，请访问: {settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
-                        ),
-                    })
+                    pending_mails.append(
+                        {
+                            "to": uploader.email,
+                            "subject": f"[EKM] 文档已自动归档: {item.name}",
+                            "body": (
+                                f"您的文档「{item.name}」已根据规则「{eff.rule_name}」"
+                                f"自动归档（超过 {eff.inactive_days} 天未更新）。\n"
+                                f"如需恢复，请访问: {settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
+                            ),
+                        }
+                    )
                 continue
 
             # Phase 1 (DB): inside reminder window?
@@ -215,34 +231,38 @@ def archive_tick(self) -> dict[str, Any]:
                 continue
 
             days_left = max(0, (threshold_at - now).days)
-            db.add(Notification(
-                user_id=item.uploader_id,
-                type=NotificationType.ARCHIVE_REMINDER,
-                title=f"即将归档: {item.name}（{days_left} 天后）",
-                payload={
-                    "knowledge_id": item.id,
-                    "name": item.name,
-                    "days_left": days_left,
-                    "threshold_at": threshold_at.isoformat(),
-                    "rule_id": eff.rule_id,
-                    "rule_name": eff.rule_name,
-                },
-            ))
+            db.add(
+                Notification(
+                    user_id=item.uploader_id,
+                    type=NotificationType.ARCHIVE_REMINDER,
+                    title=f"即将归档: {item.name}（{days_left} 天后）",
+                    payload={
+                        "knowledge_id": item.id,
+                        "name": item.name,
+                        "days_left": days_left,
+                        "threshold_at": threshold_at.isoformat(),
+                        "rule_id": eff.rule_id,
+                        "rule_name": eff.rule_name,
+                    },
+                )
+            )
             item.archive_reminder_sent_at = now
             reminders += 1
 
             uploader = db.get(User, item.uploader_id)
             if uploader and uploader.email:
-                pending_mails.append({
-                    "to": uploader.email,
-                    "subject": f"[EKM] 文档 {days_left} 天后将自动归档: {item.name}",
-                    "body": (
-                        f"您的文档「{item.name}」将在 {days_left} 天后根据规则"
-                        f"「{eff.rule_name}」自动归档。\n"
-                        f"要保留该文档，请在此日期前更新或查看:\n"
-                        f"{settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
-                    ),
-                })
+                pending_mails.append(
+                    {
+                        "to": uploader.email,
+                        "subject": f"[EKM] 文档 {days_left} 天后将自动归档: {item.name}",
+                        "body": (
+                            f"您的文档「{item.name}」将在 {days_left} 天后根据规则"
+                            f"「{eff.rule_name}」自动归档。\n"
+                            f"要保留该文档，请在此日期前更新或查看:\n"
+                            f"{settings.PUBLIC_BASE_URL}/knowledge/{item.id}"
+                        ),
+                    }
+                )
 
         # Atomic DB boundary. If this raises, pending_mails is discarded
         # and no false notifications go out — that's the whole point.
@@ -256,7 +276,9 @@ def archive_tick(self) -> dict[str, Any]:
 
     log.info(
         "archive tick: reminders=%d archived=%d mails_attempted=%d",
-        reminders, archived, len(pending_mails),
+        reminders,
+        archived,
+        len(pending_mails),
     )
     return {
         "status": "ok",
@@ -297,6 +319,7 @@ def kg_pipeline(self, document_id: int) -> dict[str, Any]:
     budget on a poison document.
     """
     from app.services.kg_pipeline import run_pipeline
+
     return run_pipeline(int(document_id), task_id=self.request.id)
 
 
@@ -304,10 +327,11 @@ def kg_pipeline(self, document_id: int) -> dict[str, Any]:
 def vectorize_chunks(self, document_id: int) -> dict[str, Any]:
     """Embed each DocumentChunk + upsert to Qdrant. Idempotent on re-run."""
     from sqlalchemy import select, update
+
+    from app.models.document import DocumentChunk
     from app.services.document_parse import SyncSession
     from app.services.embeddings import embedder
     from app.services.qdrant_client import ensure_collection, upsert_chunks
-    from app.models.document import DocumentChunk
 
     document_id = int(document_id)
     ensure_collection()
@@ -356,4 +380,5 @@ def incremental_update(self, document_id: int) -> dict[str, Any]:
     is_current=False for audit.
     """
     from app.services.document_update import run_incremental_update
+
     return run_incremental_update(int(document_id))

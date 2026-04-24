@@ -21,12 +21,13 @@ Key improvements over pure RAG:
 - Tool failures auto-degrade; internal errors are never exposed to the client.
 - New ``tool_call`` SSE event lets the frontend show progress indicators.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 
@@ -103,7 +104,7 @@ TOOLS: list[dict] = [
                     },
                     "where_props": {
                         "type": "object",
-                        "description": "属性过滤条件，例如 {\"name\": \"张三\"}",
+                        "description": '属性过滤条件，例如 {"name": "张三"}',
                     },
                     "limit": {
                         "type": "integer",
@@ -191,9 +192,7 @@ async def _exec_vector_search(args: dict) -> dict:
 async def _exec_kg_stats(_args: dict) -> dict:
     try:
         nodes = await graph.run("MATCH (n:Entity) RETURN count(n) AS node_count")
-        rels = await graph.run(
-            "MATCH (:Entity)-[r]->(:Entity) RETURN count(r) AS rel_count"
-        )
+        rels = await graph.run("MATCH (:Entity)-[r]->(:Entity) RETURN count(r) AS rel_count")
         types = await graph.run(
             "MATCH (n:Entity) UNWIND labels(n) AS lbl "
             "WITH n, lbl WHERE lbl <> 'Entity' "

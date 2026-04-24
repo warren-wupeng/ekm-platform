@@ -6,6 +6,7 @@ a title, summary (<=100 chars), and tags array.
 Failure-safe: LLM errors are logged but never propagate — K-Card
 generation must not block the document update pipeline.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,13 +42,11 @@ def generate_kcard(chunk_text: str) -> dict[str, Any] | None:
     try:
         loop = asyncio.new_event_loop()
         try:
-            raw = loop.run_until_complete(
-                llm.complete(messages, max_tokens=256, temperature=0.2)
-            )
+            raw = loop.run_until_complete(llm.complete(messages, max_tokens=256, temperature=0.2))
         finally:
             loop.close()
         return _parse_json(raw)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("K-Card LLM call failed: %s", exc)
         return None
 

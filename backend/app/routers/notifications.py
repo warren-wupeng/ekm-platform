@@ -23,19 +23,25 @@ On connect:
   5. read client frames for heartbeat ping + client-originated `ack:{id}`
      that marks a notification read without a REST roundtrip.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import logging
+from datetime import UTC, datetime
 
 from fastapi import (
-    APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, status,
+    APIRouter,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
 )
 from sqlalchemy import func, select, update
 
 from app.core.database import AsyncSessionLocal
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.core.ws import manager
 from app.models.notification import Notification
 from app.services.auth import AuthError, get_current_user
@@ -63,38 +69,52 @@ async def list_notifications(
         total_q = total_q.where(Notification.read_at.is_(None))
     total = (await db.execute(total_q)).scalar_one()
 
-    rows = (await db.execute(
-        q.order_by(Notification.created_at.desc())
-         .offset((page - 1) * page_size).limit(page_size)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                q.order_by(Notification.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return {
-        "page": page, "page_size": page_size, "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
         "notifications": [n.to_dict() for n in rows],
     }
 
 
 @router.get("/notifications/unread-count")
 async def unread_count(db: DB, user: CurrentUser):
-    total = (await db.execute(
-        select(func.count()).select_from(Notification)
-        .where(Notification.user_id == user.id, Notification.read_at.is_(None))
-    )).scalar_one()
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+        )
+    ).scalar_one()
     return {"unread": total}
 
 
 @router.patch("/notifications/{notification_id}/read")
 async def mark_read(notification_id: int, db: DB, user: CurrentUser):
-    n = (await db.execute(
-        select(Notification).where(
-            Notification.id == notification_id,
-            Notification.user_id == user.id,
+    n = (
+        await db.execute(
+            select(Notification).where(
+                Notification.id == notification_id,
+                Notification.user_id == user.id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if n is None:
         raise HTTPException(status_code=404, detail="notification not found")
     if n.read_at is None:
-        n.read_at = datetime.now(timezone.utc)
+        n.read_at = datetime.now(UTC)
         await db.flush()
     return n.to_dict()
 
@@ -105,7 +125,7 @@ async def mark_all_read(db: DB, user: CurrentUser):
     result = await db.execute(
         update(Notification)
         .where(Notification.user_id == user.id, Notification.read_at.is_(None))
-        .values(read_at=datetime.now(timezone.utc))
+        .values(read_at=datetime.now(UTC))
     )
     return {"updated": result.rowcount or 0}
 
@@ -129,21 +149,25 @@ async def ws_notifications(websocket: WebSocket, token: str = Query(...)):
     try:
         # 3. Offline backlog — flush unread notifications the user missed.
         async with AsyncSessionLocal() as session:
-            rows = (await session.execute(
-                select(Notification)
-                .where(Notification.user_id == user.id, Notification.read_at.is_(None))
-                .order_by(Notification.created_at.asc())
-                .limit(200)  # cap — if they've accumulated more, list API fills the rest
-            )).scalars().all()
+            rows = (
+                (
+                    await session.execute(
+                        select(Notification)
+                        .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+                        .order_by(Notification.created_at.asc())
+                        .limit(200)  # cap — if they've accumulated more, list API fills the rest
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
         if rows:
             backlog = {
                 "kind": "backlog",
                 "notifications": [n.to_dict() for n in rows],
             }
-            await websocket.send_text(
-                json.dumps(backlog, ensure_ascii=False, default=str)
-            )
+            await websocket.send_text(json.dumps(backlog, ensure_ascii=False, default=str))
 
         # 4. Main loop — read client frames for heartbeat + ack.
         while True:
@@ -162,7 +186,7 @@ async def ws_notifications(websocket: WebSocket, token: str = Query(...)):
 
     except WebSocketDisconnect:
         pass
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.info("WS closing for user=%s: %s", user.id, exc)
     finally:
         await manager.disconnect(user.id, websocket)
@@ -192,8 +216,8 @@ async def _mark_read_background(user_id: int, notification_id: int) -> None:
                     Notification.user_id == user_id,
                     Notification.read_at.is_(None),
                 )
-                .values(read_at=datetime.now(timezone.utc))
+                .values(read_at=datetime.now(UTC))
             )
             await session.commit()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.info("WS-ack mark_read failed: %s", exc)

@@ -5,12 +5,13 @@ removing the row. The record stays in the DB for `RETENTION_DAYS` so the
 owner can `POST /api/v1/sharing/{id}/restore` on it. After that the
 Celery beat task `ekm.sharing.purge_expired` hard-deletes it.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.sharing import SharingRecord
 from app.schemas.sharing import (
     CreateShareRequest,
@@ -39,9 +40,11 @@ def _build_response(record: SharingRecord, request: Request) -> ShareResponse:
     # rounding).
     restore_days_left: int | None = None
     if record.deleted_at is not None:
-        elapsed = datetime.now(timezone.utc) - record.deleted_at
+        elapsed = datetime.now(UTC) - record.deleted_at
         remaining = timedelta(days=RETENTION_DAYS) - elapsed
-        restore_days_left = max(0, (remaining.days + (1 if remaining.seconds or remaining.microseconds else 0)))
+        restore_days_left = max(
+            0, (remaining.days + (1 if remaining.seconds or remaining.microseconds else 0))
+        )
     return ShareResponse(
         id=record.id,
         knowledge_item_id=record.knowledge_item_id,
@@ -93,7 +96,9 @@ async def create(
         return _build_response(record, request)
     except SharingError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND if e.code == "NOT_FOUND" else status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND
+            if e.code == "NOT_FOUND"
+            else status.HTTP_400_BAD_REQUEST,
             detail={"code": e.code, "message": e.message},
         )
 
@@ -135,7 +140,7 @@ async def list_trash(
     # survived the purge task (e.g. beat outage). Hiding already-expired
     # records here avoids the UI offering a "Restore" button that will
     # then fail with RESTORE_WINDOW_EXPIRED.
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=RETENTION_DAYS)
     stmt = (
         select(SharingRecord)
         .where(
@@ -179,7 +184,9 @@ async def restore(
         # RESTORE_WINDOW_EXPIRED → 410 Gone (resource existed but is no
         # longer recoverable). Matches how we signal expired public links.
         raise HTTPException(
-            status_code=status.HTTP_410_GONE if e.code == "RESTORE_WINDOW_EXPIRED" else status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_410_GONE
+            if e.code == "RESTORE_WINDOW_EXPIRED"
+            else status.HTTP_400_BAD_REQUEST,
             detail={"code": e.code, "message": e.message},
         )
     await db.commit()
@@ -196,7 +203,9 @@ async def public_access(token: str, db: DB = None):
         record = await resolve_public_token(db, token)
     except SharingError as e:
         raise HTTPException(
-            status_code=status.HTTP_410_GONE if e.code == "TOKEN_EXPIRED" else status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_410_GONE
+            if e.code == "TOKEN_EXPIRED"
+            else status.HTTP_404_NOT_FOUND,
             detail={"code": e.code, "message": e.message},
         )
     await db.refresh(record, ["knowledge_item"])

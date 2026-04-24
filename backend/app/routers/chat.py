@@ -19,6 +19,7 @@ Backed by a Tool-calling Agent (see services/agent.py). The LLM dynamically
 selects from four tools (vector_search, kg_stats, kg_query, unified_search).
 Sources are only emitted for high-relevance vector hits (score ≥ 0.68).
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,6 @@ from pydantic import BaseModel, Field
 
 from app.core.deps import CurrentUser
 from app.services.agent import stream_answer
-
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -45,7 +45,7 @@ def _sse_format(event: str, data) -> bytes:
     # SSE wants `data:` lines; multi-line data must be split — our deltas
     # are short enough that embedded newlines are rare, but handle anyway.
     body = "\n".join(f"data: {line}" for line in payload.split("\n"))
-    return f"event: {event}\n{body}\n\n".encode("utf-8")
+    return f"event: {event}\n{body}\n\n".encode()
 
 
 @router.post("/stream")

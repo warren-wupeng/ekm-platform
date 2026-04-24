@@ -14,6 +14,7 @@ The DB insert is done inside the caller's transaction so the event only
 lands if the business write (reply create, like, etc.) also succeeded.
 Keep this function cheap and side-effect-clean.
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,11 +52,14 @@ async def dispatch(
 
     # Live push — cheap if nobody's listening, harmless if it fails.
     try:
-        await manager.send_to_user(user_id, {
-            "kind": "notification",
-            "data": n.to_dict(),
-        })
-    except Exception as exc:  # noqa: BLE001
+        await manager.send_to_user(
+            user_id,
+            {
+                "kind": "notification",
+                "data": n.to_dict(),
+            },
+        )
+    except Exception as exc:
         log.warning("live push failed for user=%s: %s", user_id, exc)
 
     return n

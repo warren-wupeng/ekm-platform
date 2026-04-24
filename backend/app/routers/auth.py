@@ -4,7 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserMe, UserMeUpdate
-from app.services.auth import AuthError, authenticate_user, get_current_user, issue_tokens, refresh_tokens
+from app.services.auth import (
+    AuthError,
+    authenticate_user,
+    get_current_user,
+    issue_tokens,
+    refresh_tokens,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 bearer_scheme = HTTPBearer(auto_error=False)

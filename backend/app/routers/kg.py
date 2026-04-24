@@ -7,6 +7,7 @@ Endpoints:
   GET  /api/v1/kg/entities   full-text search over Entity nodes
   GET  /api/v1/kg/path       shortest path between two entities
 """
+
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -15,9 +16,9 @@ from pydantic import BaseModel, Field
 from app.core.deps import CurrentUser
 from app.core.graph import graph
 from app.services.kg_search import (
-    SAFE_ID_RE,
     MAX_HOPS,
     MAX_LIMIT,
+    SAFE_ID_RE,
     LuceneEscapeError,
     escape_lucene,
 )
@@ -65,7 +66,7 @@ async def ensure_fulltext_index() -> None:
             "CREATE FULLTEXT INDEX entity_search IF NOT EXISTS "
             "FOR (n:Entity) ON EACH [n.name, n.label, n.description]"
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("Failed to create fulltext index %s: %s", _FT_INDEX_NAME, exc)
 
 
@@ -102,7 +103,7 @@ async def search_entities(
             "LIMIT $lim",
             {"idx": _FT_INDEX_NAME, "query": safe_q, "lim": limit},
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("kg entity search failed: %s", exc)
         return EntitySearchResponse(query=q, entities=[])
 
@@ -126,11 +127,17 @@ async def search_entities(
 async def shortest_path(
     user: CurrentUser,
     source: str = Query(
-        ..., min_length=1, max_length=255, alias="from",
+        ...,
+        min_length=1,
+        max_length=255,
+        alias="from",
         description="Source entity external_id",
     ),
     target: str = Query(
-        ..., min_length=1, max_length=255, alias="to",
+        ...,
+        min_length=1,
+        max_length=255,
+        alias="to",
         description="Target entity external_id",
     ),
     max_hops: int = Query(3, ge=1, le=MAX_HOPS),
@@ -162,7 +169,7 @@ async def shortest_path(
 
     try:
         rows = await graph.run(cypher, {"src": source, "dst": target})
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("kg path query failed: %s", exc)
         return PathResponse(found=False)
 

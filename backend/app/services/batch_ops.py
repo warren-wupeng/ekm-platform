@@ -33,11 +33,13 @@ Design choices:
    "show me all outcomes for batch X" without a separate table —
    consistent with #58's "the row is the audit log" principle.
 """
+
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,22 +55,23 @@ log = logging.getLogger(__name__)
 
 # ── Result shape ──────────────────────────────────────────────────────
 
-SuccessItem = dict[str, Any]   # {id: int, ...optional op-specific fields}
-FailureItem = dict[str, Any]   # {id: int, reason: str}
-BatchResult = dict[str, Any]   # {succeeded: [...], failed: [...], batch_id: str}
+SuccessItem = dict[str, Any]  # {id: int, ...optional op-specific fields}
+FailureItem = dict[str, Any]  # {id: int, reason: str}
+BatchResult = dict[str, Any]  # {succeeded: [...], failed: [...], batch_id: str}
 
 
 # ── Reason codes ──────────────────────────────────────────────────────
 # Short stable strings. Frontend maps to copy; tests assert on these.
 
-R_NOT_FOUND         = "NOT_FOUND"
+R_NOT_FOUND = "NOT_FOUND"
 R_PERMISSION_DENIED = "PERMISSION_DENIED"
-R_INVALID_TARGET    = "INVALID_TARGET"   # move: category_id doesn't exist
-R_ALREADY_DELETED   = "ALREADY_DELETED"  # paranoia; cascaded deletes shouldn't surface this
-R_UNEXPECTED        = "UNEXPECTED"
+R_INVALID_TARGET = "INVALID_TARGET"  # move: category_id doesn't exist
+R_ALREADY_DELETED = "ALREADY_DELETED"  # paranoia; cascaded deletes shouldn't surface this
+R_UNEXPECTED = "UNEXPECTED"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def _can_manage(item: KnowledgeItem, user: User) -> bool:
     """Owner-or-admin gate. Used by delete and share (EDIT-shared users
@@ -83,7 +86,8 @@ def _new_batch_id() -> str:
 
 
 async def _load_items(
-    db: AsyncSession, ids: Iterable[int],
+    db: AsyncSession,
+    ids: Iterable[int],
 ) -> dict[int, KnowledgeItem]:
     """Fetch the items once up front. Returns id → item; missing ids are
     absent from the dict (caller reports NOT_FOUND for them)."""
@@ -115,16 +119,19 @@ def _log_result(
         detail["reason"] = reason
     if extra:
         detail.update(extra)
-    db.add(AuditLog(
-        actor_id=actor.id,
-        action=action,
-        resource_type="knowledge_item",
-        resource_id=item_id,
-        detail=detail,
-    ))
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action=action,
+            resource_type="knowledge_item",
+            resource_id=item_id,
+            detail=detail,
+        )
+    )
 
 
 # ── Operations ────────────────────────────────────────────────────────
+
 
 async def batch_move(
     db: AsyncSession,
@@ -147,9 +154,9 @@ async def batch_move(
 
     # Validate target category once, not N times.
     if category_id is not None:
-        cat = (await db.execute(
-            select(Category).where(Category.id == category_id)
-        )).scalar_one_or_none()
+        cat = (
+            await db.execute(select(Category).where(Category.id == category_id))
+        ).scalar_one_or_none()
         if cat is None:
             # Degenerate case — every item will fail for the same reason,
             # so short-circuit with INVALID_TARGET on the whole batch
@@ -169,23 +176,31 @@ async def batch_move(
         if item is None:
             failed.append({"id": item_id, "reason": R_NOT_FOUND})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.UPDATE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.UPDATE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_NOT_FOUND,
             )
             continue
 
-        allowed = (
-            user.role == UserRole.ADMIN
-            or await check_user_access(
-                db, item.id, user, required=SharePermission.EDIT,
-            )
+        allowed = user.role == UserRole.ADMIN or await check_user_access(
+            db,
+            item.id,
+            user,
+            required=SharePermission.EDIT,
         )
         if not allowed:
             failed.append({"id": item_id, "reason": R_PERMISSION_DENIED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.UPDATE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.UPDATE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_PERMISSION_DENIED,
             )
             continue
@@ -197,20 +212,28 @@ async def batch_move(
             async with db.begin_nested():
                 item.category_id = category_id
                 await db.flush()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.exception("batch_move failed on item=%s: %s", item_id, exc)
             failed.append({"id": item_id, "reason": R_UNEXPECTED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.UPDATE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.UPDATE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_UNEXPECTED,
             )
             continue
 
         succeeded.append({"id": item_id, "category_id": category_id})
         _log_result(
-            db, batch_id=batch_id, action=AuditAction.UPDATE,
-            actor=user, item_id=item_id, success=True,
+            db,
+            batch_id=batch_id,
+            action=AuditAction.UPDATE,
+            actor=user,
+            item_id=item_id,
+            success=True,
             extra={"from_category_id": old_cat, "to_category_id": category_id},
         )
 
@@ -243,8 +266,12 @@ async def batch_delete(
         if item is None:
             failed.append({"id": item_id, "reason": R_NOT_FOUND})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.DELETE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.DELETE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_NOT_FOUND,
             )
             continue
@@ -252,8 +279,12 @@ async def batch_delete(
         if not _can_manage(item, user):
             failed.append({"id": item_id, "reason": R_PERMISSION_DENIED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.DELETE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.DELETE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_PERMISSION_DENIED,
             )
             continue
@@ -266,20 +297,28 @@ async def batch_delete(
             async with db.begin_nested():
                 await db.delete(item)
                 await db.flush()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.exception("batch_delete failed on item=%s: %s", item_id, exc)
             failed.append({"id": item_id, "reason": R_UNEXPECTED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.DELETE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.DELETE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_UNEXPECTED,
             )
             continue
 
         succeeded.append({"id": item_id})
         _log_result(
-            db, batch_id=batch_id, action=AuditAction.DELETE,
-            actor=user, item_id=item_id, success=True,
+            db,
+            batch_id=batch_id,
+            action=AuditAction.DELETE,
+            actor=user,
+            item_id=item_id,
+            success=True,
             extra=snapshot,
         )
 
@@ -316,8 +355,12 @@ async def batch_share(
         if item is None:
             failed.append({"id": item_id, "reason": R_NOT_FOUND})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.SHARE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.SHARE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_NOT_FOUND,
             )
             continue
@@ -325,8 +368,12 @@ async def batch_share(
         if not _can_manage(item, user):
             failed.append({"id": item_id, "reason": R_PERMISSION_DENIED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.SHARE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.SHARE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_PERMISSION_DENIED,
             )
             continue
@@ -344,22 +391,29 @@ async def batch_share(
                 # create_share flushes internally; savepoint catches
                 # uniqueness / FK failures without breaking the batch.
                 record = await create_share(db, req, shared_by=user)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.exception("batch_share failed on item=%s: %s", item_id, exc)
             failed.append({"id": item_id, "reason": R_UNEXPECTED})
             _log_result(
-                db, batch_id=batch_id, action=AuditAction.SHARE,
-                actor=user, item_id=item_id, success=False,
+                db,
+                batch_id=batch_id,
+                action=AuditAction.SHARE,
+                actor=user,
+                item_id=item_id,
+                success=False,
                 reason=R_UNEXPECTED,
             )
             continue
 
         succeeded.append({"id": item_id, "share_id": record.id})
         _log_result(
-            db, batch_id=batch_id, action=AuditAction.SHARE,
-            actor=user, item_id=item_id, success=True,
-            extra={"share_id": record.id, "target": target.value,
-                   "permission": permission.value},
+            db,
+            batch_id=batch_id,
+            action=AuditAction.SHARE,
+            actor=user,
+            item_id=item_id,
+            success=True,
+            extra={"share_id": record.id, "target": target.value, "permission": permission.value},
         )
 
     return {"batch_id": batch_id, "succeeded": succeeded, "failed": failed}

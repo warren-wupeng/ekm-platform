@@ -21,12 +21,19 @@ on the rule matches. NULL on the rule = wildcard for that field. Two rules
 can match the same item; whichever threshold fires first wins (min
 inactive_days — see services/archive.py for the resolver).
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Integer, String, func,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,8 +49,10 @@ class ArchiveRule(Base):
 
     # Scope filters — all NULLs = "matches any item".
     category_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("categories.id", ondelete="SET NULL"),
-        nullable=True, index=True,
+        Integer,
+        ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     file_type: Mapped[FileType | None] = mapped_column(
         # Reuse the existing Postgres enum (already created by 0001).
@@ -54,7 +63,8 @@ class ArchiveRule(Base):
             name="filetype",
             create_type=False,
         ),
-        nullable=True, index=True,
+        nullable=True,
+        index=True,
     )
 
     # Threshold — items untouched for this many days auto-archive.
@@ -71,19 +81,24 @@ class ArchiveRule(Base):
     # sidesteps the "SET DEFAULT on NOT NULL without server_default" bug
     # Sage flagged as P1 on PR #87 review.
     created_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"),
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(),
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
         nullable=False,
     )
 
-    category: Mapped["Category | None"] = relationship("Category")  # noqa: F821
-    created_by: Mapped["User"] = relationship("User")  # noqa: F821
+    category: Mapped[Category | None] = relationship("Category")
+    created_by: Mapped[User] = relationship("User")
 
     def __repr__(self) -> str:
         return (

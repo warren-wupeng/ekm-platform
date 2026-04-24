@@ -15,6 +15,7 @@ Offline delivery is just "rows with read_at IS NULL created before the
 current WS connection time" — no separate queue table needed. When the
 socket opens we flush the unread backlog and keep streaming live events.
 """
+
 from __future__ import annotations
 
 import enum
@@ -28,15 +29,15 @@ from app.core.database import Base
 
 
 class NotificationType(str, enum.Enum):
-    COMMENT                    = "comment"                    # new reply on your post
-    LIKE                       = "like"                       # someone liked your reply
-    MENTION                    = "mention"                    # @user in a reply
-    KNOWLEDGE_UPDATE           = "knowledge_update"           # doc you care about changed
-    ARCHIVE_REMINDER           = "archive_reminder"           # your doc will auto-archive soon
-    AUTO_ARCHIVED              = "auto_archived"              # your doc was just auto-archived
-    RESTORE_REQUEST_SUBMITTED  = "restore_request_submitted"  # to KM Ops: new request to review
-    RESTORE_REQUEST_APPROVED   = "restore_request_approved"   # to submitter: your doc is back
-    RESTORE_REQUEST_REJECTED   = "restore_request_rejected"   # to submitter: with reason
+    COMMENT = "comment"  # new reply on your post
+    LIKE = "like"  # someone liked your reply
+    MENTION = "mention"  # @user in a reply
+    KNOWLEDGE_UPDATE = "knowledge_update"  # doc you care about changed
+    ARCHIVE_REMINDER = "archive_reminder"  # your doc will auto-archive soon
+    AUTO_ARCHIVED = "auto_archived"  # your doc was just auto-archived
+    RESTORE_REQUEST_SUBMITTED = "restore_request_submitted"  # to KM Ops: new request to review
+    RESTORE_REQUEST_APPROVED = "restore_request_approved"  # to submitter: your doc is back
+    RESTORE_REQUEST_REJECTED = "restore_request_rejected"  # to submitter: with reason
 
 
 class Notification(Base):
@@ -44,8 +45,10 @@ class Notification(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     type: Mapped[NotificationType] = mapped_column(
         # `values_callable` makes SQLAlchemy persist the enum *value*
@@ -57,7 +60,8 @@ class Notification(Base):
             values_callable=lambda obj: [e.value for e in obj],
             name="notification_type",
         ),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     # Free-form per-type payload; see module docstring for the shape.
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -66,14 +70,18 @@ class Notification(Base):
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     read_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True,
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(),
-        nullable=False, index=True,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
     )
 
-    user: Mapped["User"] = relationship("User")  # noqa: F821
+    user: Mapped[User] = relationship("User")
 
     def __repr__(self) -> str:
         return f"<Notification id={self.id} type={self.type.value} user={self.user_id}>"

@@ -14,13 +14,13 @@ No JWT. Agent tokens are opaque random strings; revocation means flipping
 ``is_active = False`` on the row. JWTs would require a blocklist to get
 the same guarantee, and we'd have gained nothing in return.
 """
+
 from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
 
 import bcrypt
-
 
 # Prefix is deliberate:
 #   * `ekm`   — project namespace
@@ -44,9 +44,10 @@ TOKEN_BODY_BYTES = 24
 class NewAgentToken:
     """Plaintext + derived fields returned by generation. Plaintext is
     only visible at creation time — it's hashed before persistence."""
-    plaintext: str       # full token — show this to the caller ONCE
-    prefix: str          # PREFIX_LEN-char lookup key stored in DB
-    hashed: str          # bcrypt hash stored in DB
+
+    plaintext: str  # full token — show this to the caller ONCE
+    prefix: str  # PREFIX_LEN-char lookup key stored in DB
+    hashed: str  # bcrypt hash stored in DB
 
 
 def generate_agent_token() -> NewAgentToken:

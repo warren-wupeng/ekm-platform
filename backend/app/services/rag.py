@@ -10,11 +10,12 @@ Keep prompt construction simple and auditable. Future tuning (re-ranking,
 hybrid ES + Qdrant fusion, citation de-duplication) plugs in here without
 touching the router.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 
@@ -52,7 +53,8 @@ def _build_context(hits: list[dict]) -> str:
 
 
 async def stream_answer(
-    query: str, top_k: int | None = None,
+    query: str,
+    top_k: int | None = None,
 ) -> AsyncIterator[dict]:
     """Async generator yielding SSE events.
 
@@ -68,10 +70,13 @@ async def stream_answer(
     if hits:
         doc_ids = list({h["document_id"] for h in hits})
         async with AsyncSessionLocal() as db:
-            rows = (await db.execute(
-                select(KnowledgeItem.id, KnowledgeItem.name)
-                .where(KnowledgeItem.id.in_(doc_ids))
-            )).all()
+            rows = (
+                await db.execute(
+                    select(KnowledgeItem.id, KnowledgeItem.name).where(
+                        KnowledgeItem.id.in_(doc_ids)
+                    )
+                )
+            ).all()
         name_map = {row.id: row.name for row in rows}
         for h in hits:
             h["filename"] = name_map.get(h["document_id"])
@@ -82,10 +87,7 @@ async def stream_answer(
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": (
-                f"参考资料：\n{_build_context(hits)}\n\n"
-                f"用户问题：{query}"
-            ),
+            "content": (f"参考资料：\n{_build_context(hits)}\n\n用户问题：{query}"),
         },
     ]
 

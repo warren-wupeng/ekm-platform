@@ -8,6 +8,7 @@ The actual parsing runs in a Celery worker; this endpoint just returns a
 task_id that the UI polls via /api/v1/tasks/{task_id}, or more reliably
 via /api/v1/documents/{id}/parse-status which reads the DB directly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,12 +18,11 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
 from app.models.user import UserRole
 from app.worker.tasks import parse_document
-
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
@@ -43,25 +43,29 @@ async def _wake_worker() -> None:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.get(url)
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.debug("Worker wake-up ping to %s failed (non-fatal)", url)
 
 
 @router.post("/{document_id}/parse", status_code=202)
-async def trigger_parse(document_id: int, db: DB, user: CurrentUser, background_tasks: BackgroundTasks):
+async def trigger_parse(
+    document_id: int, db: DB, user: CurrentUser, background_tasks: BackgroundTasks
+):
     """Enqueue a Tika parse job. Returns 202 + task_id for polling."""
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == document_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="document not found")
     if not item.file_path:
         raise HTTPException(status_code=400, detail="document has no file")
 
     # Guard against re-queuing an in-flight job.
-    rec = (await db.execute(
-        select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
-    )).scalar_one_or_none()
+    rec = (
+        await db.execute(
+            select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
+        )
+    ).scalar_one_or_none()
     if rec and rec.status == ParseStatus.PARSING:
         return {
             "task_id": rec.task_id,
@@ -100,9 +104,9 @@ async def get_kg_status(document_id: int, db: DB, user: CurrentUser):
     "处理中 (parse) / 处理中 (extract) / 已完成 / 失败". The payload is
     deliberately small — this is a hot poll path.
     """
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == document_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="document not found")
 
@@ -137,17 +141,19 @@ async def get_parse_status(document_id: int, db: DB, user: CurrentUser):
 
     Returns 404 if parse has never been triggered for this document.
     """
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == document_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == document_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="document not found")
     if item.uploader_id != user.id and user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="forbidden")
 
-    rec = (await db.execute(
-        select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
-    )).scalar_one_or_none()
+    rec = (
+        await db.execute(
+            select(DocumentParseRecord).where(DocumentParseRecord.knowledge_item_id == document_id)
+        )
+    ).scalar_one_or_none()
     if rec is None:
         raise HTTPException(status_code=404, detail="no parse record for this document")
 
@@ -163,18 +169,23 @@ async def get_parse_status(document_id: int, db: DB, user: CurrentUser):
 async def list_chunks(document_id: int, db: DB, user: CurrentUser, limit: int = 20):
     """Return up to `limit` parsed chunks — handy for QA and for the UI to
     preview what got indexed."""
-    rows = (await db.execute(
-        select(DocumentChunk)
-        .where(DocumentChunk.knowledge_item_id == document_id)
-        .order_by(DocumentChunk.chunk_index)
-        .limit(limit)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(DocumentChunk)
+                .where(DocumentChunk.knowledge_item_id == document_id)
+                .order_by(DocumentChunk.chunk_index)
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return {
         "document_id": document_id,
         "count": len(rows),
         "chunks": [
-            {"index": c.chunk_index, "content": c.content, "tokens": c.token_count}
-            for c in rows
+            {"index": c.chunk_index, "content": c.content, "tokens": c.token_count} for c in rows
         ],
     }

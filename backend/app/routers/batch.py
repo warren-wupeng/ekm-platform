@@ -18,11 +18,12 @@ body. Why 207 even on "all succeeded":
 Per-item RBAC lives in services/batch_ops.py. The router just maps
 request → service call → response.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.schemas.batch import (
     BatchDeleteRequest,
     BatchMoveRequest,
@@ -44,10 +45,15 @@ router = APIRouter(
     summary="批量移动知识条目到目标分类",
 )
 async def batch_move(
-    body: BatchMoveRequest, user: CurrentUser, db: DB,
+    body: BatchMoveRequest,
+    user: CurrentUser,
+    db: DB,
 ) -> dict:
     result = await batch_ops.batch_move(
-        db, user=user, ids=body.ids, category_id=body.category_id,
+        db,
+        user=user,
+        ids=body.ids,
+        category_id=body.category_id,
     )
     await db.commit()
     return result
@@ -60,7 +66,9 @@ async def batch_move(
     summary="批量删除知识条目（硬删除，需为拥有者或管理员）",
 )
 async def batch_delete(
-    body: BatchDeleteRequest, user: CurrentUser, db: DB,
+    body: BatchDeleteRequest,
+    user: CurrentUser,
+    db: DB,
 ) -> dict:
     result = await batch_ops.batch_delete(db, user=user, ids=body.ids)
     await db.commit()
@@ -74,7 +82,9 @@ async def batch_delete(
     summary="批量分享知识条目到同一目标（需为拥有者或管理员）",
 )
 async def batch_share(
-    body: BatchShareRequest, user: CurrentUser, db: DB,
+    body: BatchShareRequest,
+    user: CurrentUser,
+    db: DB,
 ) -> dict:
     result = await batch_ops.batch_share(
         db,

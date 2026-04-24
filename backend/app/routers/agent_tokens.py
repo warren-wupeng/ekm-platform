@@ -5,14 +5,15 @@ Endpoints:
   POST   /api/v1/agent-tokens          — create new token (returns plaintext ONCE)
   DELETE /api/v1/agent-tokens/{id}     — revoke (is_active=False)
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
 from app.core.agent_security import generate_agent_token
+from app.core.deps import DB, CurrentUser
 from app.models.agent import AgentToken
 
 router = APIRouter(prefix="/api/v1/agent-tokens", tags=["agent-tokens"])
@@ -41,11 +42,17 @@ def _to_dict(t: AgentToken, plaintext: str | None = None) -> dict:
 
 @router.get("")
 async def list_tokens(db: DB, user: CurrentUser):
-    rows = (await db.execute(
-        select(AgentToken)
-        .where(AgentToken.created_by_id == user.id)
-        .order_by(AgentToken.created_at.desc())
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(AgentToken)
+                .where(AgentToken.created_by_id == user.id)
+                .order_by(AgentToken.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {"tokens": [_to_dict(t) for t in rows]}
 
 
@@ -74,9 +81,11 @@ async def create_token(payload: TokenCreate, db: DB, user: CurrentUser):
 
 @router.delete("/{token_id}", status_code=204)
 async def revoke_token(token_id: int, db: DB, user: CurrentUser):
-    t = (await db.execute(
-        select(AgentToken).where(AgentToken.id == token_id, AgentToken.created_by_id == user.id)
-    )).scalar_one_or_none()
+    t = (
+        await db.execute(
+            select(AgentToken).where(AgentToken.id == token_id, AgentToken.created_by_id == user.id)
+        )
+    ).scalar_one_or_none()
     if t is None:
         raise HTTPException(status_code=404, detail="token not found")
     t.is_active = False

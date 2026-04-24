@@ -1,4 +1,5 @@
 """FastAPI dependencies: auth, DB session."""
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -28,4 +29,4 @@ async def current_user(
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
-DB          = Annotated[AsyncSession, Depends(get_db)]
+DB = Annotated[AsyncSession, Depends(get_db)]

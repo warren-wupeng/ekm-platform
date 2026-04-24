@@ -16,19 +16,20 @@ Endpoints:
 
 `preview` lets admins see the blast radius before flipping enabled=true.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.archive import ArchiveRule
 from app.models.knowledge import FileType, KnowledgeItem
-from app.models.user import User, UserRole
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/api/v1/archive", tags=["archive"])
 
@@ -42,6 +43,7 @@ def _require_admin(user) -> None:
 
 
 # ── Archived items listing ─────────────────────────────────────────
+
 
 @router.get("/items")
 async def list_archived_items(
@@ -66,17 +68,13 @@ async def list_archived_items(
 
     # Total for pagination.
     count_q = (
-        select(func.count())
-        .select_from(KnowledgeItem)
-        .where(KnowledgeItem.is_archived.is_(True))
+        select(func.count()).select_from(KnowledgeItem).where(KnowledgeItem.is_archived.is_(True))
     )
     if user.role not in (UserRole.KM_OPS, UserRole.ADMIN):
         count_q = count_q.where(KnowledgeItem.uploader_id == user.id)
     total = (await db.execute(count_q)).scalar_one()
 
-    rows = (await db.execute(
-        q.offset((page - 1) * page_size).limit(page_size)
-    )).scalars().all()
+    rows = (await db.execute(q.offset((page - 1) * page_size).limit(page_size))).scalars().all()
 
     return {
         "total": total,
@@ -86,7 +84,9 @@ async def list_archived_items(
             {
                 "id": item.id,
                 "name": item.name,
-                "file_type": item.file_type.value if hasattr(item.file_type, "value") else str(item.file_type),
+                "file_type": item.file_type.value
+                if hasattr(item.file_type, "value")
+                else str(item.file_type),
                 "archived_at": item.archived_at.isoformat() if item.archived_at else None,
                 "uploader_name": item.uploader.display_name if item.uploader else None,
                 "uploader_id": item.uploader_id,
@@ -99,6 +99,7 @@ async def list_archived_items(
 
 
 # ── Manual archive request ────────────────────────────────────────
+
 
 class ArchiveRequestIn(BaseModel):
     knowledge_item_id: int
@@ -115,9 +116,9 @@ async def archive_item(
 
     Owner or admin can archive. Already-archived items are a no-op (200).
     """
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == body.knowledge_item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == body.knowledge_item_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -131,7 +132,7 @@ async def archive_item(
         )
     if not item.is_archived:
         item.is_archived = True
-        item.archived_at = datetime.now(timezone.utc)
+        item.archived_at = datetime.now(UTC)
         await db.flush()
         await db.commit()
     return {
@@ -144,11 +145,12 @@ async def archive_item(
 
 # ── Rule CRUD (admin only) ────────────────────────────────────────
 
+
 class RuleIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     category_id: int | None = None
     file_type: FileType | None = None
-    inactive_days: int = Field(gt=0, le=3650)   # 10 yrs is more than enough
+    inactive_days: int = Field(gt=0, le=3650)  # 10 yrs is more than enough
     enabled: bool = True
 
     @field_validator("name")
@@ -177,9 +179,11 @@ class RulePatch(BaseModel):
 @router.get("/rules")
 async def list_rules(db: DB, user: CurrentUser):
     _require_admin(user)
-    rows = (await db.execute(
-        select(ArchiveRule).order_by(ArchiveRule.created_at.desc())
-    )).scalars().all()
+    rows = (
+        (await db.execute(select(ArchiveRule).order_by(ArchiveRule.created_at.desc())))
+        .scalars()
+        .all()
+    )
     return {"rules": [r.to_dict() for r in rows]}
 
 
@@ -203,9 +207,9 @@ async def create_rule(body: RuleIn, db: DB, user: CurrentUser):
 @router.get("/rules/{rule_id}")
 async def get_rule(rule_id: int, db: DB, user: CurrentUser):
     _require_admin(user)
-    r = (await db.execute(
-        select(ArchiveRule).where(ArchiveRule.id == rule_id)
-    )).scalar_one_or_none()
+    r = (
+        await db.execute(select(ArchiveRule).where(ArchiveRule.id == rule_id))
+    ).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="rule not found")
     return r.to_dict()
@@ -213,12 +217,15 @@ async def get_rule(rule_id: int, db: DB, user: CurrentUser):
 
 @router.patch("/rules/{rule_id}")
 async def update_rule(
-    rule_id: int, body: RulePatch, db: DB, user: CurrentUser,
+    rule_id: int,
+    body: RulePatch,
+    db: DB,
+    user: CurrentUser,
 ):
     _require_admin(user)
-    r = (await db.execute(
-        select(ArchiveRule).where(ArchiveRule.id == rule_id)
-    )).scalar_one_or_none()
+    r = (
+        await db.execute(select(ArchiveRule).where(ArchiveRule.id == rule_id))
+    ).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="rule not found")
 
@@ -234,9 +241,9 @@ async def update_rule(
 @router.delete("/rules/{rule_id}", status_code=204)
 async def delete_rule(rule_id: int, db: DB, user: CurrentUser):
     _require_admin(user)
-    r = (await db.execute(
-        select(ArchiveRule).where(ArchiveRule.id == rule_id)
-    )).scalar_one_or_none()
+    r = (
+        await db.execute(select(ArchiveRule).where(ArchiveRule.id == rule_id))
+    ).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="rule not found")
     await db.delete(r)
@@ -251,13 +258,13 @@ async def preview_rule(rule_id: int, db: DB, user: CurrentUser):
     admins a "this would auto-archive 342 items" number to sanity-check.
     """
     _require_admin(user)
-    r = (await db.execute(
-        select(ArchiveRule).where(ArchiveRule.id == rule_id)
-    )).scalar_one_or_none()
+    r = (
+        await db.execute(select(ArchiveRule).where(ArchiveRule.id == rule_id))
+    ).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="rule not found")
 
-    threshold = datetime.now(timezone.utc) - timedelta(days=r.inactive_days)
+    threshold = datetime.now(UTC) - timedelta(days=r.inactive_days)
     q = (
         select(func.count())
         .select_from(KnowledgeItem)

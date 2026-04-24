@@ -13,11 +13,13 @@ the driver; subsequent calls reuse it. Failed sessions are swallowed with a
 warning — the platform must stay up if the graph is down; graph features
 just degrade.
 """
+
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
 
@@ -67,7 +69,7 @@ class Neo4jClient:
         try:
             rows = await self.run("RETURN 1 AS ok")
             return bool(rows) and rows[0].get("ok") == 1
-        except Exception as exc:  # noqa: BLE001 — degradation, not crash
+        except Exception as exc:
             log.warning("Neo4j healthcheck failed: %s", exc)
             return False
 
@@ -88,7 +90,7 @@ class Neo4jClient:
         for stmt in statements:
             try:
                 await self.run(stmt)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("Failed to apply constraint: %s (%s)", stmt, exc)
 
     async def close(self) -> None:

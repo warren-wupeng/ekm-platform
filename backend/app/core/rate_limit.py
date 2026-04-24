@@ -9,6 +9,7 @@ Authorization header so each provisioned token has its own rate bucket.
 Falls back to client IP when no Bearer token is present (pre-auth
 rejection still gets rate-limited to prevent brute-force probing).
 """
+
 from __future__ import annotations
 
 from slowapi import Limiter

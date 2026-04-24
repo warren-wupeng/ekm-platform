@@ -1,16 +1,16 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from jose import JWTError
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
     verify_password,
 )
-from app.core.config import settings
 from app.models.user import User
 
 
@@ -36,7 +36,7 @@ async def authenticate_user(db: AsyncSession, username: str, password: str) -> U
         raise AuthError("用户名或密码错误", "INVALID_CREDENTIALS")
 
     # Update last_login
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     await db.flush()
 
     return user
