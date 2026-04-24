@@ -98,7 +98,7 @@ class CategoryOut(BaseModel):
     parent_id: int | None
     description: str | None
     sort_order: int
-    children: list[CategoryOut] = []
+    children: list[CategoryOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
