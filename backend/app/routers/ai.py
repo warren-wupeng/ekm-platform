@@ -17,6 +17,7 @@ free so it can be re-tried safely.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
@@ -30,6 +31,7 @@ from app.services.llm_client import llm
 from app.services.versioning import _current_content_text
 
 router = APIRouter(prefix="/api/v1", tags=["ai"])
+log = logging.getLogger(__name__)
 
 
 # ─── SSE helpers ────────────────────────────────────────────────────────────
@@ -52,8 +54,9 @@ async def _stream_llm(messages: list[dict]) -> AsyncIterator[bytes]:
     try:
         async for delta in llm.stream(messages):
             yield _sse("delta", delta)
-    except Exception as exc:
-        yield _sse("error", {"message": str(exc)})
+    except Exception:
+        log.exception("AI stream failed")
+        yield _sse("error", {"message": "AI generation failed"})
     yield _sse("done", "[DONE]")
 
 

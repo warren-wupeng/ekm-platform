@@ -12,6 +12,9 @@ on:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
 
+permissions:
+  contents: read
+
 jobs:
   ruff:
     name: Ruff
