@@ -7,10 +7,11 @@ replace, rename, description edit, future PATCH /knowledge/{id}) can call
 Diffing uses Python's standard `difflib` in unified-diff format so the
 frontend can render it with any off-the-shelf diff viewer.
 """
+
 from __future__ import annotations
 
 import difflib
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,10 +22,13 @@ from app.models.version import KnowledgeVersion
 
 
 async def _next_version_number(db: AsyncSession, item_id: int) -> int:
-    max_v = (await db.execute(
-        select(func.max(KnowledgeVersion.version_number))
-        .where(KnowledgeVersion.knowledge_item_id == item_id)
-    )).scalar()
+    max_v = (
+        await db.execute(
+            select(func.max(KnowledgeVersion.version_number)).where(
+                KnowledgeVersion.knowledge_item_id == item_id
+            )
+        )
+    ).scalar()
     return (max_v or 0) + 1
 
 
@@ -34,11 +38,17 @@ async def _current_content_text(db: AsyncSession, item_id: int) -> str | None:
     Chunks are the source-of-truth for parsed content; versions just point
     at a concatenated copy frozen at snapshot time.
     """
-    rows = (await db.execute(
-        select(DocumentChunk.content)
-        .where(DocumentChunk.knowledge_item_id == item_id)
-        .order_by(DocumentChunk.chunk_index)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(DocumentChunk.content)
+                .where(DocumentChunk.knowledge_item_id == item_id)
+                .order_by(DocumentChunk.chunk_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
     if not rows:
         return None
     return "\n\n".join(rows)
@@ -87,9 +97,13 @@ def unified_diff(
     """Return a unified-diff string; empty text is rendered as empty file."""
     a_lines = (a_text or "").splitlines(keepends=True)
     b_lines = (b_text or "").splitlines(keepends=True)
-    diff: Sequence[str] = list(difflib.unified_diff(
-        a_lines, b_lines,
-        fromfile=a_label, tofile=b_label,
-        lineterm="",
-    ))
+    diff: Sequence[str] = list(
+        difflib.unified_diff(
+            a_lines,
+            b_lines,
+            fromfile=a_label,
+            tofile=b_label,
+            lineterm="",
+        )
+    )
     return "\n".join(diff)

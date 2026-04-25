@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     # File storage — S3-compatible object storage (Fly Tigris, MinIO, AWS S3).
     # Leave S3_BUCKET empty to fall back to local disk (dev mode).
     S3_BUCKET: str = ""
-    S3_ENDPOINT_URL: str = ""          # e.g. https://fly.storage.tigris.dev
+    S3_ENDPOINT_URL: str = ""  # e.g. https://fly.storage.tigris.dev
     S3_ACCESS_KEY_ID: str = ""
     S3_SECRET_ACCESS_KEY: str = ""
     S3_REGION: str = "auto"

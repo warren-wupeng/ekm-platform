@@ -7,6 +7,7 @@ Write APIs (upsert/delete) land in a later issue once the extraction
 pipeline (#47?) is wired up and we know the payload shape we want to
 expose.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
@@ -14,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Query
 from app.core.deps import CurrentUser
 from app.core.graph import graph
 from app.services.graph_sync import neighbors
-
 
 router = APIRouter(prefix="/api/v1/graph", tags=["graph"])
 

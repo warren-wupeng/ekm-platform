@@ -3,7 +3,7 @@
 Authenticated via X-Service-Key header, NOT user JWT.
 """
 
-from fastapi import APIRouter, Header, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.knowledge import KnowledgeItem
-from app.models.sharing import SharingRecord, SharePermission
+from app.models.sharing import SharePermission, SharingRecord
 
 router = APIRouter(prefix="/api/v1/internal", tags=["internal"])
 
@@ -24,6 +24,7 @@ def _verify_service_key(x_service_key: str = Header(...)) -> None:
 
 
 # ── Content persistence (Hocuspocus onStoreDocument) ──────────────────
+
 
 class InternalContentUpdate(BaseModel):
     html_content: str | None = None  # optional — Yjs server can't render HTML
@@ -49,6 +50,7 @@ async def store_item_content(
 
 # ── Room access check (Hocuspocus onAuthenticate) ────────────────────
 
+
 @router.get("/items/{item_id}/access")
 async def check_item_access(
     item_id: int,
@@ -66,19 +68,17 @@ async def check_item_access(
 
     # Admin / KM_OPS bypass
     from app.models.user import User, UserRole
+
     user = await db.get(User, user_id)
     if user and user.role in (UserRole.ADMIN, UserRole.KM_OPS):
         return {"allowed": True, "permission": user.role.value}
 
     # EDIT sharing record
-    stmt = (
-        select(SharingRecord)
-        .where(
-            SharingRecord.knowledge_item_id == item_id,
-            SharingRecord.shared_to_user_id == user_id,
-            SharingRecord.permission == SharePermission.EDIT,
-            SharingRecord.deleted_at.is_(None),
-        )
+    stmt = select(SharingRecord).where(
+        SharingRecord.knowledge_item_id == item_id,
+        SharingRecord.shared_to_user_id == user_id,
+        SharingRecord.permission == SharePermission.EDIT,
+        SharingRecord.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
     if result.scalar_one_or_none():

@@ -1,13 +1,21 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 ALLOWED_EXTENSIONS = {
-    "pdf", "docx", "doc", "pptx", "ppt",
-    "xlsx", "xls", "txt", "md", "csv",
+    "pdf",
+    "docx",
+    "doc",
+    "pptx",
+    "ppt",
+    "xlsx",
+    "xls",
+    "txt",
+    "md",
+    "csv",
 }
 MAX_SINGLE_MB = 100
-MAX_BATCH_MB  = 500
+MAX_BATCH_MB = 500
 
 
 class FileUploadedResponse(BaseModel):
@@ -26,5 +34,5 @@ class FileUploadedResponse(BaseModel):
 
 class BatchUploadResponse(BaseModel):
     uploaded: list[FileUploadedResponse]
-    failed: list[dict]   # [{name, reason}]
+    failed: list[dict]  # [{name, reason}]
     total_size: int

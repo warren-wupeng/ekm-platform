@@ -9,6 +9,7 @@ a hard startup failure to prevent silent fallback bugs.
 All public functions accept and return **storage keys** — opaque strings
 like ``"abc123.pdf"`` that map 1-to-1 with ``KnowledgeItem.file_path``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,6 +49,7 @@ def _get_s3():
     global _s3
     if _s3 is None:
         import boto3
+
         _s3 = boto3.client(
             "s3",
             endpoint_url=settings.S3_ENDPOINT_URL or None,
@@ -66,10 +68,12 @@ def _use_s3() -> bool:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def upload(content: bytes, key: str) -> None:
     """Store *content* under *key*.  Raises ``StorageError`` on failure."""
     if _use_s3():
         import botocore.exceptions
+
         try:
             _get_s3().put_object(Bucket=settings.S3_BUCKET, Key=key, Body=content)
             log.debug("s3 upload: %s (%d bytes)", key, len(content))
@@ -89,13 +93,13 @@ def download(key: str) -> bytes:
     """
     if _use_s3():
         import botocore.exceptions
+
         try:
             resp = _get_s3().get_object(Bucket=settings.S3_BUCKET, Key=key)
             size = resp.get("ContentLength", 0)
             if size > MAX_DOWNLOAD_BYTES:
                 raise StorageError(
-                    f"Object {key} is {size} bytes, exceeds "
-                    f"MAX_DOWNLOAD_BYTES={MAX_DOWNLOAD_BYTES}"
+                    f"Object {key} is {size} bytes, exceeds MAX_DOWNLOAD_BYTES={MAX_DOWNLOAD_BYTES}"
                 )
             return resp["Body"].read()
         except botocore.exceptions.ClientError as e:
@@ -115,6 +119,7 @@ def delete(key: str) -> None:
     """Remove *key* from storage.  No-op if already absent."""
     if _use_s3():
         import botocore.exceptions
+
         try:
             _get_s3().delete_object(Bucket=settings.S3_BUCKET, Key=key)
             log.debug("s3 delete: %s", key)

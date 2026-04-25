@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["app/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["B008", "B904", "B905", "E501", "RUF001", "RUF002", "RUF003", "UP042", "SIM105"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E501"]
+"app/models/*.py" = ["F821"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app/services", "app/routers", "app/core"]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = true
+explicit_package_bases = true
+follow_imports = "skip"
+exclude = ["^alembic/", "^app/models/", "^app/vendor/"]

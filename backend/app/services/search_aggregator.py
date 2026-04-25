@@ -31,14 +31,15 @@ Design choices:
 - ES failures on any single index are logged + skipped, not fatal — a
   degraded search (e.g. posts index missing) is still better than a 500.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from app.services.es_client import es
-
 
 log = logging.getLogger(__name__)
 
@@ -75,11 +76,14 @@ async def search_all(
         bucket_names.append("tags")
         coros.append(_search_tags(q, size=size))
 
-    gathered = await asyncio.gather(*coros, return_exceptions=True)
+    gathered: list[dict[str, Any] | BaseException] = await asyncio.gather(
+        *coros,
+        return_exceptions=True,
+    )
 
     results: dict[str, dict[str, Any]] = {}
     for bucket, outcome in zip(bucket_names, gathered):
-        if isinstance(outcome, Exception):
+        if isinstance(outcome, BaseException):
             log.warning("unified-search bucket=%s failed: %s", bucket, outcome)
             results[bucket] = {"total": 0, "hits": []}
         else:
@@ -160,28 +164,32 @@ async def _search_posts(q: str, *, size: int) -> dict[str, Any]:
     hits: list[dict[str, Any]] = []
     for p in posts["hits"]:
         src = p["source"]
-        hits.append({
-            "kind": "post",
-            "post_id": int(src.get("id", p["id"])),
-            "title": src.get("title"),
-            "snippet": _first_highlight(p.get("highlight", {}), ("title", "body"))
-                       or _truncate(src.get("body")),
-            "score": p["score"],
-            "author_id": src.get("author_id"),
-            "created_at": src.get("created_at"),
-        })
+        hits.append(
+            {
+                "kind": "post",
+                "post_id": int(src.get("id", p["id"])),
+                "title": src.get("title"),
+                "snippet": _first_highlight(p.get("highlight", {}), ("title", "body"))
+                or _truncate(src.get("body")),
+                "score": p["score"],
+                "author_id": src.get("author_id"),
+                "created_at": src.get("created_at"),
+            }
+        )
     for r in replies["hits"]:
         src = r["source"]
-        hits.append({
-            "kind": "reply",
-            "reply_id": int(src.get("id", r["id"])),
-            "post_id": src.get("post_id"),
-            "snippet": _first_highlight(r.get("highlight", {}), ("content",))
-                       or _truncate(src.get("content")),
-            "score": r["score"],
-            "author_id": src.get("author_id"),
-            "created_at": src.get("created_at"),
-        })
+        hits.append(
+            {
+                "kind": "reply",
+                "reply_id": int(src.get("id", r["id"])),
+                "post_id": src.get("post_id"),
+                "snippet": _first_highlight(r.get("highlight", {}), ("content",))
+                or _truncate(src.get("content")),
+                "score": r["score"],
+                "author_id": src.get("author_id"),
+                "created_at": src.get("created_at"),
+            }
+        )
     hits.sort(key=lambda h: h["score"], reverse=True)
     hits = hits[:size]
     return {"total": posts["total"] + replies["total"], "hits": hits}

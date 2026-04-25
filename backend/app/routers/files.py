@@ -2,10 +2,9 @@ import logging
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
-from typing import Optional
 
 from app.core.config import settings
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.schemas.files import BatchUploadResponse, FileUploadedResponse
 from app.services.files import FileUploadError, upload_batch, upload_single
 
@@ -25,7 +24,7 @@ async def _wake_worker() -> None:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.get(url)
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.debug("Worker wake-up ping to %s failed (non-fatal)", url)
 
 
@@ -42,8 +41,9 @@ def _dispatch_kg_pipeline(document_id: int) -> None:
     """
     try:
         from app.worker.tasks import kg_pipeline
+
         kg_pipeline.delay(document_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("KG pipeline dispatch failed for doc=%s: %s", document_id, exc)
 
 
@@ -55,7 +55,7 @@ def _dispatch_kg_pipeline(document_id: int) -> None:
 )
 async def upload_file(
     file: UploadFile = File(...),
-    category_id: Optional[int] = Form(None),
+    category_id: int | None = Form(None),
     db: DB = None,
     user: CurrentUser = None,
     background_tasks: BackgroundTasks = None,
@@ -81,7 +81,7 @@ async def upload_file(
 )
 async def upload_files_batch(
     files: list[UploadFile] = File(...),
-    category_id: Optional[int] = Form(None),
+    category_id: int | None = Form(None),
     db: DB = None,
     user: CurrentUser = None,
     background_tasks: BackgroundTasks = None,

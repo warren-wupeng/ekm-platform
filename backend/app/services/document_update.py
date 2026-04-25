@@ -9,6 +9,7 @@ Orchestrates the incremental update flow:
 
 Designed to run inside a Celery task (sync context).
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models.document import DocumentChunk
 from app.models.knowledge import KnowledgeItem
-from app.services.chunk_updater import ChunkDiff, apply_diff, content_hash, diff_chunks
+from app.services.chunk_updater import ChunkDiff, apply_diff, diff_chunks
 from app.services.document_parse import SyncSession
 
 log = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
 
         # Step 1: Re-parse (download from storage, send bytes to Tika).
         import asyncio
+
         from app.services import storage
         from app.services.tika_client import tika
 
@@ -75,8 +77,11 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
 
                 log.info(
                     "incremental_update doc=%d kept=%d removed=%d added=%d ver=%d",
-                    document_id, result["kept"], result["removed"],
-                    result["added"], result["doc_version"],
+                    document_id,
+                    result["kept"],
+                    result["removed"],
+                    result["added"],
+                    result["doc_version"],
                 )
 
                 # Step 4: sync search indexes — must succeed or rollback.
@@ -103,7 +108,7 @@ def run_incremental_update(document_id: int) -> dict[str, Any]:
                 kcard = generate_and_persist_kcard(db, chunk)
                 if kcard is not None:
                     kcards_generated += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("K-Card generation failed chunk=%d: %s", chunk_id, exc)
 
         db.commit()
@@ -130,6 +135,7 @@ def _sync_search_indexes(
     # Delete removed chunks from ES.
     for chunk in diff.removed:
         from app.services.es_sync import _client as es_client
+
         client = es_client()
         client.delete(
             index="ekm_chunks",
@@ -139,19 +145,23 @@ def _sync_search_indexes(
 
     # Delete removed chunks from Qdrant.
     for chunk in diff.removed:
-        from app.services.qdrant_client import delete_points
-        point_id = document_id * 1_000_000 + chunk.chunk_index
-        delete_points([str(point_id)])
+        from app.services.qdrant_client import _point_id, delete_points
+
+        delete_points([_point_id(document_id, chunk.chunk_index)])
 
     # Index added chunks to ES + Qdrant.
     if result["new_chunk_ids"]:
         from sqlalchemy import select
 
-        new_db_chunks = db.execute(
-            select(DocumentChunk)
-            .where(DocumentChunk.id.in_(result["new_chunk_ids"]))
-            .order_by(DocumentChunk.chunk_index)
-        ).scalars().all()
+        new_db_chunks = (
+            db.execute(
+                select(DocumentChunk)
+                .where(DocumentChunk.id.in_(result["new_chunk_ids"]))
+                .order_by(DocumentChunk.chunk_index)
+            )
+            .scalars()
+            .all()
+        )
 
         bulk_index_chunks(
             document_id,
@@ -163,8 +173,5 @@ def _sync_search_indexes(
 
         ensure_collection()
         vectors = embedder.embed([c.content for c in new_db_chunks])
-        triples = [
-            (c.chunk_index, c.content, vec)
-            for c, vec in zip(new_db_chunks, vectors)
-        ]
+        triples = [(c.chunk_index, c.content, vec) for c, vec in zip(new_db_chunks, vectors)]
         upsert_chunks(document_id, triples)

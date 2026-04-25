@@ -7,16 +7,16 @@ So we call OpenAI directly with a dedicated key.
 Uses text-embedding-3-small (1536-dim) by default.
 Override via EMBEDDING_MODEL / EMBEDDING_API_KEY env vars.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import httpx
 from openai import OpenAI
 
 from app.core.config import settings
-
 
 log = logging.getLogger(__name__)
 

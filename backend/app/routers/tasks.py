@@ -4,6 +4,7 @@ Front-end polls this after kicking off an async parse / index / embed job.
 Celery's AsyncResult is thin — state + optional result payload — which is
 exactly what the UI progress bar needs.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,7 +13,6 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException
 
 from app.worker.celery_app import celery_app
-
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 

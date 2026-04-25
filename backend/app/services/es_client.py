@@ -11,6 +11,7 @@ Analyzer strategy (#21):
     to the built-in `smartcn`-style standard analyzer so the stack still
     boots. A startup warning is logged so ops notices.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,6 @@ from typing import Any
 from elasticsearch import ApiError, AsyncElasticsearch, BadRequestError, NotFoundError
 
 from app.core.config import settings
-
 
 log = logging.getLogger(__name__)
 
@@ -210,21 +210,26 @@ class ESClient:
         """
         cjk_index, cjk_search = await self._detect_cjk_analyzers()
         await self._create_if_missing(
-            INDEX_CHUNKS, _chunk_mapping(cjk_index, cjk_search),
+            INDEX_CHUNKS,
+            _chunk_mapping(cjk_index, cjk_search),
         )
         await self._create_if_missing(
-            INDEX_ITEMS, _item_mapping(cjk_index, cjk_search),
+            INDEX_ITEMS,
+            _item_mapping(cjk_index, cjk_search),
         )
         # Unified search (#42) indices. Added here so a single ensure_indexes()
         # call on startup bootstraps everything; no separate migration step.
         await self._create_if_missing(
-            INDEX_POSTS, _post_mapping(cjk_index, cjk_search),
+            INDEX_POSTS,
+            _post_mapping(cjk_index, cjk_search),
         )
         await self._create_if_missing(
-            INDEX_REPLIES, _reply_mapping(cjk_index, cjk_search),
+            INDEX_REPLIES,
+            _reply_mapping(cjk_index, cjk_search),
         )
         await self._create_if_missing(
-            INDEX_TAGS, _tag_mapping(cjk_index, cjk_search),
+            INDEX_TAGS,
+            _tag_mapping(cjk_index, cjk_search),
         )
 
     async def _detect_cjk_analyzers(self) -> tuple[str, str]:
@@ -348,7 +353,11 @@ class ESClient:
     # ── read path ─────────────────────────────────────────────────────
 
     async def search_items(
-        self, q: str, *, size: int = 20, file_type: str | None = None,
+        self,
+        q: str,
+        *,
+        size: int = 20,
+        file_type: str | None = None,
     ) -> list[dict[str, Any]]:
         must: list[dict[str, Any]] = [
             {"multi_match": {"query": q, "fields": ["name^3", "description"]}}
@@ -410,7 +419,7 @@ class ESClient:
                 "highlight": {
                     "fields": {
                         "title": {},
-                        "body":  {"fragment_size": 160},
+                        "body": {"fragment_size": 160},
                     },
                 },
             },
@@ -424,7 +433,7 @@ class ESClient:
                 "size": size,
                 "query": {
                     "bool": {
-                        "must":   [{"match": {"content": q}}],
+                        "must": [{"match": {"content": q}}],
                         # Exclude tombstoned replies — their content is empty
                         # anyway, but skipping them cuts down on noise.
                         "filter": [{"term": {"is_deleted": False}}],

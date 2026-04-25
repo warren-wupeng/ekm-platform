@@ -16,13 +16,19 @@ Flow:
 Two FKs point at `users` (submitter + reviewer), so relationships
 declare `foreign_keys=` explicitly — SQLAlchemy can't guess otherwise.
 """
+
 from __future__ import annotations
 
 import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    DateTime, Enum, ForeignKey, Integer, Text, func,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Text,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,7 +36,7 @@ from app.core.database import Base
 
 
 class RestoreStatus(str, enum.Enum):
-    PENDING  = "pending"
+    PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
 
@@ -46,18 +52,23 @@ class ArchiveRestoreRequest(Base):
     knowledge_item_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("knowledge_items.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
 
     # Submitter — who wants it back. RESTRICT: keep the audit trail
     # accurate even if a user is later deleted (admin must re-home
     # their requests explicitly).
     submitted_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     submitted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -70,28 +81,35 @@ class ArchiveRestoreRequest(Base):
             values_callable=lambda obj: [e.value for e in obj],
             name="restore_status",
         ),
-        nullable=False, default=RestoreStatus.PENDING, index=True,
+        nullable=False,
+        default=RestoreStatus.PENDING,
+        index=True,
     )
 
     # Reviewer details. NULL until review happens.
     reviewed_by_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=True, index=True,
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Explicit foreign_keys — required when 2+ FKs point at the same
     # table (user), else SQLAlchemy can't decide which side joins.
-    submitted_by: Mapped["User"] = relationship(  # noqa: F821
-        "User", foreign_keys=[submitted_by_id],
+    submitted_by: Mapped[User] = relationship(
+        "User",
+        foreign_keys=[submitted_by_id],
     )
-    reviewed_by: Mapped["User | None"] = relationship(  # noqa: F821
-        "User", foreign_keys=[reviewed_by_id],
+    reviewed_by: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys=[reviewed_by_id],
     )
-    knowledge_item: Mapped["KnowledgeItem"] = relationship("KnowledgeItem")  # noqa: F821
+    knowledge_item: Mapped[KnowledgeItem] = relationship("KnowledgeItem")
 
     def __repr__(self) -> str:
         return (

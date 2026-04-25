@@ -5,15 +5,15 @@ from pydantic import BaseModel, model_validator
 
 
 class PermissionLevel(str, Enum):
-    VIEW     = "view"
+    VIEW = "view"
     DOWNLOAD = "download"
-    EDIT     = "edit"
+    EDIT = "edit"
 
 
 class ShareTarget(str, Enum):
-    USER       = "user"
+    USER = "user"
     DEPARTMENT = "department"
-    PUBLIC     = "public"  # shareable link, no auth required
+    PUBLIC = "public"  # shareable link, no auth required
 
 
 class CreateShareRequest(BaseModel):
@@ -24,7 +24,7 @@ class CreateShareRequest(BaseModel):
     target_user_id: int | None = None
     target_department: str | None = None
     # public link options
-    expires_hours: int | None = 72   # None → no expiry
+    expires_hours: int | None = 72  # None → no expiry
 
     @model_validator(mode="after")
     def check_target_fields(self):
@@ -42,8 +42,8 @@ class ShareResponse(BaseModel):
     shared_to_user_id: int | None
     shared_to_department: str | None
     permission: str
-    token: str | None        # present for public shares
-    public_url: str | None   # constructed by router
+    token: str | None  # present for public shares
+    public_url: str | None  # constructed by router
     expires_at: datetime | None
     created_at: datetime
     # Soft-delete metadata — `is_deleted` is redundant with `deleted_at`

@@ -16,9 +16,10 @@ the recipient is online. Email nudges are intentionally *not* wired here
 yet — they land when #87's mailer is on main, at which point the worker
 already has a mailer reference and we can revisit.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +29,6 @@ from app.models.notification import NotificationType
 from app.models.restore import ArchiveRestoreRequest, RestoreStatus
 from app.models.user import User, UserRole
 from app.services.notify import dispatch
-
 
 # Roles allowed to review (approve/reject) a restore request.
 REVIEWER_ROLES: tuple[UserRole, ...] = (UserRole.ADMIN, UserRole.KM_OPS)
@@ -83,10 +83,12 @@ async def submit_request(
     # read-check-then-write — fine here because the request cadence is
     # human-scale (no hot contention), and a duplicate is a harmless 409.
     existing = await db.execute(
-        select(ArchiveRestoreRequest.id).where(
+        select(ArchiveRestoreRequest.id)
+        .where(
             ArchiveRestoreRequest.knowledge_item_id == item.id,
             ArchiveRestoreRequest.status == RestoreStatus.PENDING,
-        ).limit(1)
+        )
+        .limit(1)
     )
     if existing.scalar_one_or_none() is not None:
         raise RestoreError(
@@ -152,7 +154,7 @@ async def _finalize_review(
 
     req.status = RestoreStatus.APPROVED if approve else RestoreStatus.REJECTED
     req.reviewed_by_id = reviewer.id
-    req.reviewed_at = datetime.now(timezone.utc)
+    req.reviewed_at = datetime.now(UTC)
     req.review_note = note
 
     return req
@@ -168,7 +170,11 @@ async def approve_request(
 ) -> ArchiveRestoreRequest:
     """Approve: un-archive the item and notify the submitter."""
     await _finalize_review(
-        db, req=req, reviewer=reviewer, approve=True, note=note,
+        db,
+        req=req,
+        reviewer=reviewer,
+        approve=True,
+        note=note,
     )
 
     # Un-archive. Clear archive_reminder_sent_at so the auto-archive
@@ -205,7 +211,11 @@ async def reject_request(
 ) -> ArchiveRestoreRequest:
     """Reject: record the reason and notify the submitter. Item stays archived."""
     await _finalize_review(
-        db, req=req, reviewer=reviewer, approve=False, note=note,
+        db,
+        req=req,
+        reviewer=reviewer,
+        approve=False,
+        note=note,
     )
 
     await dispatch(

@@ -9,11 +9,11 @@ Endpoints:
 
 All review endpoints require KM_OPS or ADMIN role.
 """
-from fastapi import APIRouter, HTTPException, Query, Request, status
 
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from slowapi.util import get_remote_address
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.core.rate_limit import limiter
 from app.models.user import UserRole
 from app.services.kg_review import (

@@ -1,15 +1,15 @@
 """Sharing permission service."""
+
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import KnowledgeItem
-from app.models.sharing import SharingRecord, SharePermission
+from app.models.sharing import SharePermission, SharingRecord
 from app.models.user import User
 from app.schemas.sharing import CreateShareRequest, ShareTarget
-
 
 # How long a soft-deleted share stays recoverable before the purge task
 # hard-deletes it. Single source of truth — the Celery task and the router
@@ -29,7 +29,9 @@ async def create_share(
     shared_by: User,
 ) -> SharingRecord:
     # Verify knowledge item exists
-    result = await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == req.knowledge_item_id))
+    result = await db.execute(
+        select(KnowledgeItem).where(KnowledgeItem.id == req.knowledge_item_id)
+    )
     item: KnowledgeItem | None = result.scalar_one_or_none()
     if not item:
         raise SharingError("知识条目不存在", "NOT_FOUND")
@@ -46,13 +48,15 @@ async def create_share(
     if req.target == ShareTarget.PUBLIC:
         token = secrets.token_urlsafe(24)
         if req.expires_hours is not None:
-            expires_at = datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)
+            expires_at = datetime.now(UTC) + timedelta(hours=req.expires_hours)
 
     record = SharingRecord(
         knowledge_item_id=req.knowledge_item_id,
         shared_by_id=shared_by.id,
         shared_to_user_id=req.target_user_id if req.target == ShareTarget.USER else None,
-        shared_to_department=req.target_department if req.target == ShareTarget.DEPARTMENT else None,
+        shared_to_department=req.target_department
+        if req.target == ShareTarget.DEPARTMENT
+        else None,
         permission=SharePermission(req.permission.value),
         token=token,
         expires_at=expires_at,
@@ -73,7 +77,7 @@ async def resolve_public_token(db: AsyncSession, token: str) -> SharingRecord:
     record: SharingRecord | None = result.scalar_one_or_none()
     if not record:
         raise SharingError("分享链接无效", "INVALID_TOKEN")
-    if record.expires_at and record.expires_at < datetime.now(timezone.utc):
+    if record.expires_at and record.expires_at < datetime.now(UTC):
         raise SharingError("分享链接已过期", "TOKEN_EXPIRED")
     return record
 
@@ -85,7 +89,7 @@ async def soft_delete_share(db: AsyncSession, record: SharingRecord) -> SharingR
     clock, which would extend the user's recovery window unfairly.
     """
     if record.deleted_at is None:
-        record.deleted_at = datetime.now(timezone.utc)
+        record.deleted_at = datetime.now(UTC)
         await db.flush()
     return record
 
@@ -99,7 +103,7 @@ async def restore_share(db: AsyncSession, record: SharingRecord) -> SharingRecor
     """
     if record.deleted_at is None:
         return record  # already active, no-op
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=RETENTION_DAYS)
     if record.deleted_at < cutoff:
         raise SharingError("恢复窗口已过期", "RESTORE_WINDOW_EXPIRED")
     record.deleted_at = None
@@ -119,11 +123,11 @@ async def check_user_access(
     result = await db.execute(
         select(SharingRecord).where(
             SharingRecord.knowledge_item_id == knowledge_item_id,
-            SharingRecord.deleted_at.is_(None),   # revoked shares never grant access
+            SharingRecord.deleted_at.is_(None),  # revoked shares never grant access
             (
                 (SharingRecord.shared_to_user_id == user.id)
                 | (SharingRecord.shared_to_department == user.department)
-                | (SharingRecord.token.is_not(None))   # public shares count
+                | (SharingRecord.token.is_not(None))  # public shares count
             ),
         )
     )
@@ -132,7 +136,7 @@ async def check_user_access(
     for rec in records:
         if PERM_RANK.get(rec.permission, 0) >= PERM_RANK[required]:
             # Check expiry on public shares
-            if rec.token and rec.expires_at and rec.expires_at < datetime.now(timezone.utc):
+            if rec.token and rec.expires_at and rec.expires_at < datetime.now(UTC):
                 continue
             return True
 

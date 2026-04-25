@@ -11,6 +11,7 @@ We keep DB work in a sync SQLAlchemy session (simpler inside Celery workers)
 and run the async Tika call via asyncio.run — Celery workers spawn fresh
 processes, so there's no event-loop conflict.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,8 +27,7 @@ from app.models.document import DocumentChunk, DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
 from app.services import storage
 from app.services.chunker import chunk_text
-from app.services.tika_client import tika, TikaError
-
+from app.services.tika_client import tika
 
 log = logging.getLogger(__name__)
 
@@ -129,10 +129,15 @@ def _upsert_record(db: Session, document_id: int, status: ParseStatus) -> Docume
 # Tika returns a huge metadata dict with a lot of noise. Keep what's useful
 # to the UI (title, author, pages, content-type) and drop the rest.
 _META_KEEP = {
-    "dc:title", "title",
-    "dc:creator", "Author", "meta:author",
-    "Content-Type", "content-type",
-    "xmpTPg:NPages", "meta:page-count",
+    "dc:title",
+    "title",
+    "dc:creator",
+    "Author",
+    "meta:author",
+    "Content-Type",
+    "content-type",
+    "xmpTPg:NPages",
+    "meta:page-count",
     "Content-Length",
 }
 

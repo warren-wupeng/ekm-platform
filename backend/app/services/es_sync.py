@@ -4,10 +4,11 @@ Mirrors the write path of es_client.ESClient without the async machinery.
 Celery prefork workers live in plain sync processes — using the sync ES
 client avoids asyncio.run overhead per task.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk

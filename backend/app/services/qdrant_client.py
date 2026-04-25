@@ -11,18 +11,23 @@ overwrites its prior points without an explicit delete. Up to 1M chunks
 per document is more than anyone will ever upload; if we hit that, we
 migrate to UUIDs.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
-    Distance, PointStruct, VectorParams, Filter, FieldCondition, MatchValue,
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
 )
 
 from app.core.config import settings
-
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +107,15 @@ def delete_document(doc_id: int):
     )
 
 
+def delete_points(point_ids: Iterable[int]) -> None:
+    c = _client()
+    c.delete(
+        collection_name=settings.QDRANT_COLLECTION,
+        points_selector=list(point_ids),
+        wait=True,
+    )
+
+
 def search(query_vector: list[float], top_k: int | None = None) -> list[dict]:
     c = _client()
     hits = c.search(
@@ -113,9 +127,9 @@ def search(query_vector: list[float], top_k: int | None = None) -> list[dict]:
     return [
         {
             "score": h.score,
-            "document_id": h.payload.get("document_id"),
-            "chunk_index": h.payload.get("chunk_index"),
-            "content": h.payload.get("content"),
+            "document_id": (h.payload or {}).get("document_id"),
+            "chunk_index": (h.payload or {}).get("chunk_index"),
+            "content": (h.payload or {}).get("content"),
         }
         for h in hits
     ]

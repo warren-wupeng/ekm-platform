@@ -1,4 +1,5 @@
 """File upload service — stores files via the storage abstraction (S3 or local)."""
+
 import asyncio
 import mimetypes
 import uuid
@@ -6,17 +7,16 @@ from pathlib import Path
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.models.knowledge import FileType, KnowledgeItem
-from app.services import storage
 from app.schemas.files import (
     ALLOWED_EXTENSIONS,
     MAX_BATCH_MB,
     MAX_SINGLE_MB,
-    FileUploadedResponse,
     BatchUploadResponse,
+    FileUploadedResponse,
 )
+from app.services import storage
 
 MB = 1024 * 1024
 
@@ -48,12 +48,17 @@ class FileUploadError(Exception):
 async def _read_and_validate(file: UploadFile) -> bytes:
     ext = _ext(file.filename or "")
     if ext not in ALLOWED_EXTENSIONS:
-        raise FileUploadError(file.filename or "", f"不支持的格式 .{ext}（支持：{', '.join(sorted(ALLOWED_EXTENSIONS))}）")
+        raise FileUploadError(
+            file.filename or "",
+            f"不支持的格式 .{ext}（支持：{', '.join(sorted(ALLOWED_EXTENSIONS))}）",
+        )
 
     content = await file.read()
     size_mb = len(content) / MB
     if size_mb > MAX_SINGLE_MB:
-        raise FileUploadError(file.filename or "", f"文件超过单文件限制 {MAX_SINGLE_MB} MB（当前 {size_mb:.1f} MB）")
+        raise FileUploadError(
+            file.filename or "", f"文件超过单文件限制 {MAX_SINGLE_MB} MB（当前 {size_mb:.1f} MB）"
+        )
 
     return content
 
@@ -78,7 +83,11 @@ async def upload_single(
 ) -> KnowledgeItem:
     content = await _read_and_validate(file)
     rel_path = await _save(content, file.filename or "upload")
-    mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+    mime = (
+        file.content_type
+        or mimetypes.guess_type(file.filename or "")[0]
+        or "application/octet-stream"
+    )
     ext = _ext(file.filename or "")
 
     item = KnowledgeItem(
@@ -109,7 +118,9 @@ async def upload_batch(
     for file in files:
         # Rolling batch size check
         if (total_size / MB) >= MAX_BATCH_MB:
-            failed.append({"name": file.filename, "reason": f"批量上传总量超过 {MAX_BATCH_MB} MB 限制"})
+            failed.append(
+                {"name": file.filename, "reason": f"批量上传总量超过 {MAX_BATCH_MB} MB 限制"}
+            )
             continue
         try:
             item = await upload_single(db, file, uploader_id, category_id)

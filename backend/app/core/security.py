@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
-from jose import JWTError, jwt
+from jose import jwt
 
 from app.core.config import settings
 
@@ -18,8 +18,8 @@ def _make_token(sub: str, kind: str, expires_delta: timedelta) -> str:
     payload = {
         "sub": sub,
         "kind": kind,
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + expires_delta,
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + expires_delta,
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

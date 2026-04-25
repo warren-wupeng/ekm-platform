@@ -15,6 +15,7 @@ semantics it can issue a new feedback record; the admin view shows history.
 Admins only see their own tenant's data once RBAC scopes land; for now any
 user with UserRole.ADMIN can read the whole table.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -24,13 +25,12 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.feedback import ChatFeedback, FeedbackRating
 from app.models.user import UserRole
 
-
 # Two routers so we can mount /chat/...feedback and /admin/feedback cleanly.
-chat_feedback_router  = APIRouter(prefix="/api/v1/chat",  tags=["chat-feedback"])
+chat_feedback_router = APIRouter(prefix="/api/v1/chat", tags=["chat-feedback"])
 admin_feedback_router = APIRouter(prefix="/api/v1/admin", tags=["admin-feedback"])
 
 
@@ -55,8 +55,8 @@ def _feedback_dict(f: ChatFeedback) -> dict[str, Any]:
         "user_id": f.user_id,
         "rating": f.rating.value,
         "comment": f.comment,
-        "query":   f.query_snapshot,
-        "answer":  f.answer_snapshot,
+        "query": f.query_snapshot,
+        "answer": f.answer_snapshot,
         "sources": f.sources_snapshot,
         "created_at": f.created_at.isoformat() if f.created_at else None,
     }
@@ -106,27 +106,32 @@ async def list_feedback(
         raise HTTPException(status_code=403, detail="admin only")
 
     conds = []
-    if rating is not None:     conds.append(ChatFeedback.rating == rating)
-    if session_id is not None: conds.append(ChatFeedback.session_id == session_id)
-    if user_id is not None:    conds.append(ChatFeedback.user_id == user_id)
-    if since is not None:      conds.append(ChatFeedback.created_at >= since)
-    if until is not None:      conds.append(ChatFeedback.created_at <= until)
+    if rating is not None:
+        conds.append(ChatFeedback.rating == rating)
+    if session_id is not None:
+        conds.append(ChatFeedback.session_id == session_id)
+    if user_id is not None:
+        conds.append(ChatFeedback.user_id == user_id)
+    if since is not None:
+        conds.append(ChatFeedback.created_at >= since)
+    if until is not None:
+        conds.append(ChatFeedback.created_at <= until)
     where = and_(*conds) if conds else None
 
     count_q = select(func.count()).select_from(ChatFeedback)
-    rows_q  = select(ChatFeedback).order_by(ChatFeedback.created_at.desc())
+    rows_q = select(ChatFeedback).order_by(ChatFeedback.created_at.desc())
     if where is not None:
         count_q = count_q.where(where)
-        rows_q  = rows_q.where(where)
+        rows_q = rows_q.where(where)
 
     total = (await db.execute(count_q)).scalar_one()
     offset = (page - 1) * page_size
-    rows = (await db.execute(
-        rows_q.offset(offset).limit(page_size)
-    )).scalars().all()
+    rows = (await db.execute(rows_q.offset(offset).limit(page_size))).scalars().all()
 
     return {
-        "page": page, "page_size": page_size, "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
         "feedback": [_feedback_dict(r) for r in rows],
     }
 
@@ -137,17 +142,16 @@ async def feedback_stats(db: DB, user: CurrentUser):
     if user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="admin only")
 
-    rows = (await db.execute(
-        select(ChatFeedback.rating, func.count())
-        .group_by(ChatFeedback.rating)
-    )).all()
+    rows = (
+        await db.execute(select(ChatFeedback.rating, func.count()).group_by(ChatFeedback.rating))
+    ).all()
     by_rating = {r.value: 0 for r in FeedbackRating}
     for rating_val, c in rows:
         by_rating[rating_val.value] = c
     total = sum(by_rating.values())
     return {
         "total": total,
-        "up":   by_rating["up"],
+        "up": by_rating["up"],
         "down": by_rating["down"],
         # Simple ratio; guard against 0/0 so the frontend doesn't have to.
         "up_ratio": (by_rating["up"] / total) if total else None,

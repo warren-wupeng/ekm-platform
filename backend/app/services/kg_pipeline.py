@@ -46,11 +46,13 @@ Design choices:
    (retry), not silently drop the document from search / vector
    indexes.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -82,6 +84,7 @@ _PIPELINE_TYPES = {FileType.DOCUMENT}
 
 # ── Public entrypoint ────────────────────────────────────────────────
 
+
 def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, Any]:
     """Execute the full KG pipeline for one document.
 
@@ -98,7 +101,8 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
             raise NonRetryableError(f"KnowledgeItem {document_id} not found")
         if item.file_type not in _PIPELINE_TYPES:
             _mark(
-                db, item,
+                db,
+                item,
                 status=KGPipelineStatus.SKIPPED,
                 stage="parse",
                 error=None,
@@ -114,7 +118,8 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
             }
         if not item.file_path:
             _mark(
-                db, item,
+                db,
+                item,
                 status=KGPipelineStatus.FAILED,
                 stage="parse",
                 error="document has no file_path",
@@ -128,7 +133,8 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
 
         # Flip to RUNNING + stamp start time + task id.
         _mark(
-            db, item,
+            db,
+            item,
             status=KGPipelineStatus.RUNNING,
             stage="parse",
             error=None,
@@ -145,21 +151,18 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
 
     summary: dict[str, Any] = {"document_id": document_id}
 
-    _run_stage(document_id, "parse", task_id, lambda: parse_and_persist(document_id),
-               summary)
-    _run_stage(document_id, "index", task_id, lambda: _stage_index(document_id),
-               summary)
-    _run_stage(document_id, "vectorize", task_id, lambda: _stage_vectorize(document_id),
-               summary)
-    _run_stage(document_id, "extract", task_id, lambda: _stage_extract(document_id),
-               summary)
+    _run_stage(document_id, "parse", task_id, lambda: parse_and_persist(document_id), summary)
+    _run_stage(document_id, "index", task_id, lambda: _stage_index(document_id), summary)
+    _run_stage(document_id, "vectorize", task_id, lambda: _stage_vectorize(document_id), summary)
+    _run_stage(document_id, "extract", task_id, lambda: _stage_extract(document_id), summary)
 
     # All stages succeeded — mark DONE.
     with SyncSession() as db:
         item = db.get(KnowledgeItem, document_id)
         if item is not None:
             _mark(
-                db, item,
+                db,
+                item,
                 status=KGPipelineStatus.DONE,
                 stage="extract",
                 error=None,
@@ -174,6 +177,7 @@ def run_pipeline(document_id: int, *, task_id: str | None = None) -> dict[str, A
 
 
 # ── Internals ────────────────────────────────────────────────────────
+
 
 def _run_stage(
     document_id: int,
@@ -197,13 +201,14 @@ def _run_stage(
 
     try:
         result = work()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.exception("kg_pipeline stage=%s doc=%s failed", stage, document_id)
         with SyncSession() as db:
             item = db.get(KnowledgeItem, document_id)
             if item is not None:
                 _mark(
-                    db, item,
+                    db,
+                    item,
                     status=KGPipelineStatus.FAILED,
                     stage=stage,
                     error=_truncate(str(exc), 2000),
@@ -236,29 +241,38 @@ def _stage_index(document_id: int) -> dict[str, Any]:
             .order_by(DocumentChunk.chunk_index)
         ).all()
 
-        tag_names = db.execute(
-            select(Tag.name)
-            .join(TagAssignment, TagAssignment.tag_id == Tag.id)
-            .where(TagAssignment.knowledge_item_id == document_id)
-        ).scalars().all()
+        tag_names = (
+            db.execute(
+                select(Tag.name)
+                .join(TagAssignment, TagAssignment.tag_id == Tag.id)
+                .where(TagAssignment.knowledge_item_id == document_id)
+            )
+            .scalars()
+            .all()
+        )
 
         indexed = bulk_index_chunks(
-            document_id, [(idx, content) for idx, content in chunks],
+            document_id,
+            [(idx, content) for idx, content in chunks],
         )
-        index_item(document_id, {
-            "id": document_id,
-            "name": item.name,
-            "description": item.description,
-            "file_type": (
-                item.file_type.value
-                if hasattr(item.file_type, "value") else str(item.file_type)
-            ),
-            "mime_type": item.mime_type,
-            "uploader_id": item.uploader_id,
-            "category_id": item.category_id,
-            "tags": list(tag_names),
-            "created_at": item.created_at.isoformat() if item.created_at else None,
-        })
+        index_item(
+            document_id,
+            {
+                "id": document_id,
+                "name": item.name,
+                "description": item.description,
+                "file_type": (
+                    item.file_type.value
+                    if hasattr(item.file_type, "value")
+                    else str(item.file_type)
+                ),
+                "mime_type": item.mime_type,
+                "uploader_id": item.uploader_id,
+                "category_id": item.category_id,
+                "tags": list(tag_names),
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            },
+        )
 
     return {"indexed_chunks": indexed}
 
@@ -323,7 +337,7 @@ def _mark(
     item.kg_error = error
     if task_id is not None:
         item.kg_task_id = task_id
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if started:
         item.kg_started_at = now
     if finished:

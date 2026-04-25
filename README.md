@@ -33,6 +33,23 @@ curl localhost:8000/health
 - 本地开发手动执行：`cd backend && alembic upgrade head`
 - 新增 / 变更表时：`alembic revision -m "描述"` 后手写 upgrade/downgrade
 
+### 后端本地开发检查
+
+```bash
+cd backend
+python -m pip install -r requirements-dev.txt
+
+# lint / format
+python -m ruff check app
+python -m ruff format app
+
+# narrow type check
+python -m mypy app/services app/routers app/core
+
+# tests
+pytest
+```
+
 ## 文档
 
 详见 [EKM 开发计划](docs/plan.md)

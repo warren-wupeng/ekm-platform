@@ -14,8 +14,10 @@ Endpoints:
 an item. Destructive "replace" is opt-in via POST /knowledge/{id}/tags with
 `mode="replace"`.
 """
+
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -23,12 +25,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-import logging
-
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.knowledge import KnowledgeItem, Tag, TagAssignment
 from app.services.es_client import es
-
 
 _log = logging.getLogger(__name__)
 
@@ -36,23 +35,26 @@ _log = logging.getLogger(__name__)
 async def _es_index_tag(t: Tag) -> None:
     """Mirror a Tag into ekm_tags for unified search (#42). Best-effort."""
     try:
-        await es.index_tag(tag_id=t.id, body={
-            "id": t.id,
-            "kind": "tag",
-            "name": t.name,
-            "description": None,
-            "slug": None,
-            "color": t.color,
-            "usage_count": t.usage_count,
-        })
-    except Exception as exc:  # noqa: BLE001
+        await es.index_tag(
+            tag_id=t.id,
+            body={
+                "id": t.id,
+                "kind": "tag",
+                "name": t.name,
+                "description": None,
+                "slug": None,
+                "color": t.color,
+                "usage_count": t.usage_count,
+            },
+        )
+    except Exception as exc:
         _log.warning("ES index_tag failed id=%s: %s", t.id, exc)
 
 
 async def _es_delete_tag(tag_id: int) -> None:
     try:
         await es.delete_tag(tag_id=tag_id, kind="tag")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning("ES delete_tag failed id=%s: %s", tag_id, exc)
 
 
@@ -124,11 +126,12 @@ async def create_tag(payload: TagCreate, db: DB, user: CurrentUser):
 
 @router.patch("/tags/{tag_id}")
 async def update_tag(
-    tag_id: int, payload: TagUpdate, db: DB, user: CurrentUser,
+    tag_id: int,
+    payload: TagUpdate,
+    db: DB,
+    user: CurrentUser,
 ):
-    tag = (await db.execute(
-        select(Tag).where(Tag.id == tag_id)
-    )).scalar_one_or_none()
+    tag = (await db.execute(select(Tag).where(Tag.id == tag_id))).scalar_one_or_none()
     if tag is None:
         raise HTTPException(status_code=404, detail="tag not found")
     data = payload.model_dump(exclude_unset=True)
@@ -146,9 +149,7 @@ async def update_tag(
 
 @router.delete("/tags/{tag_id}", status_code=204)
 async def delete_tag(tag_id: int, db: DB, user: CurrentUser):
-    tag = (await db.execute(
-        select(Tag).where(Tag.id == tag_id)
-    )).scalar_one_or_none()
+    tag = (await db.execute(select(Tag).where(Tag.id == tag_id))).scalar_one_or_none()
     if tag is None:
         raise HTTPException(status_code=404, detail="tag not found")
     # CASCADE on tag_assignments.tag_id cleans up assignments automatically.
@@ -161,13 +162,21 @@ async def delete_tag(tag_id: int, db: DB, user: CurrentUser):
 # ─── Bulk bind ──────────────────────────────────────────────────────────────
 @router.post("/tags/bulk-bind")
 async def bulk_bind_tags(
-    payload: BulkBindRequest, db: DB, user: CurrentUser,
+    payload: BulkBindRequest,
+    db: DB,
+    user: CurrentUser,
 ):
     """Add tags to multiple items in one call. Idempotent (non-destructive)."""
     # Verify all items exist up-front so we don't partially-commit bindings.
-    found_items = (await db.execute(
-        select(KnowledgeItem.id).where(KnowledgeItem.id.in_(payload.knowledge_item_ids))
-    )).scalars().all()
+    found_items = (
+        (
+            await db.execute(
+                select(KnowledgeItem.id).where(KnowledgeItem.id.in_(payload.knowledge_item_ids))
+            )
+        )
+        .scalars()
+        .all()
+    )
     missing = set(payload.knowledge_item_ids) - set(found_items)
     if missing:
         raise HTTPException(
@@ -176,9 +185,9 @@ async def bulk_bind_tags(
         )
 
     # Resolve or create tags.
-    existing_rows = (await db.execute(
-        select(Tag).where(Tag.name.in_(payload.tag_names))
-    )).scalars().all()
+    existing_rows = (
+        (await db.execute(select(Tag).where(Tag.name.in_(payload.tag_names)))).scalars().all()
+    )
     existing = {t.name: t for t in existing_rows}
 
     created: list[Tag] = []
@@ -201,12 +210,16 @@ async def bulk_bind_tags(
     # INSERT the new ones so bulk-bind is a true merge.
     already = {
         (r.knowledge_item_id, r.tag_id)
-        for r in (await db.execute(
-            select(TagAssignment).where(
-                TagAssignment.knowledge_item_id.in_(payload.knowledge_item_ids),
-                TagAssignment.tag_id.in_(tag_ids),
+        for r in (
+            await db.execute(
+                select(TagAssignment).where(
+                    TagAssignment.knowledge_item_id.in_(payload.knowledge_item_ids),
+                    TagAssignment.tag_id.in_(tag_ids),
+                )
             )
-        )).scalars().all()
+        )
+        .scalars()
+        .all()
     }
 
     new_assignments: list[TagAssignment] = []
@@ -214,9 +227,12 @@ async def bulk_bind_tags(
         for tag_id in tag_ids:
             if (item_id, tag_id) in already:
                 continue
-            new_assignments.append(TagAssignment(
-                knowledge_item_id=item_id, tag_id=tag_id,
-            ))
+            new_assignments.append(
+                TagAssignment(
+                    knowledge_item_id=item_id,
+                    tag_id=tag_id,
+                )
+            )
     if new_assignments:
         db.add_all(new_assignments)
         # Bump usage_count for tags that gained new bindings. Could do this
@@ -225,9 +241,11 @@ async def bulk_bind_tags(
         for a in new_assignments:
             gained_per_tag[a.tag_id] = gained_per_tag.get(a.tag_id, 0) + 1
         if gained_per_tag:
-            tags = (await db.execute(
-                select(Tag).where(Tag.id.in_(gained_per_tag.keys()))
-            )).scalars().all()
+            tags = (
+                (await db.execute(select(Tag).where(Tag.id.in_(gained_per_tag.keys()))))
+                .scalars()
+                .all()
+            )
             for t in tags:
                 t.usage_count = (t.usage_count or 0) + gained_per_tag[t.id]
 
@@ -235,43 +253,54 @@ async def bulk_bind_tags(
     return {
         "items_touched": len(payload.knowledge_item_ids),
         "tags_resolved": len(payload.tag_names),
-        "new_bindings":  len(new_assignments),
-        "tags_created":  [_tag_dict(t) for t in created],
+        "new_bindings": len(new_assignments),
+        "tags_created": [_tag_dict(t) for t in created],
     }
 
 
 # ─── Per-item tag management ────────────────────────────────────────────────
 @router.get("/knowledge/{item_id}/tags")
 async def list_item_tags(item_id: int, db: DB, user: CurrentUser):
-    item = (await db.execute(
-        select(KnowledgeItem.id).where(KnowledgeItem.id == item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem.id).where(KnowledgeItem.id == item_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="item not found")
-    rows = (await db.execute(
-        select(Tag)
-        .join(TagAssignment, TagAssignment.tag_id == Tag.id)
-        .where(TagAssignment.knowledge_item_id == item_id)
-        .order_by(Tag.name)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Tag)
+                .join(TagAssignment, TagAssignment.tag_id == Tag.id)
+                .where(TagAssignment.knowledge_item_id == item_id)
+                .order_by(Tag.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {"tags": [_tag_dict(t) for t in rows]}
 
 
 @router.post("/knowledge/{item_id}/tags")
 async def set_item_tags(
-    item_id: int, payload: ItemTagsRequest, db: DB, user: CurrentUser,
+    item_id: int,
+    payload: ItemTagsRequest,
+    db: DB,
+    user: CurrentUser,
 ):
     """Set (add or replace) tags on a single knowledge item."""
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == item_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="item not found")
 
     # Resolve / create tags.
-    existing_rows = (await db.execute(
-        select(Tag).where(Tag.name.in_(payload.tags))
-    )).scalars().all() if payload.tags else []
+    existing_rows = (
+        (await db.execute(select(Tag).where(Tag.name.in_(payload.tags)))).scalars().all()
+        if payload.tags
+        else []
+    )
     existing = {t.name: t for t in existing_rows}
 
     to_create = [n for n in payload.tags if n not in existing]
@@ -284,9 +313,11 @@ async def set_item_tags(
 
     desired_tag_ids = {existing[n].id for n in payload.tags}
 
-    current_assigns = (await db.execute(
-        select(TagAssignment).where(TagAssignment.knowledge_item_id == item_id)
-    )).scalars().all()
+    current_assigns = (
+        (await db.execute(select(TagAssignment).where(TagAssignment.knowledge_item_id == item_id)))
+        .scalars()
+        .all()
+    )
     current_tag_ids = {a.tag_id: a for a in current_assigns}
 
     # Add missing bindings.
@@ -312,25 +343,36 @@ async def set_item_tags(
 
     await db.commit()
     # Return the final tag list so callers can update UI in one round-trip.
-    rows = (await db.execute(
-        select(Tag)
-        .join(TagAssignment, TagAssignment.tag_id == Tag.id)
-        .where(TagAssignment.knowledge_item_id == item_id)
-        .order_by(Tag.name)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Tag)
+                .join(TagAssignment, TagAssignment.tag_id == Tag.id)
+                .where(TagAssignment.knowledge_item_id == item_id)
+                .order_by(Tag.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {"tags": [_tag_dict(t) for t in rows]}
 
 
 @router.delete("/knowledge/{item_id}/tags/{tag_id}", status_code=204)
 async def remove_item_tag(
-    item_id: int, tag_id: int, db: DB, user: CurrentUser,
+    item_id: int,
+    tag_id: int,
+    db: DB,
+    user: CurrentUser,
 ):
-    assign = (await db.execute(
-        select(TagAssignment).where(
-            TagAssignment.knowledge_item_id == item_id,
-            TagAssignment.tag_id == tag_id,
+    assign = (
+        await db.execute(
+            select(TagAssignment).where(
+                TagAssignment.knowledge_item_id == item_id,
+                TagAssignment.tag_id == tag_id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if assign is None:
         raise HTTPException(status_code=404, detail="tag not assigned to item")
     await db.delete(assign)

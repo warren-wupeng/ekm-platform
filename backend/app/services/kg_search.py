@@ -3,6 +3,7 @@
 Extracted from routers/kg.py so they can be unit-tested without pulling
 in FastAPI's dependency chain (auth → jose → …).
 """
+
 import re
 
 # Lucene special characters that must be escaped before passing to

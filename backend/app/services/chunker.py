@@ -7,13 +7,14 @@ without dragging in tiktoken/langchain at this stage.
 Char-count is a cheap approximation of token-count; we'll swap in a real
 tokenizer alongside the embedder in #22.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from itertools import pairwise
 
-
-DEFAULT_TARGET_CHARS = 1200   # ~= 250-350 tokens for mixed CJK/EN
+DEFAULT_TARGET_CHARS = 1200  # ~= 250-350 tokens for mixed CJK/EN
 DEFAULT_OVERLAP_CHARS = 150
 
 
@@ -77,7 +78,7 @@ def chunk_text(
 
     # Stitch overlap: prepend tail of previous chunk.
     with_overlap: list[str] = [chunks[0]]
-    for prev, cur in zip(chunks, chunks[1:]):
+    for prev, cur in pairwise(chunks):
         tail = prev[-overlap_chars:]
         with_overlap.append(f"{tail}\n\n{cur}")
     return [Chunk(i, c) for i, c in enumerate(with_overlap)]

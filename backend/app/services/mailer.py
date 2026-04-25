@@ -9,6 +9,7 @@ record; email is a nudge.
 Both sync + async entry points exist so workers (sync Celery context) and
 routers (async FastAPI context) can both call in without ceremony.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -57,7 +58,7 @@ def send_sync(
                 s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             s.send_message(msg)
         return True
-    except Exception as exc:  # noqa: BLE001 — email is best-effort
+    except Exception as exc:
         log.warning("mailer send failed to=%s: %s", to, exc)
         return False
 
@@ -70,6 +71,4 @@ async def send(
     html: str | None = None,
 ) -> bool:
     """Async wrapper — offloads smtplib onto a thread."""
-    return await asyncio.to_thread(
-        send_sync, to=to, subject=subject, body=body, html=html
-    )
+    return await asyncio.to_thread(send_sync, to=to, subject=subject, body=body, html=html)

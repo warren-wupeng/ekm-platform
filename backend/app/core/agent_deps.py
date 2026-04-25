@@ -23,11 +23,12 @@ Design notes:
 * Scope check is substring-free string equality. If we need hierarchy
   later (e.g. `kg:*`) we'll extend here, not at call sites.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -39,16 +40,17 @@ from app.core.agent_security import extract_prefix, verify_agent_token
 from app.core.database import get_db
 from app.models.agent import AgentToken
 
-
 log = logging.getLogger(__name__)
 
 
 # Known scopes. New entries here must be documented in the API docs.
-KNOWN_SCOPES: frozenset[str] = frozenset({
-    "knowledge:read",   # vector + ES search
-    "kg:read",          # Neo4j read (query, path)
-    "kg:write",         # KG node upsert
-})
+KNOWN_SCOPES: frozenset[str] = frozenset(
+    {
+        "knowledge:read",  # vector + ES search
+        "kg:read",  # Neo4j read (query, path)
+        "kg:write",  # KG node upsert
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ class AgentCaller:
     isn't a session-attached entity — side-effects like auditing should
     go through a fresh query, not this object.
     """
+
     token_id: int
     name: str
     scopes: frozenset[str]
@@ -104,27 +107,31 @@ async def _resolve_agent(
     if row is None:
         log.warning(
             "agent_auth_failed reason=unknown_or_inactive_prefix prefix=%s client=%s",
-            prefix, client_host,
+            prefix,
+            client_host,
         )
         raise _unauthorized("Invalid Agent token")
 
-    if row.expires_at is not None and row.expires_at < datetime.now(timezone.utc):
+    if row.expires_at is not None and row.expires_at < datetime.now(UTC):
         log.warning(
             "agent_auth_failed reason=expired token_id=%d prefix=%s client=%s",
-            row.id, prefix, client_host,
+            row.id,
+            prefix,
+            client_host,
         )
         raise _unauthorized("Agent token expired")
 
     if not verify_agent_token(plaintext, row.token_hash):
         log.warning(
             "agent_auth_failed reason=hash_mismatch prefix=%s client=%s",
-            prefix, client_host,
+            prefix,
+            client_host,
         )
         raise _unauthorized("Invalid Agent token")
 
     # Bump last_used_at. Part of the same AsyncSession so it lands on
     # the request's commit — one fewer round-trip than a separate write.
-    row.last_used_at = datetime.now(timezone.utc)
+    row.last_used_at = datetime.now(UTC)
     await db.flush()
 
     # Validate scopes against KNOWN_SCOPES — silently drop anything
@@ -141,15 +148,11 @@ def require_agent_scope(*required: str):
     AND-combined; for OR semantics, pick one and document at the route."""
     missing_sentinel = set(required) - KNOWN_SCOPES
     if missing_sentinel:
-        raise ValueError(
-            f"require_agent_scope called with unknown scope(s): {missing_sentinel}"
-        )
+        raise ValueError(f"require_agent_scope called with unknown scope(s): {missing_sentinel}")
 
     async def _dep(
         request: Request,
-        credentials: Annotated[
-            HTTPAuthorizationCredentials | None, Depends(_bearer)
-        ],
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
         db: Annotated[AsyncSession, Depends(get_db)],
     ) -> AgentCaller:
         agent = await _resolve_agent(credentials, db, request)

@@ -15,6 +15,7 @@ Router commits the transaction once per request. Service layer (see
 `services/restore.py`) only add/flushes, so we keep the "one commit per
 HTTP call" invariant the rest of the app uses.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -22,10 +23,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.knowledge import KnowledgeItem
 from app.models.restore import ArchiveRestoreRequest, RestoreStatus
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.services.restore import (
     REVIEWER_ROLES,
     RestoreError,
@@ -42,6 +43,7 @@ router = APIRouter(
 
 # ── Schemas ───────────────────────────────────────────────────────────
 
+
 class SubmitIn(BaseModel):
     knowledge_item_id: int
     reason: str | None = Field(default=None, max_length=2000)
@@ -55,10 +57,12 @@ class ReviewIn(BaseModel):
     empty" feels like a lint, not a domain rule. Frontend can nag the
     reviewer to fill it in.
     """
+
     note: str | None = Field(default=None, max_length=2000)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def _is_reviewer(user: User) -> bool:
     return user.role in REVIEWER_ROLES
@@ -72,22 +76,23 @@ def _raise(err: RestoreError) -> None:
 
 
 async def _load_req_with_item(
-    db, req_id: int,
+    db,
+    req_id: int,
 ) -> tuple[ArchiveRestoreRequest, KnowledgeItem]:
     """Fetch request + its item in two small queries (not a join — the
     item is needed for both permission checks and the approve-side
     un-archive mutation, so load the ORM object, not a row tuple)."""
-    req = (await db.execute(
-        select(ArchiveRestoreRequest).where(ArchiveRestoreRequest.id == req_id)
-    )).scalar_one_or_none()
+    req = (
+        await db.execute(select(ArchiveRestoreRequest).where(ArchiveRestoreRequest.id == req_id))
+    ).scalar_one_or_none()
     if req is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="restore request not found",
         )
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == req.knowledge_item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == req.knowledge_item_id))
+    ).scalar_one_or_none()
     if item is None:
         # Shouldn't happen — FK is CASCADE. Treat as 404.
         raise HTTPException(
@@ -99,11 +104,12 @@ async def _load_req_with_item(
 
 # ── Routes ────────────────────────────────────────────────────────────
 
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def submit(body: SubmitIn, user: CurrentUser, db: DB) -> dict:
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == body.knowledge_item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == body.knowledge_item_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -112,7 +118,10 @@ async def submit(body: SubmitIn, user: CurrentUser, db: DB) -> dict:
 
     try:
         req = await submit_request(
-            db, submitter=user, item=item, reason=body.reason,
+            db,
+            submitter=user,
+            item=item,
+            reason=body.reason,
         )
     except RestoreError as e:
         _raise(e)
@@ -127,7 +136,9 @@ async def list_requests(
     user: CurrentUser,
     db: DB,
     status_filter: RestoreStatus | None = Query(default=None, alias="status"),
-    mine: bool = Query(default=False, description="force-filter to own requests even for reviewers"),
+    mine: bool = Query(
+        default=False, description="force-filter to own requests even for reviewers"
+    ),
 ) -> list[dict]:
     q = (
         select(ArchiveRestoreRequest)
@@ -170,7 +181,10 @@ async def read_one(req_id: int, user: CurrentUser, db: DB) -> dict:
 
 @router.post("/{req_id}/approve")
 async def approve(
-    req_id: int, body: ReviewIn, user: CurrentUser, db: DB,
+    req_id: int,
+    body: ReviewIn,
+    user: CurrentUser,
+    db: DB,
 ) -> dict:
     if not _is_reviewer(user):
         raise HTTPException(
@@ -180,7 +194,11 @@ async def approve(
     req, item = await _load_req_with_item(db, req_id)
     try:
         await approve_request(
-            db, req=req, item=item, reviewer=user, note=body.note,
+            db,
+            req=req,
+            item=item,
+            reviewer=user,
+            note=body.note,
         )
     except RestoreError as e:
         _raise(e)
@@ -191,7 +209,10 @@ async def approve(
 
 @router.post("/{req_id}/reject")
 async def reject(
-    req_id: int, body: ReviewIn, user: CurrentUser, db: DB,
+    req_id: int,
+    body: ReviewIn,
+    user: CurrentUser,
+    db: DB,
 ) -> dict:
     if not _is_reviewer(user):
         raise HTTPException(
@@ -201,7 +222,11 @@ async def reject(
     req, item = await _load_req_with_item(db, req_id)
     try:
         await reject_request(
-            db, req=req, item=item, reviewer=user, note=body.note,
+            db,
+            req=req,
+            item=item,
+            reviewer=user,
+            note=body.note,
         )
     except RestoreError as e:
         _raise(e)

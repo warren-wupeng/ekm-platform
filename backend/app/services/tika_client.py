@@ -9,6 +9,7 @@ Endpoints used:
     PUT /meta     — returns metadata as JSON
     PUT /rmeta/text — combined (one upload, returns both)
 """
+
 from __future__ import annotations
 
 import json

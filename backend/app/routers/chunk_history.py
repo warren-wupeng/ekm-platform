@@ -2,11 +2,12 @@
 
 GET /api/v1/documents/{id}/chunks/history — all chunk versions for audit.
 """
+
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.document import DocumentChunk
 from app.models.knowledge import KnowledgeItem
 from app.models.user import UserRole

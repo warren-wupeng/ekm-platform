@@ -26,13 +26,13 @@ Notes:
 * We never interpolate LIMIT via f-string; it's clamped to an int range
   then bound as a parameter too.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
 from app.models.graph_vocab import ENTITY_TYPES, RELATION_TYPES
-
 
 # Reserved label always present on nodes written via graph_sync.upsert_entity.
 _BASE_LABEL = "Entity"

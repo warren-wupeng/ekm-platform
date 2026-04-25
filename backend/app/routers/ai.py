@@ -13,30 +13,32 @@ Persistence is *not* done here: the frontend decides whether to write the
 result back as a knowledge item / version. Keeps this endpoint side-effect
 free so it can be re-tried safely.
 """
+
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator
+import logging
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.knowledge import KnowledgeItem
 from app.services.llm_client import llm
 from app.services.versioning import _current_content_text
 
-
 router = APIRouter(prefix="/api/v1", tags=["ai"])
+log = logging.getLogger(__name__)
 
 
 # ─── SSE helpers ────────────────────────────────────────────────────────────
 def _sse(event: str, data) -> bytes:
     payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
     body = "\n".join(f"data: {line}" for line in payload.split("\n"))
-    return f"event: {event}\n{body}\n\n".encode("utf-8")
+    return f"event: {event}\n{body}\n\n".encode()
 
 
 def _stream_headers() -> dict:
@@ -52,8 +54,9 @@ async def _stream_llm(messages: list[dict]) -> AsyncIterator[bytes]:
     try:
         async for delta in llm.stream(messages):
             yield _sse("delta", delta)
-    except Exception as exc:  # noqa: BLE001 — we want the frontend to see failure
-        yield _sse("error", {"message": str(exc)})
+    except Exception:
+        log.exception("AI stream failed")
+        yield _sse("error", {"message": "AI generation failed"})
     yield _sse("done", "[DONE]")
 
 
@@ -74,9 +77,9 @@ class DraftRequest(BaseModel):
 # Keeping these inline instead of a PromptLibrary abstraction — two prompts
 # don't justify the indirection. Revisit once we hit ~5 distinct tasks.
 _LENGTH_HINT = {
-    "short":  "约 80 字",
+    "short": "约 80 字",
     "medium": "约 200 字",
-    "long":   "约 500 字",
+    "long": "约 500 字",
 }
 
 # The raw content can be very large; keep what fits comfortably in a single
@@ -100,7 +103,7 @@ def _build_summary_messages(title: str, body: str, length: str) -> list[dict]:
     )
     return [
         {"role": "system", "content": system},
-        {"role": "user",   "content": user},
+        {"role": "user", "content": user},
     ]
 
 
@@ -117,7 +120,7 @@ def _build_draft_messages(topic: str, outline: str | None, style: str | None) ->
     parts.append("请直接输出草稿正文，不要额外解释。")
     return [
         {"role": "system", "content": system},
-        {"role": "user",   "content": "\n\n".join(parts)},
+        {"role": "user", "content": "\n\n".join(parts)},
     ]
 
 
@@ -129,9 +132,9 @@ async def summarize_item(
     db: DB,
     user: CurrentUser,
 ):
-    item = (await db.execute(
-        select(KnowledgeItem).where(KnowledgeItem.id == item_id)
-    )).scalar_one_or_none()
+    item = (
+        await db.execute(select(KnowledgeItem).where(KnowledgeItem.id == item_id))
+    ).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="knowledge item not found")
 
@@ -150,12 +153,15 @@ async def summarize_item(
 
     async def gen():
         # Metadata frame up front so the UI can show "summarising… (truncated)".
-        yield _sse("meta", {
-            "item_id": item_id,
-            "length": req.length,
-            "truncated": truncated,
-            "content_chars": len(text),
-        })
+        yield _sse(
+            "meta",
+            {
+                "item_id": item_id,
+                "length": req.length,
+                "truncated": truncated,
+                "content_chars": len(text),
+            },
+        )
         async for frame in _stream_llm(messages):
             yield frame
 

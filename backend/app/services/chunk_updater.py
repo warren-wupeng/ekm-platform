@@ -9,6 +9,7 @@ using content hashes, then:
 The hash-based diff avoids full re-vectorization when only a small part
 of a document changes. Content hash = sha256(text)[:16].
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -35,10 +36,11 @@ def content_hash(text: str) -> str:
 @dataclass
 class ChunkDiff:
     """Result of comparing new chunks against existing current chunks."""
-    kept: list[DocumentChunk]      # unchanged, still current
-    removed: list[DocumentChunk]   # old chunks to retire
-    added: list[Chunk]             # new chunks to insert
-    doc_version: int               # bumped version number
+
+    kept: list[DocumentChunk]  # unchanged, still current
+    removed: list[DocumentChunk]  # old chunks to retire
+    added: list[Chunk]  # new chunks to insert
+    doc_version: int  # bumped version number
 
 
 def diff_chunks(
@@ -52,14 +54,18 @@ def diff_chunks(
     Does NOT mutate DB — caller applies the diff.
     """
     # Current chunks in DB.
-    current = db.execute(
-        select(DocumentChunk)
-        .where(
-            DocumentChunk.knowledge_item_id == document_id,
-            DocumentChunk.is_current.is_(True),
+    current = (
+        db.execute(
+            select(DocumentChunk)
+            .where(
+                DocumentChunk.knowledge_item_id == document_id,
+                DocumentChunk.is_current.is_(True),
+            )
+            .order_by(DocumentChunk.chunk_index)
         )
-        .order_by(DocumentChunk.chunk_index)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # Compute max doc_version from all chunks (including retired).
     max_ver_row = db.execute(

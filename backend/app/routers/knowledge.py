@@ -5,6 +5,7 @@ Endpoints:
   GET    /api/v1/knowledge/items/{id}/file    serve raw file bytes (auth required)
   DELETE /api/v1/knowledge/items/{id}         hard-delete an item (owner/km_ops/admin)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,8 +17,8 @@ from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import CurrentUser, DB
-from app.models.knowledge import KnowledgeItem, TagAssignment, Tag
+from app.core.deps import DB, CurrentUser
+from app.models.knowledge import KnowledgeItem, TagAssignment
 from app.services import storage
 
 log = logging.getLogger(__name__)
@@ -69,12 +70,16 @@ async def list_items(
 
     # Fetch page
     rows = (
-        await db.execute(
-            base.order_by(KnowledgeItem.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                base.order_by(KnowledgeItem.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return {
         "total": total,
@@ -84,7 +89,9 @@ async def list_items(
             {
                 "id": str(item.id),
                 "name": item.name,
-                "fileType": item.file_type.value if hasattr(item.file_type, "value") else str(item.file_type),
+                "fileType": item.file_type.value
+                if hasattr(item.file_type, "value")
+                else str(item.file_type),
                 "size": item.size,
                 "uploadedAt": item.created_at.isoformat(),
                 "uploadedBy": item.uploader.display_name if item.uploader else "Unknown",
@@ -101,7 +108,9 @@ async def serve_file(
     item_id: int,
     user: CurrentUser,
     db: DB,
-    inline: bool = Query(False, description="inline=true opens in browser; false triggers download"),
+    inline: bool = Query(
+        False, description="inline=true opens in browser; false triggers download"
+    ),
 ):
     """Serve the raw file bytes for a knowledge item.
 
@@ -173,5 +182,7 @@ async def delete_item(
     if file_path:
         try:
             await asyncio.to_thread(storage.delete, file_path)
-        except Exception:  # noqa: BLE001
-            log.warning("Storage delete failed for key=%s (item already removed from DB)", file_path)
+        except Exception:
+            log.warning(
+                "Storage delete failed for key=%s (item already removed from DB)", file_path
+            )

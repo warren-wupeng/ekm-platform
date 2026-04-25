@@ -13,16 +13,17 @@ Rule matching:
     (smallest inactive_days) so the most aggressive policy wins. That way
     a general "180d" fallback rule coexists with a "audio: 30d" override.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.archive import ArchiveRule
-from app.models.knowledge import FileType, KnowledgeItem
+from app.models.knowledge import KnowledgeItem
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class EffectiveRule:
     """The winning threshold for one item."""
+
     inactive_days: int
     rule_id: int
     rule_name: str
@@ -60,9 +62,7 @@ def resolve_effective_rule(
 
 def load_active_rules(db: Session) -> list[ArchiveRule]:
     return list(
-        db.execute(
-            select(ArchiveRule).where(ArchiveRule.enabled.is_(True))
-        ).scalars().all()
+        db.execute(select(ArchiveRule).where(ArchiveRule.enabled.is_(True))).scalars().all()
     )
 
 
@@ -75,7 +75,7 @@ def fetch_candidates(db: Session) -> list[KnowledgeItem]:
     ~100k, swap this for a per-rule filtered query.
     """
     return list(
-        db.execute(
-            select(KnowledgeItem).where(KnowledgeItem.is_archived.is_(False))
-        ).scalars().all()
+        db.execute(select(KnowledgeItem).where(KnowledgeItem.is_archived.is_(False)))
+        .scalars()
+        .all()
     )

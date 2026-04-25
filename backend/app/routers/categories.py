@@ -13,8 +13,10 @@ The FK on categories.parent_id is `ondelete=SET NULL`, which is the DB-level
 safety net. Our delete endpoint does the explicit re-parent step *first*
 so children inherit the right ancestor instead of being orphaned at the root.
 """
+
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -22,12 +24,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-import logging
-
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.knowledge import Category
 from app.services.es_client import es
-
 
 _log = logging.getLogger(__name__)
 
@@ -35,34 +34,40 @@ _log = logging.getLogger(__name__)
 async def _get_item_counts(db: Any) -> dict[int, int]:
     """Return {category_id: count} for all categories with items."""
     from app.models.knowledge import KnowledgeItem
-    rows = (await db.execute(
-        select(KnowledgeItem.category_id, func.count().label("cnt"))
-        .where(KnowledgeItem.category_id.is_not(None))
-        .group_by(KnowledgeItem.category_id)
-    )).all()
+
+    rows = (
+        await db.execute(
+            select(KnowledgeItem.category_id, func.count().label("cnt"))
+            .where(KnowledgeItem.category_id.is_not(None))
+            .group_by(KnowledgeItem.category_id)
+        )
+    ).all()
     return {row[0]: row[1] for row in rows}
 
 
 async def _es_index_category(c: Category) -> None:
     """Mirror a Category into ekm_tags (kind=category) for unified search."""
     try:
-        await es.index_tag(tag_id=c.id, body={
-            "id": c.id,
-            "kind": "category",
-            "name": c.name,
-            "description": c.description,
-            "slug": c.slug,
-            "color": None,
-            "usage_count": 0,
-        })
-    except Exception as exc:  # noqa: BLE001
+        await es.index_tag(
+            tag_id=c.id,
+            body={
+                "id": c.id,
+                "kind": "category",
+                "name": c.name,
+                "description": c.description,
+                "slug": c.slug,
+                "color": None,
+                "usage_count": 0,
+            },
+        )
+    except Exception as exc:
         _log.warning("ES index_category failed id=%s: %s", c.id, exc)
 
 
 async def _es_delete_category(cat_id: int) -> None:
     try:
         await es.delete_tag(tag_id=cat_id, kind="category")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning("ES delete_category failed id=%s: %s", cat_id, exc)
 
 
@@ -93,7 +98,7 @@ class CategoryOut(BaseModel):
     parent_id: int | None
     description: str | None
     sort_order: int
-    children: list["CategoryOut"] = []
+    children: list[CategoryOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -125,6 +130,7 @@ def _build_tree(cats: list[Category], counts: dict[int, int] | None = None) -> l
             nodes[c.parent_id]["children"].append(node)
         else:
             roots.append(node)
+
     # Roll up child counts to parent so the parent shows total descendants.
     def _rollup(nodes_list: list[dict[str, Any]]) -> int:
         total = 0
@@ -133,11 +139,13 @@ def _build_tree(cats: list[Category], counts: dict[int, int] | None = None) -> l
             n["item_count"] += child_total
             total += n["item_count"]
         return total
+
     # Stable sort by sort_order then id within each level.
     def _sort(ns: list[dict[str, Any]]) -> None:
         ns.sort(key=lambda n: (n["sort_order"], n["id"]))
         for n in ns:
             _sort(n["children"])
+
     _rollup(roots)
     _sort(roots)
     return roots
@@ -150,9 +158,11 @@ async def list_categories(
     user: CurrentUser,
     flat: bool = Query(False, description="Return flat list instead of nested tree"),
 ):
-    rows = (await db.execute(
-        select(Category).order_by(Category.sort_order, Category.id)
-    )).scalars().all()
+    rows = (
+        (await db.execute(select(Category).order_by(Category.sort_order, Category.id)))
+        .scalars()
+        .all()
+    )
     counts = await _get_item_counts(db)
 
     if flat:
@@ -162,9 +172,7 @@ async def list_categories(
 
 @router.get("/{cat_id}")
 async def get_category(cat_id: int, db: DB, user: CurrentUser):
-    row = (await db.execute(
-        select(Category).where(Category.id == cat_id)
-    )).scalar_one_or_none()
+    row = (await db.execute(select(Category).where(Category.id == cat_id))).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="category not found")
     return _to_dict(row)
@@ -172,12 +180,14 @@ async def get_category(cat_id: int, db: DB, user: CurrentUser):
 
 @router.post("", status_code=201)
 async def create_category(
-    payload: CategoryCreate, db: DB, user: CurrentUser,
+    payload: CategoryCreate,
+    db: DB,
+    user: CurrentUser,
 ):
     if payload.parent_id is not None:
-        parent = (await db.execute(
-            select(Category).where(Category.id == payload.parent_id)
-        )).scalar_one_or_none()
+        parent = (
+            await db.execute(select(Category).where(Category.id == payload.parent_id))
+        ).scalar_one_or_none()
         if parent is None:
             raise HTTPException(status_code=400, detail="parent category not found")
 
@@ -201,11 +211,12 @@ async def create_category(
 
 @router.patch("/{cat_id}")
 async def update_category(
-    cat_id: int, payload: CategoryUpdate, db: DB, user: CurrentUser,
+    cat_id: int,
+    payload: CategoryUpdate,
+    db: DB,
+    user: CurrentUser,
 ):
-    cat = (await db.execute(
-        select(Category).where(Category.id == cat_id)
-    )).scalar_one_or_none()
+    cat = (await db.execute(select(Category).where(Category.id == cat_id))).scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404, detail="category not found")
 
@@ -221,9 +232,9 @@ async def update_category(
             seen.add(ancestor_id)
             if ancestor_id == cat_id:
                 raise HTTPException(status_code=400, detail="cycle in category tree")
-            parent = (await db.execute(
-                select(Category.parent_id).where(Category.id == ancestor_id)
-            )).scalar_one_or_none()
+            parent = (
+                await db.execute(select(Category.parent_id).where(Category.id == ancestor_id))
+            ).scalar_one_or_none()
             ancestor_id = parent
 
     data = payload.model_dump(exclude_unset=True)
@@ -241,9 +252,7 @@ async def update_category(
 
 @router.delete("/{cat_id}", status_code=204)
 async def delete_category(cat_id: int, db: DB, user: CurrentUser):
-    cat = (await db.execute(
-        select(Category).where(Category.id == cat_id)
-    )).scalar_one_or_none()
+    cat = (await db.execute(select(Category).where(Category.id == cat_id))).scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404, detail="category not found")
 
@@ -252,9 +261,7 @@ async def delete_category(cat_id: int, db: DB, user: CurrentUser):
     # The FK has ondelete=SET NULL as a safety net; doing it explicitly
     # lets us preserve grandparent lineage instead of orphaning at root.
     await db.execute(
-        update(Category)
-        .where(Category.parent_id == cat_id)
-        .values(parent_id=cat.parent_id),
+        update(Category).where(Category.parent_id == cat_id).values(parent_id=cat.parent_id),
     )
     await db.delete(cat)
     await db.commit()

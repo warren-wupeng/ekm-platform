@@ -1,10 +1,10 @@
 """Request + response shapes for batch knowledge-item operations."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.sharing import PermissionLevel, ShareTarget
-
 
 # Upper bound per call. Above this the client should paginate — mostly
 # to keep a single 207 response and its audit rows under a reasonable
@@ -58,6 +58,7 @@ class BatchResponse(BaseModel):
     and 207 based on run-time data, because frontends would end up
     parsing one shape in two branches.
     """
+
     batch_id: str
-    succeeded: list[dict]   # op-specific; see services/batch_ops.py
+    succeeded: list[dict]  # op-specific; see services/batch_ops.py
     failed: list[FailedItem]

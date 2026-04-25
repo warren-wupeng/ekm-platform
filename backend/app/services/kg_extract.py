@@ -70,6 +70,7 @@ Design choices:
    their link to *this* doc is removed. Re-extraction then rebuilds
    the fresh slice.
 """
+
 from __future__ import annotations
 
 import logging
@@ -84,7 +85,7 @@ from app.models.document import DocumentChunk
 from app.models.kg import KGEdge, KGNode
 from app.models.knowledge import KnowledgeItem
 from app.services.graph_sync import upsert_entity, upsert_relation
-from app.vendor.tom_kg import KnowledgeGraphConstructor, SchemaOrgEntity  # noqa: F401 — re-exported
+from app.vendor.tom_kg import KnowledgeGraphConstructor, SchemaOrgEntity
 
 log = logging.getLogger(__name__)
 
@@ -130,9 +131,7 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
     6. Delete orphan entity nodes (zero remaining edges).
     """
     doc_eid = _doc_external_id(document_id)
-    doc_node = db.execute(
-        select(KGNode).where(KGNode.external_id == doc_eid)
-    ).scalar_one_or_none()
+    doc_node = db.execute(select(KGNode).where(KGNode.external_id == doc_eid)).scalar_one_or_none()
 
     if doc_node is None:
         return {"edges_deleted": 0, "nodes_deleted": 0}
@@ -141,12 +140,16 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
     nodes_deleted = 0
 
     # Step 2: entity nodes mentioned in this document.
-    mention_edges = db.execute(
-        select(KGEdge).where(
-            KGEdge.target_id == doc_node.id,
-            KGEdge.relation_type == "MENTIONED_IN",
+    mention_edges = (
+        db.execute(
+            select(KGEdge).where(
+                KGEdge.target_id == doc_node.id,
+                KGEdge.relation_type == "MENTIONED_IN",
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     mentioned_node_ids = [e.source_id for e in mention_edges]
 
     # Step 3: delete all MENTIONED_IN edges to this doc node.
@@ -159,11 +162,13 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
     exclusive_node_ids: list[int] = []
     for node_id in mentioned_node_ids:
         other_mentions = db.execute(
-            select(KGEdge.id).where(
+            select(KGEdge.id)
+            .where(
                 KGEdge.source_id == node_id,
                 KGEdge.relation_type == "MENTIONED_IN",
                 KGEdge.target_id != doc_node.id,
-            ).limit(1)
+            )
+            .limit(1)
         ).scalar_one_or_none()
         if other_mentions is None:
             exclusive_node_ids.append(node_id)
@@ -174,22 +179,30 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
     # regardless of whether the other endpoint is shared. This ensures
     # orphan detection works correctly afterward.
     if exclusive_node_ids:
-        outgoing = db.execute(
-            select(KGEdge).where(
-                KGEdge.source_id.in_(exclusive_node_ids),
-                KGEdge.relation_type != "MENTIONED_IN",
+        outgoing = (
+            db.execute(
+                select(KGEdge).where(
+                    KGEdge.source_id.in_(exclusive_node_ids),
+                    KGEdge.relation_type != "MENTIONED_IN",
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for edge in outgoing:
             db.delete(edge)
             edges_deleted += 1
 
-        incoming = db.execute(
-            select(KGEdge).where(
-                KGEdge.target_id.in_(exclusive_node_ids),
-                KGEdge.relation_type != "MENTIONED_IN",
+        incoming = (
+            db.execute(
+                select(KGEdge).where(
+                    KGEdge.target_id.in_(exclusive_node_ids),
+                    KGEdge.relation_type != "MENTIONED_IN",
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for edge in incoming:
             db.delete(edge)
             edges_deleted += 1
@@ -204,9 +217,9 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
     # to this document and now have zero remaining edges.
     for node_id in exclusive_node_ids:
         remaining = db.execute(
-            select(KGEdge.id).where(
-                (KGEdge.source_id == node_id) | (KGEdge.target_id == node_id)
-            ).limit(1)
+            select(KGEdge.id)
+            .where((KGEdge.source_id == node_id) | (KGEdge.target_id == node_id))
+            .limit(1)
         ).scalar_one_or_none()
         if remaining is None:
             orphan = db.get(KGNode, node_id)
@@ -221,7 +234,9 @@ def _clear_document_kg(db: Session, document_id: int) -> dict[str, int]:
 
     log.info(
         "kg_extract: cleared stale KG doc=%s edges=%d nodes=%d",
-        document_id, edges_deleted, nodes_deleted,
+        document_id,
+        edges_deleted,
+        nodes_deleted,
     )
     return {"edges_deleted": edges_deleted, "nodes_deleted": nodes_deleted}
 
@@ -266,13 +281,16 @@ def _clear_document_neo4j(document_id: int, doc_eid: str) -> None:
             loop.run_until_complete(_cleanup())
         finally:
             loop.close()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning(
-            "kg_extract: Neo4j cleanup failed doc=%s: %s", document_id, exc,
+            "kg_extract: Neo4j cleanup failed doc=%s: %s",
+            document_id,
+            exc,
         )
 
 
 # ── Extraction entry point ────────────────────────────────────────────
+
 
 def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
     """Run LLM extraction over the document's chunks and persist results.
@@ -298,8 +316,9 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
 
     cleared: dict[str, int] = {"edges_deleted": 0, "nodes_deleted": 0}
     if existing_doc_node is not None:
-        log.info("kg_extract: doc=%s has existing KG data, clearing before re-extraction",
-                 document_id)
+        log.info(
+            "kg_extract: doc=%s has existing KG data, clearing before re-extraction", document_id
+        )
         cleared = _clear_document_kg(db, document_id)
 
     chunks = db.execute(
@@ -348,11 +367,10 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
             # Tom's LLMClient is sync (openai.OpenAI().chat.completions.create),
             # Celery worker is also sync, so no asyncio juggling needed.
             kg.add_text((content or "")[:CHUNK_CHAR_CAP], timestamp=timestamp)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # One bad chunk shouldn't fail the whole doc — log + skip,
             # preserving the pre-existing behaviour.
-            log.warning("kg_extract tom add_text failed doc=%s chunk=%s: %s",
-                        document_id, idx, exc)
+            log.warning("kg_extract tom add_text failed doc=%s chunk=%s: %s", document_id, idx, exc)
             continue
         new_keys = set(kg.entities.keys()) - before_keys
         if new_keys:
@@ -401,7 +419,8 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
                 continue
             if _upsert_edge(
                 db,
-                source=node, target=doc_node,
+                source=node,
+                target=doc_node,
                 relation_type="MENTIONED_IN",
                 properties={"chunk_index": idx},
             ):
@@ -419,7 +438,8 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
             predicate = "RELATED_TO"
         if _upsert_edge(
             db,
-            source=src, target=dst,
+            source=src,
+            target=dst,
             relation_type=predicate,
             properties={"predicate_uri": rel.predicate_uri},
             confidence=rel.confidence,
@@ -433,13 +453,19 @@ def extract_and_persist(db: Session, document_id: int) -> dict[str, Any]:
     # session is closed.
     neo4j_work = {
         "mirror_document_id": document_id,
-        "clear_doc_eid": doc_eid if (cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0) else None,
+        "clear_doc_eid": doc_eid
+        if (cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0)
+        else None,
     }
 
     is_update = cleared["edges_deleted"] > 0 or cleared["nodes_deleted"] > 0
     log.info(
         "kg_extract doc=%s entities=%d relations=%d chunks=%d incremental=%s",
-        document_id, total_entities, total_relations, len(chunks), is_update,
+        document_id,
+        total_entities,
+        total_relations,
+        len(chunks),
+        is_update,
     )
     result: dict[str, Any] = {
         "document_id": document_id,
@@ -475,6 +501,7 @@ def run_neo4j_sync(result: dict[str, Any]) -> None:
 
 # ── external_id helpers ──────────────────────────────────────────────
 
+
 def _doc_external_id(knowledge_item_id: int) -> str:
     return f"doc:{knowledge_item_id}"
 
@@ -497,6 +524,7 @@ def _entity_external_id(entity_type: str, label: str) -> str:
 
 # ── Postgres upsert helpers ──────────────────────────────────────────
 
+
 def _upsert_node(
     db: Session,
     *,
@@ -507,8 +535,10 @@ def _upsert_node(
 ) -> KGNode:
     _, node = _upsert_node_with_flag(
         db,
-        external_id=external_id, label=label,
-        entity_type=entity_type, properties=properties,
+        external_id=external_id,
+        label=label,
+        entity_type=entity_type,
+        properties=properties,
     )
     return node
 
@@ -526,9 +556,7 @@ def _upsert_node_with_flag(
     Returned flag drives the `entities` counter in the summary — we want
     to count genuinely new nodes, not re-visits across runs.
     """
-    node = db.execute(
-        select(KGNode).where(KGNode.external_id == external_id)
-    ).scalar_one_or_none()
+    node = db.execute(select(KGNode).where(KGNode.external_id == external_id)).scalar_one_or_none()
     if node is None:
         node = KGNode(
             external_id=external_id,
@@ -595,19 +623,22 @@ def _upsert_edge(
             existing.confidence = confidence
             existing.needs_review = needs_review
         return False
-    db.add(KGEdge(
-        source_id=source.id,
-        target_id=target.id,
-        relation_type=relation_type,
-        properties=properties,
-        confidence=confidence,
-        needs_review=needs_review,
-    ))
+    db.add(
+        KGEdge(
+            source_id=source.id,
+            target_id=target.id,
+            relation_type=relation_type,
+            properties=properties,
+            confidence=confidence,
+            needs_review=needs_review,
+        )
+    )
     db.flush()
     return True
 
 
 # ── Neo4j mirror ─────────────────────────────────────────────────────
+
 
 def _mirror_to_neo4j(document_id: int) -> None:
     """Push this document's KG slice into Neo4j. Best-effort.
@@ -637,31 +668,38 @@ def _mirror_to_neo4j(document_id: int) -> None:
             return
 
         # Entities mentioned in this document — one hop off the doc node.
-        mention_edges = db.execute(
-            select(KGEdge).where(
-                KGEdge.target_id == doc_node.id,
-                KGEdge.relation_type == "MENTIONED_IN",
+        mention_edges = (
+            db.execute(
+                select(KGEdge).where(
+                    KGEdge.target_id == doc_node.id,
+                    KGEdge.relation_type == "MENTIONED_IN",
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         mentioned_source_ids = [e.source_id for e in mention_edges]
 
         if not mentioned_source_ids:
             return
 
-        mentioned_nodes = db.execute(
-            select(KGNode).where(KGNode.id.in_(mentioned_source_ids))
-        ).scalars().all()
-        node_by_id: dict[int, KGNode] = {n.id: n for n in mentioned_nodes}
+        mentioned_nodes = (
+            db.execute(select(KGNode).where(KGNode.id.in_(mentioned_source_ids))).scalars().all()
+        )
 
         # Inter-entity relations among the mentioned set.
         inter_edges: list[KGEdge] = []
         if mentioned_source_ids:
-            inter_edges = db.execute(
-                select(KGEdge).where(
-                    KGEdge.source_id.in_(mentioned_source_ids),
-                    KGEdge.target_id.in_(mentioned_source_ids),
+            inter_edges = (
+                db.execute(
+                    select(KGEdge).where(
+                        KGEdge.source_id.in_(mentioned_source_ids),
+                        KGEdge.target_id.in_(mentioned_source_ids),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         # Snapshot all needed data as plain dicts before session closes.
         doc_snapshot = {
@@ -680,14 +718,20 @@ def _mirror_to_neo4j(document_id: int) -> None:
             for n in mentioned_nodes
         }
         mention_snapshots = [
-            {"source_id": e.source_id, "relation_type": e.relation_type,
-             "properties": dict(e.properties or {})}
+            {
+                "source_id": e.source_id,
+                "relation_type": e.relation_type,
+                "properties": dict(e.properties or {}),
+            }
             for e in mention_edges
         ]
         inter_snapshots = [
-            {"source_id": e.source_id, "target_id": e.target_id,
-             "relation_type": e.relation_type,
-             "properties": dict(e.properties or {})}
+            {
+                "source_id": e.source_id,
+                "target_id": e.target_id,
+                "relation_type": e.relation_type,
+                "properties": dict(e.properties or {}),
+            }
             for e in inter_edges
         ]
 
@@ -732,16 +776,15 @@ def _mirror_to_neo4j(document_id: int) -> None:
             loop.run_until_complete(_push())
         finally:
             loop.close()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("kg_extract: Neo4j mirror failed doc=%s: %s",
-                    document_id, exc)
+    except Exception as exc:
+        log.warning("kg_extract: Neo4j mirror failed doc=%s: %s", document_id, exc)
 
 
 # ── Type-only re-exports so tests / tooling can reach the Schema.org types.
 __all__ = [
-    "extract_and_persist",
-    "_clear_document_kg",
-    "MAX_CHUNKS_PER_DOC",
     "CHUNK_CHAR_CAP",
+    "MAX_CHUNKS_PER_DOC",
     "SchemaOrgEntity",
+    "_clear_document_kg",
+    "extract_and_persist",
 ]

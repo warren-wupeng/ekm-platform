@@ -9,10 +9,10 @@ Pydantic v2's ForwardRef resolution breaks with postponed evaluation in
 certain import-order scenarios, causing ``/openapi.json`` to 500.
 Python 3.10+ supports all the syntax we need natively.
 """
+
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ── /knowledge/search ─────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class SearchHit(BaseModel):
     """One document+chunk match. Score is vendor-specific (Qdrant cosine
     for vector hits, ES bm25 for full-text)."""
+
     model_config = ConfigDict(extra="ignore")
 
     document_id: int
@@ -50,6 +51,7 @@ class KGQueryRequest(BaseModel):
           "limit": 20
         }
     """
+
     model_config = ConfigDict(extra="forbid")
 
     entity_type: str | None = Field(
@@ -62,7 +64,9 @@ class KGQueryRequest(BaseModel):
         description="Exact-match filters on node properties (AND'd).",
     )
     limit: int | None = Field(
-        default=None, ge=1, le=200,
+        default=None,
+        ge=1,
+        le=200,
         description="Max nodes returned. Clamped server-side.",
     )
 
@@ -87,6 +91,7 @@ class KGNodeUpsertRequest(BaseModel):
     External Agents extracting entities from docs they don't own should
     NOT be able to create arbitrary nodes — scope `kg:write` gates this.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     external_id: str = Field(min_length=1, max_length=255)
@@ -106,6 +111,7 @@ class KGNodeUpsertResponse(BaseModel):
 class KGPathResponse(BaseModel):
     """Shortest path between two entities. ``found=False`` means no path
     within the requested hop budget — returned with an empty node list."""
+
     found: bool
     node_ids: list[str] = Field(default_factory=list)
     rel_types: list[str] = Field(default_factory=list)

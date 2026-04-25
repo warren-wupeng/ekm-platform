@@ -8,6 +8,7 @@ Endpoints:
 All honor the IK analyzer configured in es_client.py, so Chinese queries
 tokenize correctly.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
@@ -15,7 +16,6 @@ from fastapi import APIRouter, Query
 from app.core.deps import CurrentUser
 from app.services.es_client import es
 from app.services.search_aggregator import search_all
-
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
 

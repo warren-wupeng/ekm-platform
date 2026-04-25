@@ -26,12 +26,19 @@ can't look up purely by hash (bcrypt hashes are salted, so the same token
 hashes differently every time), and we shouldn't search by raw equality
 on the plaintext.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Integer, JSON, String, func,
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,7 +56,10 @@ class AgentToken(Base):
     # First 12 chars of the plaintext token, e.g. "ekmat_4a7f1c".
     # Indexed + unique so lookup is O(1) without seeing the secret.
     token_prefix: Mapped[str] = mapped_column(
-        String(32), unique=True, index=True, nullable=False,
+        String(32),
+        unique=True,
+        index=True,
+        nullable=False,
     )
     # bcrypt hash of full plaintext. Verified on every request.
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -61,23 +71,29 @@ class AgentToken(Base):
     # RESTRICT — keep audit trail even if the provisioning admin leaves.
     # An admin must explicitly reassign or revoke their tokens.
     created_by_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
     # Bumped on every successful authenticated call. Used for "is this
     # token actually in use?" dashboards + stale-key pruning.
     last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     # Nullable = never expires. Revocation path is `is_active=False`.
     expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    created_by: Mapped["User"] = relationship("User")  # noqa: F821
+    created_by: Mapped[User] = relationship("User")
 
     def __repr__(self) -> str:
         return f"<AgentToken id={self.id} name={self.name!r} prefix={self.token_prefix}>"

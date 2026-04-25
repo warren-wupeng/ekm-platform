@@ -14,26 +14,25 @@ Endpoints:
   PUT    /api/v1/replies/{id}/like              — idempotent like
   DELETE /api/v1/replies/{id}/like              — idempotent unlike
 """
+
 from __future__ import annotations
 
+import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
-import logging
-
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.community import Post, PostLike, Reply, ReplyLike
 from app.models.notification import NotificationType
 from app.models.user import User, UserRole
 from app.services.es_client import es
 from app.services.notify import dispatch as notify_dispatch
-
 
 _log = logging.getLogger(__name__)
 
@@ -46,30 +45,36 @@ async def _es_index_post(p: Post) -> None:
     job can heal missed updates.
     """
     try:
-        await es.index_post(post_id=p.id, body={
-            "id": p.id,
-            "title": p.title,
-            "body": p.body,
-            "author_id": p.author_id,
-            "reply_count": p.reply_count,
-            "created_at": p.created_at.isoformat() if p.created_at else None,
-        })
-    except Exception as exc:  # noqa: BLE001
+        await es.index_post(
+            post_id=p.id,
+            body={
+                "id": p.id,
+                "title": p.title,
+                "body": p.body,
+                "author_id": p.author_id,
+                "reply_count": p.reply_count,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            },
+        )
+    except Exception as exc:
         _log.warning("ES index_post failed id=%s: %s", p.id, exc)
 
 
 async def _es_index_reply(r: Reply) -> None:
     try:
-        await es.index_reply(reply_id=r.id, body={
-            "id": r.id,
-            "post_id": r.post_id,
-            "parent_reply_id": r.parent_reply_id,
-            "content": "" if r.deleted_at else r.content,
-            "author_id": r.author_id,
-            "is_deleted": r.deleted_at is not None,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        })
-    except Exception as exc:  # noqa: BLE001
+        await es.index_reply(
+            reply_id=r.id,
+            body={
+                "id": r.id,
+                "post_id": r.post_id,
+                "parent_reply_id": r.parent_reply_id,
+                "content": "" if r.deleted_at else r.content,
+                "author_id": r.author_id,
+                "is_deleted": r.deleted_at is not None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            },
+        )
+    except Exception as exc:
         _log.warning("ES index_reply failed id=%s: %s", r.id, exc)
 
 
@@ -83,9 +88,11 @@ async def _resolve_mentions(db, content: str, exclude_user_id: int) -> list[User
     names = set(_MENTION_RE.findall(content or ""))
     if not names:
         return []
-    rows = (await db.execute(
-        select(User).where(User.username.in_(names), User.id != exclude_user_id)
-    )).scalars().all()
+    rows = (
+        (await db.execute(select(User).where(User.username.in_(names), User.id != exclude_user_id)))
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -96,14 +103,14 @@ def _content_snippet(s: str, n: int = 120) -> str:
 
 # Separate routers so we can mount /posts and /replies with cleanly
 # different prefixes while keeping everything in one file.
-posts_router   = APIRouter(prefix="/api/v1/posts",   tags=["community"])
+posts_router = APIRouter(prefix="/api/v1/posts", tags=["community"])
 replies_router = APIRouter(prefix="/api/v1/replies", tags=["community"])
 
 
 # ─── Schemas ────────────────────────────────────────────────────────────────
 class PostCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    body:  str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
 
 
 class ReplyCreate(BaseModel):
@@ -140,18 +147,14 @@ def _reply_dict(r: Reply) -> dict:
 
 
 async def _load_post(db, post_id: int) -> Post:
-    p = (await db.execute(
-        select(Post).where(Post.id == post_id)
-    )).scalar_one_or_none()
+    p = (await db.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
     if p is None:
         raise HTTPException(status_code=404, detail="post not found")
     return p
 
 
 async def _load_reply(db, reply_id: int) -> Reply:
-    r = (await db.execute(
-        select(Reply).where(Reply.id == reply_id)
-    )).scalar_one_or_none()
+    r = (await db.execute(select(Reply).where(Reply.id == reply_id))).scalar_one_or_none()
     if r is None:
         raise HTTPException(status_code=404, detail="reply not found")
     return r
@@ -167,22 +170,40 @@ async def list_posts(
 ):
     offset = (page - 1) * page_size
     total = (await db.execute(select(func.count()).select_from(Post))).scalar_one()
-    rows = (await db.execute(
-        select(Post).options(selectinload(Post.author)).order_by(Post.created_at.desc()).offset(offset).limit(page_size)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Post)
+                .options(selectinload(Post.author))
+                .order_by(Post.created_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
     # Bulk-check which posts the current user has liked
     post_ids = [p.id for p in rows]
     liked_set: set[int] = set()
     if post_ids:
-        liked_rows = (await db.execute(
-            select(PostLike.post_id).where(
-                PostLike.post_id.in_(post_ids),
-                PostLike.user_id == user.id,
+        liked_rows = (
+            (
+                await db.execute(
+                    select(PostLike.post_id).where(
+                        PostLike.post_id.in_(post_ids),
+                        PostLike.user_id == user.id,
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
         liked_set = set(liked_rows)
     return {
-        "page": page, "page_size": page_size, "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
         "posts": [_post_dict(p, liked_by_me=p.id in liked_set) for p in rows],
     }
 
@@ -202,14 +223,16 @@ async def create_post(payload: PostCreate, db: DB, user: CurrentUser):
 
 @posts_router.get("/{post_id}")
 async def get_post(post_id: int, db: DB, user: CurrentUser):
-    p = (await db.execute(
-        select(Post).options(selectinload(Post.author)).where(Post.id == post_id)
-    )).scalar_one_or_none()
+    p = (
+        await db.execute(select(Post).options(selectinload(Post.author)).where(Post.id == post_id))
+    ).scalar_one_or_none()
     if p is None:
         raise HTTPException(status_code=404, detail="post not found")
-    liked = (await db.execute(
-        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
-    )).scalar_one_or_none()
+    liked = (
+        await db.execute(
+            select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+        )
+    ).scalar_one_or_none()
     return _post_dict(p, liked_by_me=liked is not None)
 
 
@@ -217,9 +240,11 @@ async def get_post(post_id: int, db: DB, user: CurrentUser):
 async def like_post(post_id: int, db: DB, user: CurrentUser):
     """Idempotent: PUT returns the current like state regardless of prior."""
     p = await _load_post(db, post_id)
-    existing = (await db.execute(
-        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
-    )).scalar_one_or_none()
+    existing = (
+        await db.execute(
+            select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+        )
+    ).scalar_one_or_none()
     if existing:
         return {"post_id": post_id, "liked": True, "like_count": p.like_count}
     db.add(PostLike(post_id=post_id, user_id=user.id))
@@ -238,9 +263,11 @@ async def like_post(post_id: int, db: DB, user: CurrentUser):
 async def unlike_post(post_id: int, db: DB, user: CurrentUser):
     """Idempotent: DELETE returns the current like state regardless of prior."""
     p = await _load_post(db, post_id)
-    existing = (await db.execute(
-        select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
-    )).scalar_one_or_none()
+    existing = (
+        await db.execute(
+            select(PostLike).where(PostLike.post_id == post_id, PostLike.user_id == user.id)
+        )
+    ).scalar_one_or_none()
     if not existing:
         return {"post_id": post_id, "liked": False, "like_count": p.like_count}
     await db.delete(existing)
@@ -252,42 +279,56 @@ async def unlike_post(post_id: int, db: DB, user: CurrentUser):
 # ─── Replies ────────────────────────────────────────────────────────────────
 @posts_router.get("/{post_id}/replies")
 async def list_replies(
-    post_id: int, db: DB, user: CurrentUser,
+    post_id: int,
+    db: DB,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
     await _load_post(db, post_id)
     offset = (page - 1) * page_size
-    total = (await db.execute(
-        select(func.count()).select_from(Reply).where(Reply.post_id == post_id)
-    )).scalar_one()
+    total = (
+        await db.execute(select(func.count()).select_from(Reply).where(Reply.post_id == post_id))
+    ).scalar_one()
     # Order by created_at ASC so top-level → children read naturally when
     # the client groups by parent_reply_id.
-    rows = (await db.execute(
-        select(Reply)
-        .where(Reply.post_id == post_id)
-        .order_by(Reply.created_at.asc())
-        .offset(offset).limit(page_size)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Reply)
+                .where(Reply.post_id == post_id)
+                .order_by(Reply.created_at.asc())
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "post_id": post_id,
-        "page": page, "page_size": page_size, "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
         "replies": [_reply_dict(r) for r in rows],
     }
 
 
 @posts_router.post("/{post_id}/replies", status_code=201)
 async def create_reply(
-    post_id: int, payload: ReplyCreate, db: DB, user: CurrentUser,
+    post_id: int,
+    payload: ReplyCreate,
+    db: DB,
+    user: CurrentUser,
 ):
     await _load_post(db, post_id)
 
     # Enforce max depth = 2 (top-level or one level of children).
     parent = None
     if payload.parent_reply_id is not None:
-        parent = (await db.execute(
-            select(Reply).where(Reply.id == payload.parent_reply_id)
-        )).scalar_one_or_none()
+        parent = (
+            await db.execute(select(Reply).where(Reply.id == payload.parent_reply_id))
+        ).scalar_one_or_none()
         if parent is None:
             raise HTTPException(status_code=400, detail="parent reply not found")
         if parent.post_id != post_id:
@@ -392,12 +433,10 @@ async def delete_reply(reply_id: int, db: DB, user: CurrentUser):
     if r.author_id != user.id and user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="only author or admin can delete")
     # Soft-delete: preserve thread shape so children stay anchored.
-    r.deleted_at = datetime.now(timezone.utc)
+    r.deleted_at = datetime.now(UTC)
 
     # Decrement post.reply_count — the reply is gone from the user's view.
-    post = (await db.execute(
-        select(Post).where(Post.id == r.post_id)
-    )).scalar_one_or_none()
+    post = (await db.execute(select(Post).where(Post.id == r.post_id))).scalar_one_or_none()
     if post is not None:
         post.reply_count = max((post.reply_count or 0) - 1, 0)
     await db.commit()
@@ -414,12 +453,14 @@ async def delete_reply(reply_id: int, db: DB, user: CurrentUser):
 async def like_reply(reply_id: int, db: DB, user: CurrentUser):
     """Idempotent: PUT returns the current like state regardless of prior."""
     r = await _load_reply(db, reply_id)
-    existing = (await db.execute(
-        select(ReplyLike).where(
-            ReplyLike.reply_id == reply_id,
-            ReplyLike.user_id == user.id,
+    existing = (
+        await db.execute(
+            select(ReplyLike).where(
+                ReplyLike.reply_id == reply_id,
+                ReplyLike.user_id == user.id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if existing is not None:
         return {"reply_id": reply_id, "liked": True, "like_count": r.like_count}
 
@@ -455,12 +496,14 @@ async def like_reply(reply_id: int, db: DB, user: CurrentUser):
 @replies_router.delete("/{reply_id}/like")
 async def unlike_reply(reply_id: int, db: DB, user: CurrentUser):
     r = await _load_reply(db, reply_id)
-    existing = (await db.execute(
-        select(ReplyLike).where(
-            ReplyLike.reply_id == reply_id,
-            ReplyLike.user_id == user.id,
+    existing = (
+        await db.execute(
+            select(ReplyLike).where(
+                ReplyLike.reply_id == reply_id,
+                ReplyLike.user_id == user.id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if existing is None:
         return {"reply_id": reply_id, "liked": False, "like_count": r.like_count}
 

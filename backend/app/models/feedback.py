@@ -9,13 +9,20 @@ This keeps the data model simple and lets us rebuild "all thumbs-down on
 the same session" in SQL without a ChatSession table. If we later add
 session persistence, we swap the string fields for FKs.
 """
+
 from __future__ import annotations
 
 import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    DateTime, Enum, ForeignKey, Integer, String, Text, func,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,7 +31,7 @@ from app.core.database import Base
 
 
 class FeedbackRating(str, enum.Enum):
-    UP   = "up"
+    UP = "up"
     DOWN = "down"
 
 
@@ -40,7 +47,10 @@ class ChatFeedback(Base):
     message_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     rating: Mapped[FeedbackRating] = mapped_column(
         # values_callable aligns with lowercase enum values created in 0005.
@@ -49,22 +59,25 @@ class ChatFeedback(Base):
             values_callable=lambda obj: [e.value for e in obj],
             name="feedback_rating",
         ),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     # Free-form — optional note "wrong source" / "hallucinated X" etc.
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Snapshots — frozen at feedback time so the admin view is reproducible
     # even if the underlying documents change.
-    query_snapshot:   Mapped[str | None] = mapped_column(Text, nullable=True)
-    answer_snapshot:  Mapped[str | None] = mapped_column(Text, nullable=True)
+    query_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answer_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     sources_snapshot: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User")  # noqa: F821
+    user: Mapped[User] = relationship("User")
 
     def __repr__(self) -> str:
         return f"<ChatFeedback id={self.id} rating={self.rating.value}>"

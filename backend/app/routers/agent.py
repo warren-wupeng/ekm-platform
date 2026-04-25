@@ -23,13 +23,14 @@ Design notes:
   500 where possible — Tom's Agent should see a partial or empty result
   instead of an outage. Unexpected errors still bubble.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core.agent_deps import AgentCaller, require_agent_scope
-from app.core.rate_limit import AGENT_RATE, limiter
 from app.core.graph import graph
+from app.core.rate_limit import AGENT_RATE, limiter
 from app.schemas.agent import (
     KGNode,
     KGNodeUpsertRequest,
@@ -50,13 +51,13 @@ from app.services.kg_query import (
 )
 from app.services.qdrant_client import search as qdrant_search
 
-
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
 # ── /knowledge/search ─────────────────────────────────────────────────
+
 
 @router.get(
     "/knowledge/search",
@@ -76,7 +77,9 @@ async def knowledge_search(
     request: Request,
     q: str = Query(..., min_length=1, max_length=500, description="Query string"),
     top_k: int = Query(
-        10, ge=1, le=50,
+        10,
+        ge=1,
+        le=50,
         description="Max hits returned (shared budget across backends).",
     ),
     agent: AgentCaller = Depends(require_agent_scope("knowledge:read")),
@@ -89,7 +92,7 @@ async def knowledge_search(
         vectors = embedder.embed([q])
         if vectors:
             vector_hits = qdrant_search(vectors[0], top_k=top_k)
-    except Exception as exc:  # noqa: BLE001 — degradable
+    except Exception as exc:
         log.warning("agent-search vector backend failed: %s", exc)
 
     # ── full-text side ────
@@ -98,7 +101,7 @@ async def knowledge_search(
     fulltext_hits: list[dict] = []
     try:
         fulltext_hits = await es.search_chunks(q, size=top_k)
-    except Exception as exc:  # noqa: BLE001 — degradable
+    except Exception as exc:
         log.warning("agent-search fulltext backend failed: %s", exc)
 
     # ── merge + dedupe ────
@@ -138,6 +141,7 @@ async def knowledge_search(
 
 # ── /kg/query ─────────────────────────────────────────────────────────
 
+
 @router.post(
     "/kg/query",
     response_model=KGQueryResponse,
@@ -171,7 +175,7 @@ async def kg_query(
 
     try:
         rows = await graph.run(built.cypher, built.params)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Graph down = empty result, not 500 — consistent with graph_sync.
         log.warning("agent kg_query failed: %s", exc)
         return KGQueryResponse(nodes=[])
@@ -190,6 +194,7 @@ async def kg_query(
 
 
 # ── /kg/node ──────────────────────────────────────────────────────────
+
 
 @router.post(
     "/kg/node",
@@ -214,6 +219,7 @@ async def kg_node_upsert(
     # do a thing and we can't confirm it happened. Having it silently
     # succeed would break Tom's "did my write land?" contract.
     from app.core.graph import graph as _g
+
     healthy = await _g.healthcheck()
     if not healthy:
         raise HTTPException(
@@ -233,6 +239,7 @@ async def kg_node_upsert(
 
 
 # ── /kg/path ──────────────────────────────────────────────────────────
+
 
 @router.get(
     "/kg/path",
@@ -270,7 +277,7 @@ async def kg_path(
 
     try:
         rows = await graph.run(built.cypher, built.params)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("agent kg_path failed: %s", exc)
         return KGPathResponse(found=False)
 

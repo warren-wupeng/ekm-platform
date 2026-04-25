@@ -8,6 +8,7 @@ that created the entity.
 Functions here are kept small and idempotent so they can also run as a
 Celery task for periodic full-reconciliation from Postgres.
 """
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +16,10 @@ import re
 from typing import Any
 
 from app.core.graph import graph
-from app.models.graph_vocab import ENTITY_TYPES, RELATION_TYPES  # noqa: F401  # re-exported for callers
+from app.models.graph_vocab import (  # noqa: F401  # re-exported for callers
+    ENTITY_TYPES,
+    RELATION_TYPES,
+)
 
 log = logging.getLogger(__name__)
 
@@ -55,12 +59,15 @@ async def upsert_entity(
         "RETURN n.external_id AS id"
     )
     try:
-        await graph.run(cypher, {
-            "eid": external_id,
-            "label": label,
-            "props": properties or {},
-        })
-    except Exception as exc:  # noqa: BLE001
+        await graph.run(
+            cypher,
+            {
+                "eid": external_id,
+                "label": label,
+                "props": properties or {},
+            },
+        )
+    except Exception as exc:
         log.warning("upsert_entity failed for %s: %s", external_id, exc)
 
 
@@ -88,15 +95,21 @@ async def upsert_relation(
         "RETURN type(r) AS rel"
     )
     try:
-        await graph.run(cypher, {
-            "src": source_external_id,
-            "dst": target_external_id,
-            "props": properties or {},
-        })
-    except Exception as exc:  # noqa: BLE001
+        await graph.run(
+            cypher,
+            {
+                "src": source_external_id,
+                "dst": target_external_id,
+                "props": properties or {},
+            },
+        )
+    except Exception as exc:
         log.warning(
             "upsert_relation failed %s-[%s]->%s: %s",
-            source_external_id, relation_type, target_external_id, exc,
+            source_external_id,
+            relation_type,
+            target_external_id,
+            exc,
         )
 
 
@@ -119,6 +132,6 @@ async def neighbors(
     )
     try:
         return await graph.run(cypher, {"eid": external_id, "limit": limit})
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("neighbors query failed for %s: %s", external_id, exc)
         return []

@@ -3,6 +3,7 @@
 POST /api/v1/admin/reparse — re-queue historical items through the parse
 pipeline so they get DocumentChunks (and downstream ES/Qdrant indexing).
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.core.rate_limit import limiter
 from app.models.document import DocumentParseRecord, ParseStatus
 from app.models.knowledge import KnowledgeItem
@@ -28,7 +29,9 @@ _SKIP_STATUSES = {ParseStatus.PARSED, ParseStatus.PARSING}
 
 
 class ReparseRequest(BaseModel):
-    item_ids: list[int] | None = Field(default=None, description="Specific item IDs; omit for all unparsed")
+    item_ids: list[int] | None = Field(
+        default=None, description="Specific item IDs; omit for all unparsed"
+    )
     force: bool = Field(default=False, description="True = ignore parse status, re-run everything")
 
 
@@ -58,12 +61,9 @@ async def admin_reparse(request: Request, body: ReparseRequest, db: DB, user: Cu
     if not body.force:
         # Exclude items that are PARSED or currently PARSING.
         if all_ids:
-            skip_stmt = (
-                select(DocumentParseRecord.knowledge_item_id)
-                .where(
-                    DocumentParseRecord.knowledge_item_id.in_(all_ids),
-                    DocumentParseRecord.status.in_(_SKIP_STATUSES),
-                )
+            skip_stmt = select(DocumentParseRecord.knowledge_item_id).where(
+                DocumentParseRecord.knowledge_item_id.in_(all_ids),
+                DocumentParseRecord.status.in_(_SKIP_STATUSES),
             )
             skip_ids = set((await db.execute(skip_stmt)).scalars().all())
         else:
@@ -90,18 +90,20 @@ async def admin_reparse(request: Request, body: ReparseRequest, db: DB, user: Cu
             dispatch_failed += 1
 
     # Audit trail.
-    db.add(AuditLog(
-        actor_id=user.id,
-        action=AuditAction.UPDATE,
-        resource_type="admin_reparse",
-        detail={
-            "queued": queued,
-            "skipped": len(all_ids) - len(to_queue),
-            "dispatch_failed": dispatch_failed,
-            "force": body.force,
-            "item_ids": body.item_ids,
-        },
-    ))
+    db.add(
+        AuditLog(
+            actor_id=user.id,
+            action=AuditAction.UPDATE,
+            resource_type="admin_reparse",
+            detail={
+                "queued": queued,
+                "skipped": len(all_ids) - len(to_queue),
+                "dispatch_failed": dispatch_failed,
+                "force": body.force,
+                "item_ids": body.item_ids,
+            },
+        )
+    )
     await db.commit()
 
     return ReparseResponse(
