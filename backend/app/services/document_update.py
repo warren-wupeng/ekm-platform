@@ -145,10 +145,9 @@ def _sync_search_indexes(
 
     # Delete removed chunks from Qdrant.
     for chunk in diff.removed:
-        from app.services.qdrant_client import delete_points
+        from app.services.qdrant_client import _point_id, delete_points
 
-        point_id = document_id * 1_000_000 + chunk.chunk_index
-        delete_points([str(point_id)])
+        delete_points([_point_id(document_id, chunk.chunk_index)])
 
     # Index added chunks to ES + Qdrant.
     if result["new_chunk_ids"]:

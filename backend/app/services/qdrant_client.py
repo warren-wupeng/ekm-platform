@@ -107,11 +107,11 @@ def delete_document(doc_id: int):
     )
 
 
-def delete_points(point_ids: Iterable[int | str]) -> None:
+def delete_points(point_ids: Iterable[int]) -> None:
     c = _client()
     c.delete(
         collection_name=settings.QDRANT_COLLECTION,
-        points_selector=[int(point_id) for point_id in point_ids],
+        points_selector=list(point_ids),
         wait=True,
     )
 
