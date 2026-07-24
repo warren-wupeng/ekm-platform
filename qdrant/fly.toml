@@ -1,0 +1,44 @@
+app = "ekm-qdrant"
+primary_region = "sin"
+
+[build]
+  image = "qdrant/qdrant:v1.11.0"
+
+[env]
+  # Bind to :: (all IPv6 interfaces) so Fly.io .internal DNS (IPv6) can reach
+  # this service from other apps in the same private network.
+  # Without this, Qdrant defaults to 0.0.0.0 (IPv4 only), and peer connections
+  # via ekm-qdrant.internal fail with ECONNREFUSED even though the machine is running.
+  QDRANT__SERVICE__HOST = "::"
+  QDRANT__SERVICE__HTTP_PORT = "6333"
+
+[[mounts]]
+  source = "ekm_qdrant_data"
+  destination = "/qdrant/storage"
+
+[[services]]
+  internal_port = 6333
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    force_https = false
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.http_checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
